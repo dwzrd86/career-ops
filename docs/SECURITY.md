@@ -9,6 +9,7 @@ tags:
 related:
   - '[[RELEASE_RUNBOOK]]'
   - '[[ARCHITECTURE]]'
+  - '[[CAREER-OPS-SECURITY-03]]'
 ---
 
 # Security and data handling
@@ -150,3 +151,54 @@ same generic reset-screen outcome for known and unknown addresses.
 The selected implementation does not remove the future OIDC option: job
 authorization will continue to use authenticated identity plus verified-email
 state, never a client-supplied email address or a browser-visible auth table.
+
+## Convex function-access matrix
+
+**Inventory reviewed 2026-08-01.** This matrix covers every callable
+application endpoint in `web/convex/`. Generated bindings and test setup files
+are excluded: they expose no application endpoint. `auth.config.ts` configures
+the Convex Auth issuer and likewise defines no function.
+
+`Verified user` means both an authenticated Convex Auth password account and a
+verified email address, enforced by `requireVerifiedUser`. `Internal only`
+means the function has no public `api.*` reference and may be called only by
+Convex functions. Authentication and authorization are separate: the public
+job functions require both.
+
+| Endpoint and kind | Authentication requirement | Owner field and authorization scope | Caller-visible fields | Input limits and validation | External side effects |
+| --- | --- | --- | --- | --- | --- |
+| `jobs:list` — public query | Verified user | `jobs.ownerId` must equal the authenticated user ID; the `by_owner_created_at` index applies this filter before reading. | Up to 100 matching job documents, currently including Convex metadata and every stored job field (`ownerId`, company, title, location, URL, source, status, optional score/notes, and timestamps). | No arguments. Result is bounded with `.take(100)`. | None. |
+| `jobs:create` — public mutation | Verified user | `ownerId` is assigned from the authenticated user; the caller cannot supply it. | Newly created job document ID only. | Convex requires strings for company, title, location, URL, source, and optional notes. **No server-side size, trim, URL-scheme, or semantic validation currently exists.** | Writes one `jobs` document. |
+| `jobs:updateStatus` — public mutation | Verified user | Fetches `id` and requires `job.ownerId === authenticatedUserId`; missing and foreign IDs both return `Job not found`. | No document data (void result). | `id` must be a Convex `jobs` ID; `status` is one of `discovered`, `evaluated`, `applied`, `interview`, `offer`, `rejected`, or `discarded`. | Patches the owned job's status and `updatedAt`. |
+| `auth:signIn` — public action supplied by Convex Auth | No existing session is required for sign-up, sign-in, verification, or reset; the password-change flow requires a valid session and a verified password account. | Auth tables use the provider account's normalized email and linked user ID; password change also verifies that the retrieved account belongs to the current user. It does not access application-owned records. | On success: only Auth flow results (session tokens, a redirect/verifier, or a `started` marker). The application does not return auth-table records. Authentication failures intentionally use generic errors for sensitive flows. | Convex Auth envelope accepts optional provider, params, verifier, refresh token, and caller marker. Password-profile email is trimmed, lowercased, and checked against the configured email pattern. Sign-up Turnstile tokens must be 1–2,048 characters; passwords require at least 12 characters with a letter and number. No explicit maximum email or password length is currently imposed by application code. OTP expiry is 15 minutes; Convex Auth caps failed sign-in attempts at 5/hour, and HMAC-keyed sign-up/reset/resend attempts at 5/hour. | Creates/updates Auth accounts, verification records, sessions, and credentials. Sign-up sends a Turnstile verification request; reset and verification flows send transactional email through Resend. |
+| `auth:signOut` — public action supplied by Convex Auth | Callable without an app-level verified-user guard; it only invalidates the current authenticated session when one is present. | Current session only; no application-record access. | No data (void result). | No arguments. | Invalidates the current Auth session; no network call. |
+| `auth:isAuthenticated` — public query supplied by Convex Auth | None; it evaluates the credentials supplied with the call. | No owner field or record access. | One boolean indicating whether a user identity is present. | No arguments. | None. |
+| `auth:store` — internal mutation supplied by Convex Auth | Internal only; Convex Auth invokes it from its trusted server implementation. | Auth-table operations are scoped by the library's typed account, session, verification, and user IDs. No application-record access. | Internal caller only; browser callers cannot invoke or read its Auth-table result. | Convex Auth's discriminated `storeArgs` validator; not client-callable. | Creates, reads, updates, and deletes Convex Auth records needed for account, credential, verification-code, and session lifecycle operations. |
+| `auth:getVerifiedPasswordAccount` — internal query | Internal only. | Looks up the password account whose `authAccounts.userId` equals the supplied user ID and requires verified email state. | Internal caller receives only `providerAccountId`; no complete Auth document is returned. | `userId` must be a Convex `users` ID. | None. |
+| `abuse:consume` — internal mutation | Internal only; called from the server-side password provider before protected flows. | `authAbuseLimits` is scoped by a non-reversible HMAC-derived `key` plus `action`, not an email or application owner ID. | No caller-visible data (void result). | `action` is limited to `signUp`, `passwordReset`, or `resendVerification`; `key` must be a string. The application creates the key only from the normalized email with a server-held HMAC secret. | Creates or patches an in-database hourly abuse counter; rejects attempts past the configured limit. |
+| `GET /.well-known/openid-configuration` — public HTTP route registered by Convex Auth | None. | No owner data or application-record access. | Public OpenID discovery metadata: issuer, JWKS URL, and authorization endpoint. | No request body or route parameters. | None. |
+| `GET /.well-known/jwks.json` — public HTTP route registered by Convex Auth | None. | No owner data or application-record access. | The public JSON Web Key Set used to verify issued JWTs; no private signing key. | No request body or route parameters. | None. |
+
+### HTTP-route configuration note
+
+`web/convex/http.ts` delegates route registration exclusively to
+`auth.addHttpRoutes(http)`. The configured provider is credentials/password,
+not OAuth or OIDC, so the optional `/api/auth/signin/*` and
+`/api/auth/callback/*` provider routes are not registered in this deployment.
+There are no other application HTTP routes.
+
+### Data-boundary findings for follow-up work
+
+- The list query is owner-filtered and result-bounded, but it currently returns
+  the raw job document. Subsequent UI/data-shape work should return an explicit
+  public projection if `ownerId` or other internal fields must remain hidden.
+- Job creation trusts any string accepted by the Convex validators. The next
+  hardening task must add server-side length, whitespace, URL, and controlled
+  value constraints before insert.
+- The existing status update already uses the required non-enumerating
+  owner-check pattern. New read, update, and delete endpoints must use the
+  same fetch-then-owner-compare policy and receive anonymous/cross-account
+  tests.
+- Auth endpoints are provided by `@convex-dev/auth`; application code must use
+  its supported APIs for future export/deletion and must not read or mutate
+  Auth tables directly.
