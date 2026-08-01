@@ -45,6 +45,14 @@ function asPasswordUser(t: ReturnType<typeof createTest>, userId: Id<"users">) {
   return t.withIdentity({ issuer: "https://tests.example.test", subject: `${userId}|test-session` });
 }
 
+async function verifiedPasswordUser(t: ReturnType<typeof createTest>, email: string) {
+  await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", password: securePassword });
+  const account = await passwordAccount(t, email);
+  expect(account).not.toBeNull();
+  await signIn(t, { code: verificationCode("email verification"), email, flow: "email-verification" });
+  return asPasswordUser(t, account!.userId);
+}
+
 async function resetRequestNotice(t: ReturnType<typeof createTest>, email: string) {
   try {
     await signIn(t, { email, flow: "reset" });
@@ -165,5 +173,69 @@ describe("password account lifecycle", () => {
 
     // The React access screen intentionally presents this exact same notice whether the request resolves or rejects.
     await expect(signIn(t, { email: "unknown@example.test", flow: "reset" })).rejects.toThrow();
+  });
+});
+
+describe("job input validation", () => {
+  test("normalizes persisted job fields and accepts only parseable HTTPS URLs", async () => {
+    const t = createTest();
+    const user = await verifiedPasswordUser(t, "jobs@example.test");
+
+    const id = await user.mutation(api.jobs.create, {
+      company: "  Example\n\tCompany  ",
+      location: "  Remote   -  USA ",
+      notes: "  First\n\npriority  ",
+      source: "  Company   careers page ",
+      title: "  Security\tEngineer  ",
+      url: "  HTTPS://EXAMPLE.TEST/jobs/1  ",
+    });
+
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get(id)).toMatchObject({
+        company: "Example Company",
+        location: "Remote - USA",
+        notes: "First priority",
+        source: "Company careers page",
+        title: "Security Engineer",
+        url: "https://example.test/jobs/1",
+      });
+    });
+
+    await expect(user.mutation(api.jobs.create, {
+      company: "Example Company",
+      location: "Remote",
+      source: "Manual entry",
+      title: "Security Engineer",
+      url: "http://example.test/jobs/1",
+    })).rejects.toThrow("valid HTTPS URL");
+    await expect(user.mutation(api.jobs.create, {
+      company: "Example Company",
+      location: "Remote",
+      source: "Manual entry",
+      title: "Security Engineer",
+      url: "https://user:password@example.test/jobs/1",
+    })).rejects.toThrow("valid HTTPS URL");
+  });
+
+  test("rejects blank or oversized fields and invalid statuses", async () => {
+    const t = createTest();
+    const user = await verifiedPasswordUser(t, "job-limits@example.test");
+    const validJob = {
+      company: "Example Company",
+      location: "Remote",
+      source: "Manual entry",
+      title: "Security Engineer",
+      url: "https://example.test/jobs/1",
+    };
+    const id = await user.mutation(api.jobs.create, validJob);
+
+    await expect(user.mutation(api.jobs.create, { ...validJob, company: " \n\t " }))
+      .rejects.toThrow("company is required");
+    await expect(user.mutation(api.jobs.create, { ...validJob, title: "a".repeat(201) }))
+      .rejects.toThrow("title must be at most 200 characters");
+    await expect(user.mutation(api.jobs.create, { ...validJob, notes: "a".repeat(4_001) }))
+      .rejects.toThrow("notes must be at most 4000 characters");
+    await expect(user.mutation(api.jobs.updateStatus, { id, status: "invented" as any }))
+      .rejects.toThrow();
   });
 });
