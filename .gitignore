@@ -1,6 +1,8 @@
 # Personal data (user fills these)
 cv.md
+article-digest.md
 data/applications.md
+data/follow-ups.md
 data/pipeline.md
 data/scan-history.tsv
 reports/*.md
@@ -27,8 +29,11 @@ modes/_profile.md
 .update-dismissed
 .update-lock
 
-# Secrets (never commit — use .env.example as template)
-.env
+# Secrets and generated credentials (never commit — use examples as templates)
+.env*
+!.env.example
+!web/.env.example
+**/.convex-home/
 
 # Generated
 .resolved-prompt-*
