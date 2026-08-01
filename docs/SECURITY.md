@@ -62,6 +62,15 @@ Convex Auth as beta, so upgrade compatibility and the account-lifecycle tests
 must be reviewed before every production release. The current application is a
 React/Vite single-page application, which is a supported Convex Auth target.
 
+### Authenticated account controls
+
+The authenticated **Account security** surface requires the current password
+before changing it. Its server-side credentials-provider flow verifies the
+current session and verified password account, rotates the password using
+Convex Auth's supported credential API, and invalidates all other sessions.
+The browser receives no auth-table records or session IDs. The same surface
+can end only the current session or sign out into the email recovery flow.
+
 ### Why this is supported
 
 - [Convex Auth's current overview](https://docs.convex.dev/auth/convex-auth)

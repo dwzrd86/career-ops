@@ -1,4 +1,4 @@
-import { convexAuth, getAuthUserId } from "@convex-dev/auth/server";
+import { convexAuth, getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 import { PasswordConfig } from "@convex-dev/auth/providers/Password";
 import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
 import Resend from "@auth/core/providers/resend";
@@ -12,8 +12,10 @@ import {
   signInViaProvider,
 } from "@convex-dev/auth/server";
 import { GenericDataModel } from "convex/server";
-import { Value } from "convex/values";
+import { Value, v } from "convex/values";
 import { Scrypt } from "lucia";
+import { internalQuery } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 
@@ -25,6 +27,29 @@ function publicEmailProfile(params: Record<string, Value | undefined>) {
 
   return { email };
 }
+
+/**
+ * Centralized password-account policy for both application data and sensitive
+ * account changes. This runs only on the backend; neither auth records nor
+ * session identifiers are returned to the browser.
+ */
+async function verifiedPasswordAccountForUser(db: Pick<QueryCtx["db"], "query">, userId: Id<"users">) {
+  const passwordAccount = await db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (query) => query.eq("userId", userId).eq("provider", "password"))
+    .unique();
+
+  if (passwordAccount?.emailVerified === undefined) {
+    throw new Error("Email verification required");
+  }
+  return { providerAccountId: passwordAccount.providerAccountId };
+}
+
+/** Internal-only bridge for action-based Convex Auth provider callbacks. */
+export const getVerifiedPasswordAccount = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => await verifiedPasswordAccountForUser(ctx.db, args.userId),
+});
 
 type AbuseAction = "signUp" | "passwordReset" | "resendVerification";
 
@@ -168,6 +193,39 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
         return result;
       }
 
+      if (flow === "change-password") {
+        const currentPassword = params.currentPassword;
+        const newPassword = params.newPassword;
+        if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+          throw new Error("Authentication temporarily unavailable. Please try again later.");
+        }
+        config.validatePasswordRequirements?.(newPassword);
+
+        const userId = await getAuthUserId(ctx);
+        if (userId === null) {
+          throw new Error("Authentication temporarily unavailable. Please try again later.");
+        }
+        const { providerAccountId } = await ctx.runQuery((internal as any).auth.getVerifiedPasswordAccount, { userId });
+        const sessionId = await getAuthSessionId(ctx);
+        if (sessionId === null) {
+          throw new Error("Authentication temporarily unavailable. Please try again later.");
+        }
+        const retrieved = await retrieveAccount(ctx, {
+          account: { id: providerAccountId, secret: currentPassword },
+          provider,
+        });
+        if (retrieved === null || retrieved.user._id !== userId) {
+          throw new Error("Authentication temporarily unavailable. Please try again later.");
+        }
+
+        await modifyAccountCredentials(ctx, {
+          account: { id: providerAccountId, secret: newPassword },
+          provider,
+        });
+        await invalidateSessions(ctx, { except: [sessionId], userId });
+        return { sessionId, userId };
+      }
+
       if (flow === "email-verification") {
         if (!config.verify) throw new Error("Authentication temporarily unavailable. Please try again later.");
         const { account } = await retrieveAccount(ctx, { account: { id: email }, provider });
@@ -253,14 +311,6 @@ export async function requireVerifiedUser(ctx: QueryCtx | MutationCtx) {
   if (userId === null) {
     throw new Error("Authentication required");
   }
-
-  const passwordAccount = await ctx.db
-    .query("authAccounts")
-    .withIndex("userIdAndProvider", (query) => query.eq("userId", userId).eq("provider", "password"))
-    .unique();
-
-  if (passwordAccount?.emailVerified === undefined) {
-    throw new Error("Email verification required");
-  }
+  await verifiedPasswordAccountForUser(ctx.db, userId);
   return userId;
 }

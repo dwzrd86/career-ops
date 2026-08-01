@@ -12,6 +12,7 @@ import {
   LogOut,
   MapPin,
   Search,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -29,6 +30,10 @@ const statusLabels: Record<JobStatus, string> = {
 };
 
 const activeStatuses: JobStatus[] = ["discovered", "evaluated", "applied", "interview", "offer"];
+
+function passwordMeetsRequirements(password: string) {
+  return password.length >= 12 && /[a-z]/i.test(password) && /\d/.test(password);
+}
 
 type Turnstile = {
   remove(widgetId: string): void;
@@ -167,9 +172,9 @@ function EmptyPipeline({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function AccessScreen() {
+function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   const { signIn } = useAuthActions();
-  const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">("signIn");
+  const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">(initialMode);
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -218,10 +223,6 @@ function AccessScreen() {
   function clearMessages() {
     setError("");
     setNotice("");
-  }
-
-  function passwordMeetsRequirements(password: string) {
-    return password.length >= 12 && /[a-z]/i.test(password) && /\d/.test(password);
   }
 
   function startOver(nextMode: "signIn" | "signUp" | "reset") {
@@ -365,11 +366,104 @@ function AccessScreen() {
   );
 }
 
-function PipelineDashboard() {
+function AccountSecurityDialog({
+  onClose,
+  onRecovery,
+  onSignOut,
+}: {
+  onClose: () => void;
+  onRecovery: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
+  const { signIn } = useAuthActions();
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const currentPassword = String(values.get("currentPassword") || "");
+    const newPassword = String(values.get("newPassword") || "");
+    const confirmation = String(values.get("confirmation") || "");
+
+    if (newPassword !== confirmation) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (!passwordMeetsRequirements(newPassword)) {
+      setError("Use at least 12 characters, including a letter and a number.");
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setIsSubmitting(true);
+    try {
+      await signIn("password", { currentPassword, flow: "change-password", newPassword });
+      setNotice("Password updated. Other active sessions have been signed out.");
+      event.currentTarget.reset();
+    } catch {
+      setError("We could not change your password. Check your current password and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" role="presentation">
+      <section aria-modal="true" aria-labelledby="account-security-title" className="dialog account-security-dialog" role="dialog">
+        <header>
+          <div>
+            <p className="eyebrow">Account</p>
+            <h2 id="account-security-title">Account security</h2>
+          </div>
+          <button aria-label="Close" className="icon-button" onClick={onClose} type="button"><X size={18} /></button>
+        </header>
+        <p className="dialog-copy">Change your password, end this browser session, or recover access with a verified email code.</p>
+        <form onSubmit={submit}>
+          <label>
+            Current password
+            <input autoComplete="current-password" autoFocus name="currentPassword" required type="password" />
+          </label>
+          <label>
+            New password
+            <input autoComplete="new-password" minLength={12} name="newPassword" required type="password" />
+          </label>
+          <label>
+            Confirm new password
+            <input autoComplete="new-password" minLength={12} name="confirmation" required type="password" />
+          </label>
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
+          {notice ? <p className="access-notice" role="status">{notice}</p> : null}
+          <footer>
+            <button className="button secondary" onClick={onClose} type="button">Close</button>
+            <button className="button primary" disabled={isSubmitting} type="submit">
+              {isSubmitting ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}
+              Change password
+            </button>
+          </footer>
+        </form>
+        <div className="account-security-actions">
+          <button className="text-button" disabled={isSubmitting} onClick={() => void onSignOut()} type="button">Sign out from this session</button>
+          <button className="text-button" disabled={isSubmitting} onClick={() => void onRecovery()} type="button">Use email recovery instead</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PipelineDashboard({
+  onRecovery,
+  onSignOut,
+}: {
+  onRecovery: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
   const jobs = useQuery(functions.listJobs, {});
   const [query, setQuery] = useState("");
   const [showNewJob, setShowNewJob] = useState(false);
-  const { signOut } = useAuthActions();
+  const [showAccountSecurity, setShowAccountSecurity] = useState(false);
 
   const filteredJobs = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -402,7 +496,8 @@ function PipelineDashboard() {
             <h1>Pipeline</h1>
           </div>
           <div className="topbar-actions">
-            <button aria-label="Sign out" className="icon-button" onClick={() => void signOut()} title="Sign out" type="button"><LogOut size={17} /></button>
+            <button aria-label="Account security" className="icon-button" onClick={() => setShowAccountSecurity(true)} title="Account security" type="button"><ShieldCheck size={17} /></button>
+            <button aria-label="Sign out" className="icon-button" onClick={() => void onSignOut()} title="Sign out" type="button"><LogOut size={17} /></button>
             <button className="button primary" onClick={() => setShowNewJob(true)} type="button">
               <CirclePlus size={16} />
               Add role
@@ -455,16 +550,25 @@ function PipelineDashboard() {
       </section>
 
       {showNewJob ? <NewJobDialog onClose={() => setShowNewJob(false)} /> : null}
+      {showAccountSecurity ? <AccountSecurityDialog onClose={() => setShowAccountSecurity(false)} onRecovery={onRecovery} onSignOut={onSignOut} /> : null}
     </main>
   );
 }
 
 export default function App() {
+  const { signOut } = useAuthActions();
+  const [accessMode, setAccessMode] = useState<"signIn" | "reset">("signIn");
+
+  async function signOutTo(mode: "signIn" | "reset") {
+    setAccessMode(mode);
+    await signOut();
+  }
+
   return (
     <>
       <AuthLoading><main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Securing your workspace</main></AuthLoading>
-      <Unauthenticated><AccessScreen /></Unauthenticated>
-      <Authenticated><PipelineDashboard /></Authenticated>
+      <Unauthenticated><AccessScreen initialMode={accessMode} /></Unauthenticated>
+      <Authenticated><PipelineDashboard onRecovery={() => signOutTo("reset")} onSignOut={() => signOutTo("signIn")} /></Authenticated>
     </>
   );
 }
