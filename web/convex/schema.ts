@@ -30,4 +30,15 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_created_at", ["createdAt"])
     .index("by_owner_created_at", ["ownerId", "createdAt"]),
+  // This table intentionally stores an HMAC-derived address key, never an email address.
+  authAbuseLimits: defineTable({
+    action: v.union(
+      v.literal("passwordReset"),
+      v.literal("resendVerification"),
+      v.literal("signUp"),
+    ),
+    attempts: v.number(),
+    key: v.string(),
+    windowStartedAt: v.number(),
+  }).index("by_key_and_action", ["key", "action"]),
 });

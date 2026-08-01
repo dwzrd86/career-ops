@@ -15,7 +15,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { functions, Job, JobStatus } from "./convex";
 
 const statusLabels: Record<JobStatus, string> = {
@@ -29,6 +29,25 @@ const statusLabels: Record<JobStatus, string> = {
 };
 
 const activeStatuses: JobStatus[] = ["discovered", "evaluated", "applied", "interview", "offer"];
+
+type Turnstile = {
+  remove(widgetId: string): void;
+  render(container: HTMLElement, options: {
+    action: string;
+    callback(token: string): void;
+    "error-callback"(): void;
+    "expired-callback"(): void;
+    sitekey: string;
+    theme: "light";
+  }): string;
+  reset(widgetId?: string): void;
+};
+
+declare global {
+  interface Window {
+    turnstile?: Turnstile;
+  }
+}
 
 function StatusSelect({ job }: { job: Job }) {
   const updateStatus = useMutation(functions.updateJobStatus);
@@ -155,9 +174,46 @@ function AccessScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [botProtectionToken, setBotProtectionToken] = useState("");
+  const botProtectionElement = useRef<HTMLDivElement>(null);
+  const botProtectionWidgetId = useRef<string | undefined>(undefined);
 
   const isPasswordMode = mode === "signIn" || mode === "signUp";
   const isResetVerification = mode === "resetVerification";
+
+  useEffect(() => {
+    const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+    if (mode !== "signUp" || !siteKey || !botProtectionElement.current) return;
+
+    const render = () => {
+      if (!window.turnstile || !botProtectionElement.current || botProtectionWidgetId.current) return;
+      botProtectionWidgetId.current = window.turnstile.render(botProtectionElement.current, {
+        action: "signup",
+        callback: setBotProtectionToken,
+        "error-callback": () => setBotProtectionToken(""),
+        "expired-callback": () => setBotProtectionToken(""),
+        sitekey: siteKey,
+        theme: "light",
+      });
+    };
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"]');
+    if (existing) {
+      existing.addEventListener("load", render);
+      render();
+    } else {
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.addEventListener("load", render);
+      document.head.append(script);
+    }
+
+    return () => {
+      if (botProtectionWidgetId.current && window.turnstile) window.turnstile.remove(botProtectionWidgetId.current);
+      botProtectionWidgetId.current = undefined;
+      setBotProtectionToken("");
+    };
+  }, [mode]);
 
   function clearMessages() {
     setError("");
@@ -204,7 +260,12 @@ function AccessScreen() {
       } else if (isResetVerification) {
         await signIn("password", { email, code, newPassword: password, flow: "reset-verification" });
       } else {
-        const result = await signIn("password", { email: submittedEmail, password, flow: mode });
+        const result = await signIn("password", {
+          ...(mode === "signUp" ? { botProtectionToken } : {}),
+          email: submittedEmail,
+          flow: mode,
+          password,
+        });
         if (!result.signingIn) {
           setEmail(submittedEmail);
           setMode("verify");
@@ -220,6 +281,11 @@ function AccessScreen() {
         setError(mode === "verify" || isResetVerification ? "We could not verify that code. Request a new one and try again." : "Authentication failed. Check your details and try again.");
       }
     } finally {
+      // Turnstile tokens are single-use, so each server-side signup attempt needs a fresh one.
+      if (mode === "signUp" && botProtectionWidgetId.current && window.turnstile) {
+        window.turnstile.reset(botProtectionWidgetId.current);
+        setBotProtectionToken("");
+      }
       setIsSubmitting(false);
     }
   }
@@ -274,14 +340,17 @@ function AccessScreen() {
               <input autoComplete="one-time-code" autoFocus inputMode="numeric" name="code" pattern="[0-9]{8}" required type="text" />
             </label>
           ) : null}
+          {mode === "signUp" ? (
+            <div aria-label="Bot protection" ref={botProtectionElement} />
+          ) : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {notice ? <p className="access-notice" role="status">{notice}</p> : null}
-          <button className="button primary access-submit" disabled={isSubmitting} type="submit">
+          <button className="button primary access-submit" disabled={isSubmitting || (mode === "signUp" && !botProtectionToken)} type="submit">
             {isSubmitting ? <LoaderCircle className="spin" size={16} /> : <LockKeyhole size={16} />}
             {submitLabel}
           </button>
         </form>
-        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.</p> : null}
+        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
         {mode === "verify" ? <>
           <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification code</button>
           <button className="text-button" onClick={() => startOver("signIn")} type="button">Back to sign in</button>
