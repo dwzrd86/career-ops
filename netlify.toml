@@ -5,3 +5,10 @@
 
 [build.environment]
   NODE_VERSION = "24"
+
+# Observe the production browser surface before enforcement. The only third-party
+# browser integration is optional Cloudflare Turnstile during account creation.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy-Report-Only = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://beaming-bass-637.convex.cloud wss://beaming-bass-637.convex.cloud https://beaming-bass-637.convex.site; frame-src https://challenges.cloudflare.com"

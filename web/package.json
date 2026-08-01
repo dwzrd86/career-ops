@@ -10,6 +10,7 @@
     "verify:production-build": "node scripts/production-build-guard.mjs verify",
     "test:auth": "vitest run --config vitest.auth.config.ts",
     "test:production-build-guard": "node --test scripts/production-build-guard.test.mjs",
+    "test:security-headers": "node --test scripts/security-headers.test.mjs",
     "preview": "vite preview",
     "convex:dev": "convex dev",
     "deploy": "convex deploy --cmd 'npm run build'"
