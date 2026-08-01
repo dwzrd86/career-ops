@@ -1,0 +1,41 @@
+name: Web Release Safety
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - "netlify.toml"
+      - ".github/workflows/web-release-safety.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "netlify.toml"
+      - ".github/workflows/web-release-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-web-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      VITE_CONVEX_URL: https://production-ci-check.convex.cloud
+      CONVEX_DEV_DEPLOYMENT_URLS: https://development-ci-check.convex.cloud
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run test:production-build-guard
+      - run: npm run build
+      - run: npm run verify:production-build
+      - name: Scan source for accidentally committed secrets
+        working-directory: ${{ github.workspace }}
+        run: node web/scripts/secret-pattern-scan.mjs

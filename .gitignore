@@ -50,3 +50,6 @@ bun.lock
 .claude/memory/
 career-dashboard
 package-lock.json
+!web/package-lock.json
+# Local Netlify folder
+.netlify

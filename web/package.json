@@ -1,0 +1,32 @@
+{
+  "name": "career-ops-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/production-build-guard.mjs build",
+    "build:app": "tsc --noEmit && vite build",
+    "verify:production-build": "node scripts/production-build-guard.mjs verify",
+    "test:production-build-guard": "node --test scripts/production-build-guard.test.mjs",
+    "preview": "vite preview",
+    "convex:dev": "convex dev",
+    "deploy": "convex deploy --cmd 'npm run build'"
+  },
+  "dependencies": {
+    "@auth/core": "^0.41.2",
+    "@convex-dev/auth": "^0.0.94",
+    "@vitejs/plugin-react": "^4.4.1",
+    "convex": "^1.42.1",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "vite": "^6.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.8.3"
+  }
+}
