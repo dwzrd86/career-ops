@@ -12,3 +12,26 @@
   for = "/*"
   [headers.values]
     Content-Security-Policy-Report-Only = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://beaming-bass-637.convex.cloud wss://beaming-bass-637.convex.cloud https://beaming-bass-637.convex.site; frame-src https://challenges.cloudflare.com"
+    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+
+# The entry document contains the deployment-specific Convex endpoint. Never
+# allow a browser to reuse an earlier deploy's HTML after a production release.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Vite names these files from their content, so they are safe to retain for a
+# year while a freshly fetched entry document selects the current bundle.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
