@@ -71,6 +71,42 @@ Convex Auth's supported credential API, and invalidates all other sessions.
 The browser receives no auth-table records or session IDs. The same surface
 can end only the current session or sign out into the email recovery flow.
 
+### Required deployment configuration
+
+Set browser values in the Netlify build environment and server values in the
+Convex deployment environment. Do not copy server secrets into `VITE_*`
+variables, `.env.example`, or browser code. `web/.env.example` lists the same
+names without secret values.
+
+| Name | Store | Purpose |
+| --- | --- | --- |
+| `VITE_CONVEX_URL` | Netlify build | Public production Convex endpoint. |
+| `VITE_TURNSTILE_SITE_KEY` | Netlify build | Public Cloudflare Turnstile site key. The production build guard rejects a missing value. |
+| `AUTH_TURNSTILE_SECRET` | Convex secret | Server-only Turnstile verification credential. |
+| `AUTH_TURNSTILE_HOSTNAME` | Convex environment | Allowed production hostname returned by Turnstile. |
+| `AUTH_RESEND_FROM` | Convex environment | Verified Resend sender identity, such as `Jobbie <accounts@example.com>`; the domain must be verified with Resend before production use. |
+| `AUTH_RESEND_KEY` | Convex secret | Resend API credential used for verification and reset mail. |
+| `AUTH_ABUSE_KEY` | Convex secret | High-entropy HMAC key used to derive non-reversible rate-limit keys from addresses. |
+| `SITE_URL` | Convex environment | Public application origin used by Convex Auth to form both verification and reset OTP callback URLs (`SITE_URL?code=...`). The application currently sends only the OTP, which users enter on the corresponding access screen. |
+| `CONVEX_SITE_URL` | Convex environment | Convex HTTP-site origin used by the Auth provider and signed session tokens. |
+| `JWT_PRIVATE_KEY`, `JWKS` | Convex secrets | Convex Auth signing key and corresponding public JSON Web Key Set. Generate with the supported Convex Auth key command; never hand-author or commit them. |
+
+The password provider checks its required server configuration before every
+password flow. Missing lifecycle, recovery, abuse-key, or sign-in configuration
+therefore returns only the generic authentication retry response and cannot
+create an account or session. The expected Turnstile hostname is mandatory for
+registration. This is intentionally fail-closed in production (and keeps local
+misconfiguration visible during development).
+
+### Automated account-lifecycle tests
+
+Run `cd web && npm run test:auth`. The suite starts an isolated,
+in-memory Convex test backend for each case and intercepts Resend requests into
+a test-only outbox; it never needs a real deployment, mailbox, or credential.
+It exercises invalid addresses and passwords, repeat registration,
+unverified-data denial, verification, reset expiry, server rate limits, and the
+same generic reset-screen outcome for known and unknown addresses.
+
 ### Why this is supported
 
 - [Convex Auth's current overview](https://docs.convex.dev/auth/convex-auth)

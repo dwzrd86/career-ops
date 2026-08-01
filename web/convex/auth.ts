@@ -52,13 +52,37 @@ export const getVerifiedPasswordAccount = internalQuery({
 });
 
 type AbuseAction = "signUp" | "passwordReset" | "resendVerification";
+type SecurityEnvironment =
+  | "AUTH_ABUSE_KEY"
+  | "AUTH_RESEND_FROM"
+  | "AUTH_RESEND_KEY"
+  | "AUTH_TURNSTILE_HOSTNAME"
+  | "AUTH_TURNSTILE_SECRET"
+  | "CONVEX_SITE_URL"
+  | "SITE_URL";
 
-function requiredSecurityEnvironment(name: "AUTH_ABUSE_KEY" | "AUTH_TURNSTILE_SECRET") {
+function requiredSecurityEnvironment(name: SecurityEnvironment) {
   const value = process.env[name];
   if (!value) {
     throw new Error("Authentication temporarily unavailable. Please try again later.");
   }
   return value;
+}
+
+/**
+ * Require the server-side configuration before any password flow can create
+ * an account, deliver an OTP, or establish a session. This deliberately
+ * fails closed: a production deployment without its recovery controls cannot
+ * accept or authenticate password accounts.
+ */
+function requireAccountLifecycleConfiguration(flow: string) {
+  for (const name of ["AUTH_ABUSE_KEY", "AUTH_RESEND_FROM", "AUTH_RESEND_KEY", "CONVEX_SITE_URL", "SITE_URL"] as const) {
+    requiredSecurityEnvironment(name);
+  }
+  if (flow === "signUp") {
+    requiredSecurityEnvironment("AUTH_TURNSTILE_HOSTNAME");
+    requiredSecurityEnvironment("AUTH_TURNSTILE_SECRET");
+  }
 }
 
 async function privacyPreservingKey(email: string) {
@@ -96,8 +120,8 @@ function isExpectedTurnstileResponse(value: unknown): value is { action?: string
   if (typeof value !== "object" || value === null || (value as { success?: unknown }).success !== true) {
     return false;
   }
-  const expectedHostname = process.env.AUTH_TURNSTILE_HOSTNAME;
-  return (!expectedHostname || (value as { hostname?: unknown }).hostname === expectedHostname)
+  const expectedHostname = requiredSecurityEnvironment("AUTH_TURNSTILE_HOSTNAME");
+  return (value as { hostname?: unknown }).hostname === expectedHostname
     && (!(value as { action?: unknown }).action || (value as { action?: unknown }).action === "signup");
 }
 
@@ -107,6 +131,7 @@ async function enforceAbuseControls(
   ctx: GenericActionCtxWithAuthConfig<GenericDataModel>,
 ) {
   const flow = params.flow;
+  requireAccountLifecycleConfiguration(typeof flow === "string" ? flow : "");
   let action: AbuseAction | null = null;
 
   if (flow === "signUp") {
@@ -149,6 +174,9 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
       const profile = config.profile?.(params, ctx) ?? publicEmailProfile(params);
       await enforceAbuseControls(params, profile.email, ctx);
       const email = profile.email;
+      // Providers create and validate OTP records from params, so keep their
+      // identifier aligned with the normalized password-account address.
+      const normalizedParams = { ...params, email };
 
       if (flow === "signUp") {
         const secret = params.password as string;
@@ -161,7 +189,7 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
           shouldLinkViaPhone: false,
         });
         if (config.verify && !account.emailVerified) {
-          return await signInViaProvider(ctx, config.verify, { accountId: account._id, params });
+          return await signInViaProvider(ctx, config.verify, { accountId: account._id, params: normalizedParams });
         }
         return { userId: user._id };
       }
@@ -172,7 +200,7 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
         const retrieved = await retrieveAccount(ctx, { account: { id: email, secret }, provider });
         if (retrieved === null) throw new Error("Authentication temporarily unavailable. Please try again later.");
         if (config.verify && !retrieved.account.emailVerified) {
-          return await signInViaProvider(ctx, config.verify, { accountId: retrieved.account._id, params });
+          return await signInViaProvider(ctx, config.verify, { accountId: retrieved.account._id, params: normalizedParams });
         }
         return { userId: retrieved.user._id };
       }
@@ -180,13 +208,13 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
       if (flow === "reset") {
         if (!config.reset) throw new Error("Authentication temporarily unavailable. Please try again later.");
         const { account } = await retrieveAccount(ctx, { account: { id: email }, provider });
-        return await signInViaProvider(ctx, config.reset, { accountId: account._id, params });
+        return await signInViaProvider(ctx, config.reset, { accountId: account._id, params: normalizedParams });
       }
 
       if (flow === "reset-verification") {
         if (!config.reset || params.newPassword === undefined) throw new Error("Authentication temporarily unavailable. Please try again later.");
         const { account } = await retrieveAccount(ctx, { account: { id: email }, provider });
-        const result = await signInViaProvider(ctx, config.reset, { params });
+        const result = await signInViaProvider(ctx, config.reset, { params: normalizedParams });
         if (result === null || account.userId !== result.userId) throw new Error("Authentication temporarily unavailable. Please try again later.");
         await modifyAccountCredentials(ctx, { account: { id: email, secret: params.newPassword as string }, provider });
         await invalidateSessions(ctx, { except: [result.sessionId], userId: result.userId });
@@ -229,7 +257,7 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
       if (flow === "email-verification") {
         if (!config.verify) throw new Error("Authentication temporarily unavailable. Please try again later.");
         const { account } = await retrieveAccount(ctx, { account: { id: email }, provider });
-        return await signInViaProvider(ctx, config.verify, { accountId: account._id, params });
+        return await signInViaProvider(ctx, config.verify, { accountId: account._id, params: normalizedParams });
       }
 
       throw new Error("Authentication temporarily unavailable. Please try again later.");

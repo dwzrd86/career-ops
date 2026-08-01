@@ -51,13 +51,17 @@ and handling rules.
 
 ## Authentication and data isolation
 
-Email/password registration is open to new users. Convex Auth owns the account
-records, and every job record is scoped to its authenticated owner; unauthenticated
-requests and cross-account status changes are rejected by the backend.
+Email/password registration requires a verified address. Convex Auth owns the
+account records, and every job record is scoped to its verified, authenticated
+owner; unauthenticated, unverified, and cross-account requests are rejected by
+the backend. Registration also requires Cloudflare Turnstile and backend rate
+limits.
 
-Before a broad public launch, configure an email provider for email verification
-and password resets. Do not store job-board passwords, browser cookies, real
-resumes, or application answers in Netlify environment variables.
+Set the required Resend, Turnstile, callback, and signing-key configuration
+before deployment. The exact value-free names and secret-store boundaries are
+documented in [the security policy](../docs/SECURITY.md#required-deployment-configuration).
+Do not store job-board passwords, browser cookies, real resumes, or application
+answers in Netlify environment variables.
 
 ## Current product scope
 

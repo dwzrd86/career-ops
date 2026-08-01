@@ -8,6 +8,7 @@
     "build": "node scripts/production-build-guard.mjs build",
     "build:app": "tsc --noEmit && vite build",
     "verify:production-build": "node scripts/production-build-guard.mjs verify",
+    "test:auth": "vitest run --config vitest.auth.config.ts",
     "test:production-build-guard": "node --test scripts/production-build-guard.test.mjs",
     "preview": "vite preview",
     "convex:dev": "convex dev",
@@ -24,9 +25,12 @@
     "vite": "^6.3.6"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "typescript": "^5.8.3"
+    "convex-test": "^0.0.54",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }

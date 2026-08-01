@@ -48,6 +48,11 @@ export function validateProductionUrl({ productionUrl, developmentUrls = [] }) {
   return normalizedProductionUrl;
 }
 
+export function validateTurnstileSiteKey(value = process.env.VITE_TURNSTILE_SITE_KEY) {
+  if (!value || !value.trim()) fail("VITE_TURNSTILE_SITE_KEY must be configured for bot-protected registration.");
+  return value;
+}
+
 export function embeddedConvexUrls(source) {
   return [...new Set(source.match(convexUrlPattern) || [])];
 }
@@ -72,6 +77,7 @@ export function verifyDist(expectedUrl, assetsDirectory = resolve(webDirectory, 
 }
 
 function build() {
+  validateTurnstileSiteKey();
   const expectedUrl = validateProductionUrl({
     productionUrl: process.env.VITE_CONVEX_URL,
     developmentUrls: developmentDeploymentUrls(),
@@ -86,6 +92,7 @@ function build() {
 }
 
 function verify() {
+  validateTurnstileSiteKey();
   const expectedUrl = validateProductionUrl({
     productionUrl: process.env.VITE_CONVEX_URL,
     developmentUrls: developmentDeploymentUrls(),

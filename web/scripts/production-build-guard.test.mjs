@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   embeddedConvexUrls,
   parseDeploymentUrl,
+  validateTurnstileSiteKey,
   validateProductionUrl,
 } from "./production-build-guard.mjs";
 
@@ -24,6 +25,11 @@ test("rejects a production build that targets a known development deployment", (
     () => validateProductionUrl({ productionUrl: developmentUrl, developmentUrls: [developmentUrl] }),
     /matches a development deployment URL/,
   );
+});
+
+test("requires the public bot-protection site key for production builds", () => {
+  assert.equal(validateTurnstileSiteKey("1x00000000000000000000AA"), "1x00000000000000000000AA");
+  assert.throws(() => validateTurnstileSiteKey(""), /VITE_TURNSTILE_SITE_KEY/);
 });
 
 test("finds unique Convex URLs embedded in a bundle", () => {
