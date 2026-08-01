@@ -1,6 +1,6 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { requireVerifiedUser } from "./auth";
 
 const jobStatus = v.union(
   v.literal("discovered"),
@@ -15,7 +15,7 @@ const jobStatus = v.union(
 export const list = queryGeneric({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUser(ctx);
+    const userId = await requireVerifiedUser(ctx);
     return await ctx.db
       .query("jobs")
       .withIndex("by_owner_created_at", (query) => query.eq("ownerId", userId))
@@ -34,7 +34,7 @@ export const create = mutationGeneric({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const ownerId = await requireUser(ctx);
+    const ownerId = await requireVerifiedUser(ctx);
     const now = Date.now();
     return await ctx.db.insert("jobs", {
       ...args,
@@ -52,7 +52,7 @@ export const updateStatus = mutationGeneric({
     status: jobStatus,
   },
   handler: async (ctx, { id, status }) => {
-    const userId = await requireUser(ctx);
+    const userId = await requireVerifiedUser(ctx);
     const job = await ctx.db.get(id);
     if (job === null || job.ownerId !== userId) {
       throw new Error("Job not found");
@@ -60,11 +60,3 @@ export const updateStatus = mutationGeneric({
     await ctx.db.patch(id, { status, updatedAt: Date.now() });
   },
 });
-
-async function requireUser(ctx: Parameters<typeof getAuthUserId>[0]) {
-  const userId = await getAuthUserId(ctx);
-  if (userId === null) {
-    throw new Error("Authentication required");
-  }
-  return userId;
-}

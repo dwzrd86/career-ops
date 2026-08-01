@@ -150,67 +150,147 @@ function EmptyPipeline({ onAdd }: { onAdd: () => void }) {
 
 function AccessScreen() {
   const { signIn } = useAuthActions();
-  const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
+  const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">("signIn");
+  const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const isPasswordMode = mode === "signIn" || mode === "signUp";
+  const isResetVerification = mode === "resetVerification";
+
+  function clearMessages() {
+    setError("");
+    setNotice("");
+  }
+
+  function passwordMeetsRequirements(password: string) {
+    return password.length >= 12 && /[a-z]/i.test(password) && /\d/.test(password);
+  }
+
+  function startOver(nextMode: "signIn" | "signUp" | "reset") {
+    setMode(nextMode);
+    clearMessages();
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    const email = String(values.get("email") || "").trim();
+    const submittedEmail = String(values.get("email") || email).trim();
     const password = String(values.get("password") || "");
     const confirmation = String(values.get("confirmation") || "");
+    const code = String(values.get("code") || "").trim();
 
-    if (mode === "signUp" && password !== confirmation) {
+    if ((mode === "signUp" || isResetVerification) && password !== confirmation) {
       setError("Passwords do not match.");
       return;
     }
+    if ((mode === "signUp" || isResetVerification) && !passwordMeetsRequirements(password)) {
+      setError("Use at least 12 characters, including a letter and a number.");
+      return;
+    }
 
-    setError("");
+    clearMessages();
     setIsSubmitting(true);
     try {
-      await signIn("password", { email, password, flow: mode });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Authentication failed. Try again.");
+      if (mode === "reset") {
+        // This response is intentionally identical for known and unknown addresses.
+        await signIn("password", { email: submittedEmail, flow: "reset" });
+        setEmail(submittedEmail);
+        setMode("resetVerification");
+        setNotice("If an account matches that address, a reset code is on its way.");
+      } else if (mode === "verify") {
+        await signIn("password", { email, code, flow: "email-verification" });
+      } else if (isResetVerification) {
+        await signIn("password", { email, code, newPassword: password, flow: "reset-verification" });
+      } else {
+        const result = await signIn("password", { email: submittedEmail, password, flow: mode });
+        if (!result.signingIn) {
+          setEmail(submittedEmail);
+          setMode("verify");
+          setNotice("Check your inbox for an eight-digit verification code before accessing your pipeline.");
+        }
+      }
+    } catch {
+      if (mode === "reset") {
+        setEmail(submittedEmail);
+        setMode("resetVerification");
+        setNotice("If an account matches that address, a reset code is on its way.");
+      } else {
+        setError(mode === "verify" || isResetVerification ? "We could not verify that code. Request a new one and try again." : "Authentication failed. Check your details and try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  async function resendVerification() {
+    clearMessages();
+    setIsSubmitting(true);
+    try {
+      await signIn("password", { email, flow: "email-verification" });
+      setNotice("If the address is eligible for verification, a new code is on its way.");
+    } catch {
+      setNotice("If the address is eligible for verification, a new code is on its way.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const heading = mode === "signIn" ? "Welcome back." : mode === "signUp" ? "Create your secure workspace." : mode === "verify" ? "Verify your email." : mode === "reset" ? "Reset your password." : "Enter your reset code.";
+  const submitLabel = mode === "signIn" ? "Sign in" : mode === "signUp" ? "Create account" : mode === "verify" ? "Verify email" : mode === "reset" ? "Send reset code" : "Reset password";
 
   return (
     <main className="access-screen">
       <section className="access-panel">
         <div className="access-mark"><LockKeyhole size={22} /></div>
         <p className="eyebrow">Private career workspace</p>
-        <h1>{mode === "signIn" ? "Welcome back." : "Create your secure workspace."}</h1>
+        <h1>{heading}</h1>
         <p className="access-copy">
-          Job leads, applications, and tailored materials remain scoped to your authenticated account.
+          {mode === "verify" ? `Enter the code sent to ${email}.` : "Job leads, applications, and tailored materials remain scoped to your authenticated account."}
         </p>
         <form onSubmit={submit}>
-          <label>
-            Email
-            <input autoComplete="email" autoFocus name="email" required type="email" />
-          </label>
-          <label>
-            Password
-            <input autoComplete={mode === "signIn" ? "current-password" : "new-password"} minLength={12} name="password" required type="password" />
-          </label>
-          {mode === "signUp" ? (
+          {!isResetVerification && mode !== "verify" ? (
+            <label>
+              Email
+              <input autoComplete="email" autoFocus name="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
+            </label>
+          ) : <input name="email" type="hidden" value={email} />}
+          {isPasswordMode || isResetVerification ? (
+            <label>
+              {isResetVerification ? "New password" : "Password"}
+              <input autoComplete={mode === "signIn" ? "current-password" : "new-password"} minLength={12} name="password" required type="password" />
+            </label>
+          ) : null}
+          {mode === "signUp" || isResetVerification ? (
             <label>
               Confirm password
               <input autoComplete="new-password" minLength={12} name="confirmation" required type="password" />
             </label>
           ) : null}
-          {error ? <p className="form-error">{error}</p> : null}
+          {mode === "verify" || isResetVerification ? (
+            <label>
+              Code
+              <input autoComplete="one-time-code" autoFocus inputMode="numeric" name="code" pattern="[0-9]{8}" required type="text" />
+            </label>
+          ) : null}
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
+          {notice ? <p className="access-notice" role="status">{notice}</p> : null}
           <button className="button primary access-submit" disabled={isSubmitting} type="submit">
             {isSubmitting ? <LoaderCircle className="spin" size={16} /> : <LockKeyhole size={16} />}
-            {mode === "signIn" ? "Sign in" : "Create account"}
+            {submitLabel}
           </button>
         </form>
-        {mode === "signUp" ? <p className="access-hint">Use at least 12 characters, including a letter and a number.</p> : null}
-        <button className="text-button" onClick={() => { setMode(mode === "signIn" ? "signUp" : "signIn"); setError(""); }} type="button">
-          {mode === "signIn" ? "Create an account" : "Already have an account? Sign in"}
-        </button>
+        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.</p> : null}
+        {mode === "verify" ? <>
+          <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification code</button>
+          <button className="text-button" onClick={() => startOver("signIn")} type="button">Back to sign in</button>
+        </> : mode === "resetVerification" ? <button className="text-button" onClick={() => startOver("reset")} type="button">Request another reset code</button> : <>
+          <button className="text-button" onClick={() => startOver(mode === "signIn" ? "signUp" : "signIn")} type="button">
+            {mode === "signIn" ? "Create an account" : "Already have an account? Sign in"}
+          </button>
+          {mode === "signIn" ? <button className="text-button" onClick={() => startOver("reset")} type="button">Forgot your password?</button> : null}
+        </>}
       </section>
     </main>
   );
