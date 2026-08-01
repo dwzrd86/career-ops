@@ -14,6 +14,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -72,6 +73,22 @@ function StatusSelect({ job }: { job: Job }) {
       </select>
       <ChevronDown aria-hidden="true" size={14} />
     </label>
+  );
+}
+
+function JobActions({ job }: { job: Job }) {
+  const removeJob = useMutation(functions.removeJob);
+
+  async function remove() {
+    if (!window.confirm(`Remove ${job.title} at ${job.company} from your pipeline?`)) return;
+    await removeJob({ id: job._id });
+  }
+
+  return (
+    <>
+      <a aria-label={`Open ${job.title} at ${job.company}`} className="icon-button" href={job.url} rel="noreferrer" target="_blank"><ArrowUpRight size={17} /></a>
+      <button aria-label={`Remove ${job.title} at ${job.company}`} className="icon-button" onClick={() => void remove()} title="Remove role" type="button"><Trash2 size={17} /></button>
+    </>
   );
 }
 
@@ -539,7 +556,7 @@ function PipelineDashboard({
                       <td><span className="location"><MapPin size={14} />{job.location}</span></td>
                       <td>{job.source}</td>
                       <td><StatusSelect job={job} /></td>
-                      <td><a aria-label={`Open ${job.title} at ${job.company}`} className="icon-button" href={job.url} rel="noreferrer" target="_blank"><ArrowUpRight size={17} /></a></td>
+                      <td><JobActions job={job} /></td>
                     </tr>
                   ))}
                 </tbody>

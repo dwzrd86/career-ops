@@ -239,3 +239,49 @@ describe("job input validation", () => {
       .rejects.toThrow();
   });
 });
+
+describe("job ownership authorization", () => {
+  const validJob = {
+    company: "Example Company",
+    location: "Remote",
+    source: "Manual entry",
+    title: "Security Engineer",
+    url: "https://example.test/jobs/1",
+  };
+
+  test("rejects anonymous pipeline reads and mutations", async () => {
+    const t = createTest();
+    const owner = await verifiedPasswordUser(t, "owner@example.test");
+    const id = await owner.mutation(api.jobs.create, validJob);
+
+    await expect(t.query(api.jobs.list)).rejects.toThrow("Authentication required");
+    await expect(t.mutation(api.jobs.create, validJob)).rejects.toThrow("Authentication required");
+    await expect(t.mutation(api.jobs.updateStatus, { id, status: "applied" })).rejects.toThrow("Authentication required");
+    await expect(t.mutation(api.jobs.remove, { id })).rejects.toThrow("Authentication required");
+  });
+
+  test("does not reveal or modify another user's job", async () => {
+    const t = createTest();
+    const owner = await verifiedPasswordUser(t, "owner@example.test");
+    const otherUser = await verifiedPasswordUser(t, "other@example.test");
+    const ownerJobId = await owner.mutation(api.jobs.create, validJob);
+    const otherJobId = await otherUser.mutation(api.jobs.create, { ...validJob, title: "Other user's role" });
+
+    await expect(otherUser.mutation(api.jobs.updateStatus, { id: ownerJobId, status: "applied" }))
+      .rejects.toThrow("Job not found");
+    await expect(otherUser.mutation(api.jobs.remove, { id: ownerJobId }))
+      .rejects.toThrow("Job not found");
+    await expect(owner.query(api.jobs.list)).resolves.toEqual([
+      expect.objectContaining({ _id: ownerJobId, status: "discovered" }),
+    ]);
+    await expect(otherUser.query(api.jobs.list)).resolves.toEqual([
+      expect.objectContaining({ _id: otherJobId, title: "Other user's role" }),
+    ]);
+
+    await owner.mutation(api.jobs.remove, { id: ownerJobId });
+    await expect(owner.query(api.jobs.list)).resolves.toEqual([]);
+    await expect(otherUser.query(api.jobs.list)).resolves.toEqual([
+      expect.objectContaining({ _id: otherJobId, title: "Other user's role" }),
+    ]);
+  });
+});

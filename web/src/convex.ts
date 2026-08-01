@@ -43,4 +43,5 @@ export const functions = {
     { id: string; status: JobStatus },
     null
   >("jobs:updateStatus"),
+  removeJob: makeFunctionReference<"mutation", { id: string }, null>("jobs:remove"),
 };

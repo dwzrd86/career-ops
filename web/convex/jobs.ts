@@ -107,3 +107,15 @@ export const updateStatus = mutationGeneric({
     await ctx.db.patch(id, { status, updatedAt: Date.now() });
   },
 });
+
+export const remove = mutationGeneric({
+  args: { id: v.id("jobs") },
+  handler: async (ctx, { id }) => {
+    const userId = await requireVerifiedUser(ctx);
+    const job = await ctx.db.get(id);
+    if (job === null || job.ownerId !== userId) {
+      throw new Error("Job not found");
+    }
+    await ctx.db.delete(id);
+  },
+});
