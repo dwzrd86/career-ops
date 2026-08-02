@@ -29,6 +29,20 @@ export async function inviteTokenHash(value: unknown) {
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** A keyed, opaque lookup value for a temporarily reserved signup address. */
+export async function reservationEmailHash(value: string) {
+  const email = value.trim().toLowerCase();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(requiredEnrollmentEnvironment()),
+    { hash: "SHA-256", name: "HMAC" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`reservation:${email}`));
+  return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function generateInviteToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);

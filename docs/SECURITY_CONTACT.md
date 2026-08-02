@@ -28,7 +28,7 @@ Include only the minimum information needed to investigate:
 - likely impact and any mitigation already taken; and
 - a way to contact you for follow-up.
 
-Do not send passwords, authentication or reset codes, access tokens, private
+Do not send passwords, authentication or reset links, access tokens, private
 keys, full resumes, job notes, application answers, or another user's personal
 data. If a proof of concept needs sensitive material, first describe the
 minimum safe way to share it.

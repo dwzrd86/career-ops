@@ -36,7 +36,7 @@ service.
 ## 2. Accounts and acceptable use
 
 - Register only with an email address you control, complete verification, and
-  keep your password and verification codes confidential.
+  keep your password and verification links confidential.
 - Use the service only for lawful job-search organization and in accordance
   with the terms that apply to any job site or employer link you open.
 - Do not attempt to access another person's account or data, evade rate limits

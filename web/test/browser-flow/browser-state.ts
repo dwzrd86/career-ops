@@ -59,14 +59,19 @@ export function setBrowserFlowPendingAccount(email: string, password: string) {
   publish({ pendingAccount: { email, password } });
 }
 
-export function verifyBrowserFlowAccount(code: string) {
-  if (code !== "12345678" || state.pendingAccount === null) throw new Error("verification failed");
+export function verifyBrowserFlowAccount() {
+  if (state.pendingAccount === null) throw new Error("verification failed");
   publish({
     authenticated: true,
     email: state.pendingAccount.email,
     password: state.pendingAccount.password,
     pendingAccount: null,
   });
+}
+
+export function resetBrowserFlowPassword(password: string) {
+  if (state.email === null) throw new Error("reset failed");
+  publish({ password });
 }
 
 export function signInBrowserFlow(email: string, password: string) {

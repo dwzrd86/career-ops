@@ -34,8 +34,17 @@ export type EnrollmentStatus = {
   enrolled: boolean;
 };
 
+export type AccountExport = {
+  exportedAt: string;
+  format: string;
+  jobs: Array<Job & { id: string }>;
+  privacy: { acknowledgedAt: string; policyVersion: string | null } | null;
+};
+
 export const functions = {
   acknowledgePrivacy: makeFunctionReference<"mutation", Record<string, never>, null>("privacy:acknowledge"),
+  exportAccountData: makeFunctionReference<"query", Record<string, never>, AccountExport>("account:exportData"),
+  recordAccountExport: makeFunctionReference<"mutation", Record<string, never>, null>("account:recordExportRequest"),
   reportClientError: makeFunctionReference<
     "mutation",
     {

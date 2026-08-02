@@ -69,11 +69,11 @@ and handling rules.
 
 ## Authentication and data isolation
 
-Email/password registration requires a verified address. Convex Auth owns the
-account records, and every job record is scoped to its verified, authenticated
-owner; unauthenticated, unverified, and cross-account requests are rejected by
-the backend. Registration also requires Cloudflare Turnstile and backend rate
-limits.
+Email/password registration requires a verified address. Better Auth owns the
+credential and session records, while every job record is scoped to its
+verified, authenticated application owner; unauthenticated, unverified, and
+cross-account requests are rejected by the backend. Registration also requires
+Cloudflare Turnstile and backend rate limits.
 
 This is a closed alpha: registration additionally requires a single-use invite
 code. The backend stores only an HMAC digest of each code and expires unused
@@ -82,7 +82,7 @@ both that value and the separate `ENROLLMENT_INVITE_KEY` digest key belong only
 in the Convex deployment environment. Never place either in a `VITE_*` value,
 Netlify build setting, client code, ticket, or email body.
 
-Set the required Resend, Turnstile, callback, and signing-key configuration
+Set the required Better Auth, Resend, Turnstile, and callback configuration
 before deployment. The exact value-free names and secret-store boundaries are
 documented in [the security policy](../docs/SECURITY.md#required-deployment-configuration).
 Do not store job-board passwords, browser cookies, real resumes, or application

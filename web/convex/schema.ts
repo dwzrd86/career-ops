@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
 const jobStatus = v.union(
   v.literal("discovered"),
@@ -13,10 +12,10 @@ const jobStatus = v.union(
 );
 
 export default defineSchema({
-  ...authTables,
-  // Keep acknowledgement metadata with the authenticated account rather than
-  // duplicating identity data or a copy of the policy in a separate table.
+  // Application-owned account metadata. Authentication credentials and sessions
+  // are isolated in the Better Auth component; authId is its stable user id.
   users: defineTable({
+    authId: v.string(),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -26,9 +25,7 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     privacyAcknowledgedAt: v.optional(v.number()),
     privacyPolicyVersion: v.optional(v.string()),
-  })
-    .index("email", ["email"])
-    .index("phone", ["phone"]),
+  }).index("by_auth_id", ["authId"]),
   jobs: defineTable({
     ownerId: v.id("users"),
     company: v.string(),
@@ -66,9 +63,11 @@ export default defineSchema({
     claimedBy: v.optional(v.id("users")),
     expiredAt: v.optional(v.number()),
     reservationId: v.optional(v.string()),
+    reservationEmailHash: v.optional(v.string()),
     reservationExpiresAt: v.optional(v.number()),
   })
     .index("by_token_hash", ["tokenHash"])
+    .index("by_reservation_email", ["reservationEmailHash"])
     .index("by_claimed_by", ["claimedBy"]),
   // Audit records intentionally omit email addresses, raw tokens, IP
   // addresses, and career content. They support operational investigation
@@ -98,4 +97,9 @@ export default defineSchema({
     route: v.string(),
     occurredAt: v.number(),
   }).index("by_occurred_at", ["occurredAt"]),
+  accountPrivacyEvents: defineTable({
+    action: v.union(v.literal("exportRequested"), v.literal("accountDeleted")),
+    occurredAt: v.number(),
+    userId: v.id("users"),
+  }).index("by_user", ["userId"]),
 });

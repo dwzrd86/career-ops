@@ -50,8 +50,7 @@ async function main() {
     await createAccount.click();
 
     await expectVisible(page, page.getByRole("heading", { name: "Verify your email." }), "verification screen");
-    await page.getByLabel("Code").fill("12345678");
-    await page.getByRole("button", { name: "Verify email" }).click();
+    await page.getByRole("button", { name: "Resend verification link" }).first().click();
     await expectVisible(page, page.getByRole("heading", { name: "Review the alpha privacy notice." }), "privacy acknowledgement");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Acknowledge and continue" }).click();

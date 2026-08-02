@@ -18,7 +18,7 @@ export default defineConfig({
       enforce: "pre",
       resolveId(source, importer) {
         if (source === "convex/react") return resolve(flowDirectory, "mock-convex-react.ts");
-        if (source === "@convex-dev/auth/react") return resolve(flowDirectory, "mock-auth-react.tsx");
+        if (source === "./auth-client" && importer && importer.includes("/src/")) return resolve(flowDirectory, "mock-auth-client.ts");
         if (source === "./convex" && importer && importer.includes("/src/")) {
           return resolve(flowDirectory, "mock-convex.ts");
         }

@@ -1,5 +1,4 @@
 import { Authenticated, AuthLoading, Unauthenticated, useMutation, useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { functions, Job, JobStatus } from "./convex";
+import { authClient } from "./auth-client";
 import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
 
 const statusLabels: Record<JobStatus, string> = {
@@ -38,7 +38,6 @@ const policyLinks = {
   security: "https://github.com/dwzrd86/career-ops/blob/main/docs/SECURITY_CONTACT.md",
   terms: "https://github.com/dwzrd86/career-ops/blob/main/docs/TERMS.md",
 };
-const accountDataRequest = "mailto:hi@santifer.io?subject=Jobbie%20alpha%20data%20request";
 
 function passwordMeetsRequirements(password: string) {
   return password.length >= 12 && /[a-z]/i.test(password) && /\d/.test(password);
@@ -214,9 +213,11 @@ function EmptyPipeline({ onAdd }: { onAdd: () => void }) {
 }
 
 function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
-  const { signIn } = useAuthActions();
   const reportError = useSafeErrorReporter();
-  const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">(initialMode);
+  const resetToken = new URLSearchParams(window.location.search).get("token");
+  const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">(
+    resetToken ? "resetVerification" : initialMode,
+  );
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -278,7 +279,6 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
     const submittedEmail = String(values.get("email") || email).trim();
     const password = String(values.get("password") || "");
     const confirmation = String(values.get("confirmation") || "");
-    const code = String(values.get("code") || "").trim();
     const inviteToken = String(values.get("inviteToken") || "").trim();
 
     if ((mode === "signUp" || isResetVerification) && password !== confirmation) {
@@ -295,36 +295,45 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
     try {
       if (mode === "reset") {
         // This response is intentionally identical for known and unknown addresses.
-        await signIn("password", { email: submittedEmail, flow: "reset" });
+        const result = await authClient.requestPasswordReset({ email: submittedEmail, redirectTo: window.location.origin });
+        if (result.error) throw new Error(result.error.message);
         setEmail(submittedEmail);
-        setMode("resetVerification");
-        setNotice("If an account matches that address, a reset code is on its way.");
+        setNotice("If an account matches that address, a reset link is on its way.");
       } else if (mode === "verify") {
-        await signIn("password", { email, code, flow: "email-verification" });
+        const result = await authClient.sendVerificationEmail({ email, callbackURL: window.location.origin });
+        if (result.error) throw new Error(result.error.message);
+        setNotice("If the address is eligible for verification, a new link is on its way.");
       } else if (isResetVerification) {
-        await signIn("password", { email, code, newPassword: password, flow: "reset-verification" });
-      } else {
-        const result = await signIn("password", {
-          ...(mode === "signUp" ? { botProtectionToken } : {}),
-          ...(mode === "signUp" ? { inviteToken } : {}),
+        if (!resetToken) throw new Error("Missing reset token");
+        const result = await authClient.resetPassword({ newPassword: password, token: resetToken });
+        if (result.error) throw new Error(result.error.message);
+        window.history.replaceState({}, "", window.location.pathname);
+        setMode("signIn");
+        setNotice("Password reset. Sign in with your new password.");
+      } else if (mode === "signUp") {
+        const result = await authClient.signUp.email({
+          botProtectionToken,
+          callbackURL: window.location.origin,
           email: submittedEmail,
-          flow: mode,
+          inviteToken,
+          name: submittedEmail.split("@")[0] || "Jobbie user",
           password,
-        });
-        if (!result.signingIn) {
-          setEmail(submittedEmail);
-          setMode("verify");
-          setNotice("Check your inbox for an eight-digit verification code before accessing your pipeline.");
-        }
+        } as Parameters<typeof authClient.signUp.email>[0]);
+        if (result.error) throw new Error(result.error.message);
+        setEmail(submittedEmail);
+        setMode("verify");
+        setNotice("Check your inbox for a verification link before accessing your pipeline.");
+      } else {
+        const result = await authClient.signIn.email({ email: submittedEmail, password, rememberMe: true });
+        if (result.error) throw new Error(result.error.message);
       }
     } catch {
       reportError("auth.submit", "authenticationFailed");
       if (mode === "reset") {
         setEmail(submittedEmail);
-        setMode("resetVerification");
-        setNotice("If an account matches that address, a reset code is on its way.");
+        setNotice("If an account matches that address, a reset link is on its way.");
       } else {
-        setError(mode === "verify" || isResetVerification ? "We could not verify that code. Request a new one and try again." : "Authentication failed. Check your details and try again.");
+        setError(mode === "verify" || isResetVerification ? "We could not complete that request. Request a new link and try again." : "Authentication failed. Check your details and try again.");
       }
     } finally {
       // Turnstile tokens are single-use, so each server-side signup attempt needs a fresh one.
@@ -340,18 +349,19 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
     clearMessages();
     setIsSubmitting(true);
     try {
-      await signIn("password", { email, flow: "email-verification" });
-      setNotice("If the address is eligible for verification, a new code is on its way.");
+      const result = await authClient.sendVerificationEmail({ email, callbackURL: window.location.origin });
+      if (result.error) throw new Error(result.error.message);
+      setNotice("If the address is eligible for verification, a new link is on its way.");
     } catch {
       reportError("auth.resend-verification", "authenticationFailed");
-      setNotice("If the address is eligible for verification, a new code is on its way.");
+      setNotice("If the address is eligible for verification, a new link is on its way.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  const heading = mode === "signIn" ? "Welcome back." : mode === "signUp" ? "Create your secure workspace." : mode === "verify" ? "Verify your email." : mode === "reset" ? "Reset your password." : "Enter your reset code.";
-  const submitLabel = mode === "signIn" ? "Sign in" : mode === "signUp" ? "Create account" : mode === "verify" ? "Verify email" : mode === "reset" ? "Send reset code" : "Reset password";
+  const heading = mode === "signIn" ? "Welcome back." : mode === "signUp" ? "Create your secure workspace." : mode === "verify" ? "Verify your email." : mode === "reset" ? "Reset your password." : "Choose a new password.";
+  const submitLabel = mode === "signIn" ? "Sign in" : mode === "signUp" ? "Create account" : mode === "verify" ? "Resend verification link" : mode === "reset" ? "Send reset link" : "Reset password";
 
   return (
     <main className="access-screen">
@@ -360,7 +370,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
         <p className="eyebrow">Private career workspace</p>
         <h1>{heading}</h1>
         <p className="access-copy">
-          {mode === "verify" ? `Enter the code sent to ${email}.` : "Job leads, applications, and tailored materials remain scoped to your authenticated account."}
+          {mode === "verify" ? `Open the verification link sent to ${email}.` : "Job leads, applications, and tailored materials remain scoped to your authenticated account."}
         </p>
         <form onSubmit={submit}>
           {!isResetVerification && mode !== "verify" ? (
@@ -381,12 +391,6 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
               <input autoComplete="new-password" minLength={12} name="confirmation" required type="password" />
             </label>
           ) : null}
-          {mode === "verify" || isResetVerification ? (
-            <label>
-              Code
-              <input autoComplete="one-time-code" autoFocus inputMode="numeric" name="code" pattern="[0-9]{8}" required type="text" />
-            </label>
-          ) : null}
           {mode === "signUp" ? (
             <label>
               Alpha invite code
@@ -405,9 +409,9 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
         </form>
         {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" ? " A valid alpha invite code is also required." : ""}{mode === "signUp" && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
         {mode === "verify" ? <>
-          <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification code</button>
+          <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification link</button>
           <button className="text-button" onClick={() => startOver("signIn")} type="button">Back to sign in</button>
-        </> : mode === "resetVerification" ? <button className="text-button" onClick={() => startOver("reset")} type="button">Request another reset code</button> : <>
+        </> : mode === "resetVerification" ? <button className="text-button" onClick={() => startOver("reset")} type="button">Request another reset link</button> : <>
           <button className="text-button" onClick={() => startOver(mode === "signIn" ? "signUp" : "signIn")} type="button">
             {mode === "signIn" ? "Create an account" : "Already have an account? Sign in"}
           </button>
@@ -518,11 +522,38 @@ function AccountSecurityDialog({
   onRecovery: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
-  const { signIn } = useAuthActions();
   const reportError = useSafeErrorReporter();
+  const accountExport = useQuery(functions.exportAccountData, {});
+  const recordExport = useMutation(functions.recordAccountExport);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function downloadExport() {
+    if (accountExport === undefined) return;
+    await recordExport({});
+    const blob = new Blob([JSON.stringify(accountExport, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = "jobbie-account-export.json";
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function deleteAccount() {
+    const password = window.prompt("Enter your current password to permanently delete your account and pipeline.");
+    if (!password || !window.confirm("Permanently delete your account and all pipeline data? This cannot be undone.")) return;
+    setIsSubmitting(true);
+    try {
+      const result = await authClient.deleteUser({ password });
+      if (result.error) throw new Error(result.error.message);
+    } catch {
+      setError("We could not delete your account. Check your password and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -544,7 +575,8 @@ function AccountSecurityDialog({
     setNotice("");
     setIsSubmitting(true);
     try {
-      await signIn("password", { currentPassword, flow: "change-password", newPassword });
+      const result = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true });
+      if (result.error) throw new Error(result.error.message);
       setNotice("Password updated. Other active sessions have been signed out.");
       event.currentTarget.reset();
     } catch {
@@ -595,10 +627,10 @@ function AccountSecurityDialog({
         </div>
         <section aria-label="Account data controls" className="account-data-controls">
           <h3>Account data</h3>
-          <p>Your alpha data export and account-deletion requests are handled manually from your verified account email.</p>
+          <p>Download your pipeline data or permanently delete this account and its pipeline.</p>
           <div>
-            <a className="button secondary" href={accountDataRequest}>Request data export</a>
-            <a className="button secondary" href={accountDataRequest}>Request account deletion</a>
+            <button className="button secondary" disabled={accountExport === undefined || isSubmitting} onClick={() => void downloadExport()} type="button">Download data export</button>
+            <button className="button secondary" disabled={isSubmitting} onClick={() => void deleteAccount()} type="button">Delete account</button>
           </div>
           <p className="account-policy-links"><a href={policyLinks.privacy} rel="noreferrer" target="_blank">Privacy notice</a><span aria-hidden="true">·</span><a href={policyLinks.terms} rel="noreferrer" target="_blank">Terms</a><span aria-hidden="true">·</span><a href={policyLinks.security} rel="noreferrer" target="_blank">Security contact</a></p>
         </section>
@@ -710,13 +742,13 @@ function PipelineDashboard({
 }
 
 export default function App() {
-  const { signOut } = useAuthActions();
   const [accessMode, setAccessMode] = useState<"signIn" | "reset">("signIn");
   useUnhandledErrorReporting();
 
   async function signOutTo(mode: "signIn" | "reset") {
     setAccessMode(mode);
-    await signOut();
+    const result = await authClient.signOut();
+    if (result.error) throw new Error(result.error.message);
   }
 
   return (

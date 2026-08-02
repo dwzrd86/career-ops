@@ -16,5 +16,6 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "convex"]
+  "include": ["src", "convex"],
+  "exclude": ["convex/**/*.test.ts", "convex/**/*.test.setup.ts"]
 }

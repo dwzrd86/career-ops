@@ -38,8 +38,8 @@ dataset.
 
 | Data | Purpose | Stored or processed by |
 | --- | --- | --- |
-| Email address, account ID, verified-email state, password credential material, session and verification/reset records | Create, secure, verify, recover, and sign in to an account | Convex Auth in the configured Convex deployment. The application does not expose auth-table records to other users. |
-| Verification and reset code email | Send an eight-digit address-verification or password-reset code | Resend processes the destination address and message needed to deliver it. Codes expire after 15 minutes. |
+| Email address, account ID, verified-email state, password credential material, session and verification/reset records | Create, secure, verify, recover, and sign in to an account | Better Auth in the configured Convex deployment. The application does not expose authentication-component records to other users. |
+| Verification and reset link email | Send single-use address-verification or password-reset links | Resend processes the destination address and message needed to deliver it. Links expire after 15 minutes. |
 | Signup bot-protection token and validation result | Reduce automated account creation | Cloudflare Turnstile validates the token during signup. The application does not store the token in its own tables. |
 | Job-pipeline entries: company, role title, location, job URL, source, status, optional notes, created/updated timestamps, and owning account ID | Display and manage the user's private pipeline | The `jobs` table in the configured Convex deployment. Each entry is scoped to its authenticated, verified owner. |
 | HMAC-derived email rate-limit key, action type, attempt count, and rate-limit-window start time | Rate-limit signup, reset, and verification resend attempts | The `authAbuseLimits` table in the configured Convex deployment. It deliberately stores an HMAC-derived key instead of the email address. |
@@ -67,27 +67,25 @@ certification claim.
 
 | Data | Retention in the current alpha | How to delete it |
 | --- | --- | --- |
-| A job-pipeline entry | Until the user removes that entry, requests account-data deletion, or the alpha is retired. There is no automatic job-record expiry. | Select the entry's remove control in the pipeline, or request account-data deletion as described below. |
-| Account and authentication records | Until the user requests account-data deletion or the alpha is retired. There is no self-service account-deletion control yet. | Request deletion through the support channel below from the verified account email. |
-| Verification and reset codes | 15 minutes, as configured in the application. | They expire automatically; no user action is needed. |
-| HMAC-derived rate-limit records | The current alpha has no automated expiry job for these records; they are retained until the operator removes them or retires the alpha. | Include the request in an account-data deletion request. The operator will assess whether any limited record must be retained temporarily for fraud prevention or legal obligations and will explain any exception. |
-| Unused alpha invite | It cannot be used after its stated expiry time. The retained HMAC digest and privacy-safe audit entries remain until the operator removes them or retires the alpha. | Invite tokens are not tied to an email address before redemption. For a redeemed invite, include the request in an account-data deletion request. |
+| A job-pipeline entry | Until the user removes that entry, deletes the account, or the alpha is retired. There is no automatic job-record expiry. | Select the entry's remove control in the pipeline, or delete the account from Account security. |
+| Account and authentication records | Until the user deletes the account or the alpha is retired. | Use the Account security control and enter the current password to permanently delete the account and associated pipeline data. |
+| Verification and reset links | 15 minutes, as configured in the application. | They expire automatically; no user action is needed. |
+| HMAC-derived rate-limit records | The current alpha has no automated expiry job for these records; they are retained until the operator removes them or retires the alpha. | These keyed anti-abuse records are not linked to a readable account profile and may be retained temporarily for fraud prevention. |
+| Alpha invite and privacy-safe audit entries | Unused invites expire; digest and event records remain until the operator removes them or retires the alpha. | Invite tokens are not tied to an email before redemption. Deletion expires a redeemed invite and retains only the privacy-safe event record. |
 
-The app currently supports per-role deletion but not a self-service full export
-or account-deletion workflow. To receive a copy of the data held for an alpha
-account, or to request deletion of the account and associated pipeline data,
-email **hi@santifer.io** from the verified account address with the subject
-`Jobbie alpha data request`. Do not include a password, authentication code,
-resume, or job notes in that email. The operator will verify the request and
-confirm the available export or deletion steps; this is a manual alpha process,
-not an instant automated action.
+The Account security control downloads a portable JSON export containing only
+the signed-in user's pipeline and privacy acknowledgement metadata. It also
+supports permanent account deletion after the current password is confirmed;
+Better Auth removes the authentication account while the transactional trigger
+removes that user's pipeline records. Do not include a password, authentication
+link, resume, or job notes in a support email.
 
 ## Your choices and responsibilities
 
 - Do not enter information you are not comfortable storing in this early alpha.
 - You can sign out, change your password, use email recovery, remove individual
   pipeline entries, or stop using the service at any time.
-- Keep your password and verification codes private. The service will not ask
+- Keep your password and verification links private. The service will not ask
   for them by email.
 - For a security issue, use the private channel in [[SECURITY_CONTACT]], not a
   public issue tracker.

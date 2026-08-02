@@ -1,4 +1,3 @@
-import { exportPKCS8, generateKeyPair } from "jose";
 import { vi } from "vitest";
 
 export type DeliveredEmail = {
@@ -18,8 +17,6 @@ process.env.AUTH_TURNSTILE_HOSTNAME = "tests.example.test";
 process.env.AUTH_TURNSTILE_SECRET = "test-only-turnstile-secret";
 process.env.CONVEX_SITE_URL = "https://tests.example.test";
 process.env.SITE_URL = "https://tests.example.test";
-process.env.JWT_PRIVATE_KEY = await exportPKCS8((await generateKeyPair("RS256", { extractable: true })).privateKey);
-
 vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input);
   if (url === "https://challenges.cloudflare.com/turnstile/v0/siteverify") {

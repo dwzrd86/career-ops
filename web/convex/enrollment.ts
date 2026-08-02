@@ -22,6 +22,7 @@ async function expireInviteIfNeeded(ctx: MutationCtx, invite: { _id: Id<"alphaIn
   if (invite.expiredAt === undefined) {
     await ctx.db.patch(invite._id, {
       expiredAt: Date.now(),
+      reservationEmailHash: undefined,
       reservationExpiresAt: undefined,
       reservationId: undefined,
     });
@@ -32,8 +33,8 @@ async function expireInviteIfNeeded(ctx: MutationCtx, invite: { _id: Id<"alphaIn
 
 /** Called only from the password provider before a sign-up creates an account. */
 export const reserveInvite = internalMutationGeneric({
-  args: { tokenHash: v.string() },
-  handler: async (ctx, { tokenHash }) => {
+  args: { emailHash: v.string(), tokenHash: v.string() },
+  handler: async (ctx, { emailHash, tokenHash }) => {
     const invite = await ctx.db
       .query("alphaInvites")
       .withIndex("by_token_hash", (query) => query.eq("tokenHash", tokenHash))
@@ -56,6 +57,7 @@ export const reserveInvite = internalMutationGeneric({
 
     const reservationId = crypto.randomUUID();
     await ctx.db.patch(invite._id, {
+      reservationEmailHash: emailHash,
       reservationExpiresAt: Date.now() + reservationDurationMs,
       reservationId,
     });
@@ -64,7 +66,7 @@ export const reserveInvite = internalMutationGeneric({
   },
 });
 
-/** Completes the reservation after Convex Auth has created the password account. */
+/** Completes a reservation for a trusted account-creation flow. */
 export const claimReservedInvite = internalMutationGeneric({
   args: {
     inviteId: v.id("alphaInvites"),
@@ -84,6 +86,7 @@ export const claimReservedInvite = internalMutationGeneric({
       claimedAt: Date.now(),
       claimedBy: userId,
       reservationExpiresAt: undefined,
+      reservationEmailHash: undefined,
       reservationId: undefined,
     });
     await recordEvent(ctx, "inviteAccepted", inviteId);

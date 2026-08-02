@@ -9,13 +9,11 @@ tags:
 related:
   - '[[RELEASE_RUNBOOK]]'
   - '[[ARCHITECTURE]]'
-  - '[[CAREER-OPS-SECURITY-03]]'
 ---
 
 # Security and data handling
 
-Career-Ops contains a local, personal job-search workspace alongside a
-source-controlled web application. Keep those boundaries explicit.
+Career-Ops contains a local job-search workspace alongside a hosted alpha. Keep those data boundaries explicit.
 
 ## Data classification
 
@@ -26,205 +24,57 @@ source-controlled web application. Keep those boundaries explicit.
 | Secrets and access material | `.env*`, Netlify and Convex tokens/deploy keys, generated `.convex-home/` credentials, browser profiles | Keep outside Git and logs. Use provider secret stores and rotate if exposed. |
 | Test identities | Production test accounts, real email inboxes, job-board credentials | Do not create or commit them. Use isolated, disposable test identities only when necessary. |
 
-## Secret-handling rules
-
-- Never print, commit, or copy secret values into source files, CI output, shell history, screenshots, or tickets.
-- Keep `.env*`, `.convex-home/`, `.netlify/`, browser automation profiles, and all personal records ignored.
-- Commit `web/.env.example` only as a value-free template.
-- Grant Netlify only the Convex production deploy key it needs; do not use personal access tokens in build settings.
-- Treat a suspected exposure as a rotation event: revoke the credential, issue a replacement, and review deployment access.
-
 ## Supported deployment flow
 
-The only supported production path is documented in [[RELEASE_RUNBOOK]]. Netlify
-runs `npx convex deploy --cmd 'npm run build'`, which supplies the
-production `VITE_CONVEX_URL` to the build. The build guard rejects a known
-development URL and checks the emitted bundle contains only the expected
-production Convex endpoint before Netlify publishes `dist/`.
+The supported production path is [[RELEASE_RUNBOOK]]. Netlify runs `npx convex deploy --cmd 'npm run build'`; the build guard rejects known development URLs and verifies the emitted bundle uses only the production Convex endpoint. Do not manually publish a frontend bundle or substitute a Convex URL.
 
-Do not run a standalone frontend publish or manually substitute a Convex URL.
-Use the CI workflow and the release runbook before deploying.
+## Account lifecycle
 
-## Account lifecycle decision
+The application uses `@convex-dev/better-auth` with Better Auth email/password authentication. Credentials, sessions, verification records, and recovery tokens live in the Better Auth Convex component. The application-owned `users` table holds only an `authId` mapping and privacy metadata. Every pipeline function resolves that mapping from a verified Better Auth session before it reads or writes career data.
 
-**Decision (2026-08-01): retain Convex Auth `@convex-dev/auth` `0.0.94` and
-add a Resend-backed, Auth.js-compatible transactional email provider for
-password reset and address verification.** Version `0.0.94` is the current
-npm release as of this review. The official Convex Auth password guidance
-supports both flows through the `Password` provider's `reset` and `verify`
-options, and keeps identity policy and the registered HTTP routes in
-`web/convex/auth.ts` and `web/convex/http.ts` respectively. The implementation
-will use opaque, single-use verification and reset values; users may not read
-or write pipeline data until verification succeeds.
+Signup requires a Cloudflare Turnstile token, an opaque single-use alpha invite, and an HMAC-keyed rate-limit check. The invite is reserved against an opaque keyed email value before Better Auth creates the account, then claimed by the component's transactional user trigger. Raw invite tokens and email addresses are not persisted in enrollment records.
 
-This is an invited-alpha decision, not an assertion that Convex Auth is
-generally equivalent to a full identity platform. Convex currently documents
-Convex Auth as beta, so upgrade compatibility and the account-lifecycle tests
-must be reviewed before every production release. The current application is a
-React/Vite single-page application, which is a supported Convex Auth target.
-
-### Authenticated account controls
-
-The authenticated **Account security** surface requires the current password
-before changing it. Its server-side credentials-provider flow verifies the
-current session and verified password account, rotates the password using
-Convex Auth's supported credential API, and invalidates all other sessions.
-The browser receives no auth-table records or session IDs. The same surface
-can end only the current session or sign out into the email recovery flow.
+Verification and password recovery use single-use, 15-minute Resend links. Password reset and password change revoke other sessions. The app does not expose Better Auth component records, session values, tokens, or password material to application queries.
 
 ### Required deployment configuration
 
-Set browser values in the Netlify build environment and server values in the
-Convex deployment environment. Do not copy server secrets into `VITE_*`
-variables, `.env.example`, or browser code. `web/.env.example` lists the same
-names without secret values.
+Set browser values in Netlify and server values in Convex. Never copy a server secret into `VITE_*`, `.env.example`, browser code, a ticket, or logs.
 
 | Name | Store | Purpose |
 | --- | --- | --- |
 | `VITE_CONVEX_URL` | Netlify build | Public production Convex endpoint. |
-| `VITE_TURNSTILE_SITE_KEY` | Netlify build | Public Cloudflare Turnstile site key. The production build guard rejects a missing value. |
-| `VITE_APP_DEPLOYMENT_VERSION` | Netlify build | Non-secret release label stored with browser error-report metadata. Use the release tag or Git SHA; never put a token or URL here. |
-| `APP_DEPLOYMENT_VERSION` | Convex environment | Matching non-secret release label stored with backend error-report metadata. Use the release tag or Git SHA; never put a token or URL here. |
+| `VITE_CONVEX_SITE_URL` | Netlify build | Public Convex `.site` endpoint used by the Better Auth client. Convex supplies this during the production build. |
+| `VITE_TURNSTILE_SITE_KEY` | Netlify build | Public Turnstile site key. The production build guard requires it. |
+| `VITE_APP_DEPLOYMENT_VERSION` | Netlify build | Non-secret release label for browser diagnostics. |
+| `BETTER_AUTH_SECRET` | Convex secret | High-entropy Better Auth secret for encryption and token hashing. Generate separately for each deployment. |
+| `SITE_URL` | Convex environment | Exact public Netlify origin trusted by Better Auth and used in verification and reset redirects. |
+| `CONVEX_SITE_URL` | Convex built-in | Convex `.site` origin used for Better Auth HTTP routes; do not override it. |
 | `AUTH_TURNSTILE_SECRET` | Convex secret | Server-only Turnstile verification credential. |
-| `AUTH_TURNSTILE_HOSTNAME` | Convex environment | Allowed production hostname returned by Turnstile. |
-| `AUTH_RESEND_FROM` | Convex environment | Verified Resend sender identity, such as `Jobbie <accounts@example.com>`; the domain must be verified with Resend before production use. |
-| `AUTH_RESEND_KEY` | Convex secret | Resend API credential used for verification and reset mail. |
-| `AUTH_ABUSE_KEY` | Convex secret | High-entropy HMAC key used to derive non-reversible rate-limit keys from addresses. |
-| `ENROLLMENT_INVITE_KEY` | Convex secret | Separate high-entropy HMAC key used to derive non-reversible closed-alpha invite digests. |
-| `ENROLLMENT_ADMIN_KEY` | Convex secret | Operator-only credential required to issue a time-limited alpha invite. It is never browser-visible or stored with the invite. |
-| `SITE_URL` | Convex environment | Public application origin used by Convex Auth to form both verification and reset OTP callback URLs (`SITE_URL?code=...`). The application currently sends only the OTP, which users enter on the corresponding access screen. |
-| `CONVEX_SITE_URL` | Convex environment | Convex HTTP-site origin used by the Auth provider and signed session tokens. |
-| `JWT_PRIVATE_KEY`, `JWKS` | Convex secrets | Convex Auth signing key and corresponding public JSON Web Key Set. Generate with the supported Convex Auth key command; never hand-author or commit them. |
+| `AUTH_TURNSTILE_HOSTNAME` | Convex environment | Expected production hostname returned by Turnstile. |
+| `AUTH_RESEND_FROM`, `AUTH_RESEND_KEY` | Convex environment/secret | Verified sender identity and Resend credential for verification and recovery links. |
+| `AUTH_ABUSE_KEY` | Convex secret | High-entropy HMAC key for non-reversible auth rate-limit values. |
+| `ENROLLMENT_INVITE_KEY`, `ENROLLMENT_ADMIN_KEY` | Convex secrets | HMAC key for invite digests and operator-only invite issuance key. |
+| `APP_DEPLOYMENT_VERSION` | Convex environment | Non-secret release label for backend diagnostics. |
 
-The password provider checks its required server configuration before every
-password flow. Missing lifecycle, recovery, abuse-key, or sign-in configuration
-therefore returns only the generic authentication retry response and cannot
-create an account or session. The expected Turnstile hostname is mandatory for
-registration. This is intentionally fail-closed in production (and keeps local
-misconfiguration visible during development).
+Missing account-lifecycle configuration fails closed. Configure a real verified Resend sender and a production Turnstile hostname before a production cutover.
 
-### Automated account-lifecycle tests
+### Production migration boundary
 
-Run `cd web && npm run test:auth`. The suite starts an isolated,
-in-memory Convex test backend for each case and intercepts Resend requests into
-a test-only outbox; it never needs a real deployment, mailbox, or credential.
-It exercises invalid addresses and passwords, invite-token validation and
-expiry, same-account reuse and cross-account reuse attempts, unverified-data
-denial, verification, reset expiry, server rate limits, and the same generic
-reset-screen outcome for known and unknown addresses.
+The Better Auth component has been deployed and browser-validated only on the development Convex deployment. The production deployment remains on the legacy identity store until a migration is run. Legacy password hashes must not be copied into Better Auth or manually edited; production users require a controlled account migration and password-reset process that preserves their application-owned `users` and `jobs` ownership mappings. Do not deploy the Better Auth schema to production before that runbook and the account-export/deletion workflow are tested against a disposable deployment.
 
-### Closed-alpha enrollment
+## Convex access matrix
 
-Issue an alpha invite only from an operator-controlled Convex session by
-calling `enrollment:issueInvite` with the server-held administrative key and a
-bounded expiry. Deliver the returned code through an approved private channel,
-then discard the operator's copy once it has been delivered. Do not place an
-invite token in a ticket, a browser-visible environment variable, source
-control, or a support email.
+`Verified user` means a Better Auth session with `emailVerified` set and a matching app-owned `users.authId` record. Internal endpoints have no public `api.*` reference.
 
-During signup, the backend checks a keyed digest, atomically reserves the
-invite for up to ten minutes, and claims it only for the just-created account.
-Unused codes are rejected after expiry and claimed codes cannot enroll a second
-account. The audit table records only invite ID, event category, and timestamp;
-it deliberately excludes raw tokens, email addresses, IP addresses, account
-IDs, and career data.
-
-### Why this is supported
-
-- [Convex Auth's current overview](https://docs.convex.dev/auth/convex-auth)
-  explicitly lists passwords with reset and optional email verification.
-- [The password-provider guide](https://labs.convex.dev/auth/config/passwords)
-  documents `reset` and `verify` provider configuration, including a Resend
-  implementation, and identifies the corresponding sign-in flows.
-- [Convex's authentication overview](https://docs.convex.dev/auth/overview)
-  confirms that backend functions remain responsible for authorization checks;
-  the implementation will therefore add a verified-identity guard to each
-  public pipeline function rather than relying on the React screen alone.
-
-### Migration impact
-
-- Keep the existing Convex Auth tables and `jobs.ownerId -> users` references;
-  no user-data table migration is required solely to add the providers.
-- Extend `web/convex/auth.ts` with the shared email normalization and the
-  `Password({ verify, reset, ... })` configuration; retain the present 12
-  character, letter-and-number password requirement.
-- Add a mail adapter and required deployment configuration. Production must
-  fail closed if the sender identity or mail credential is absent. Do not put
-  mail credentials in `web/.env.example`, source control, browser code, or
-  logs.
-- Existing password accounts must be treated as unverified until they complete
-  the verification flow. Their job documents remain owned by the same user ID,
-  but are inaccessible until verification; exercise this path in a disposable
-  deployment before release.
-- Preserve `auth.addHttpRoutes(http)` in `web/convex/http.ts`; add only the
-  documented routes/provider handlers needed for the chosen flows. The React
-  app will gain sign-up verification, resend, reset request, and reset
-  completion states.
-
-### Rejected alternatives
-
-| Alternative | Decision rationale |
+| Endpoint | Access and boundary |
 | --- | --- |
-| Leave the current password-only flow | Rejected: it has neither recovery nor verified ownership of the email address. |
-| WorkOS AuthKit | Rejected for this invited alpha: it is a viable mature OIDC option with passwords, email one-time codes, MFA, and user management, but would replace the existing auth provider, change the React integration and Convex JWT configuration, and require an identity migration. Reconsider if beta-library risk, enterprise SSO, or provider-managed MFA becomes a requirement. |
-| Clerk or Auth0 | Rejected for the same release: both are supported by Convex and offer broader managed identity features, but introduce vendor configuration, new browser/provider components, JWT issuer configuration, and user/account migration without solving a requirement unavailable in the documented Convex Auth path. |
+| `jobs:list`, `jobs:create`, `jobs:updateStatus`, `jobs:remove` | Require a verified user. Reads are constrained by `ownerId`; updates and deletes use a non-enumerating owner comparison. New jobs require current privacy acknowledgement. |
+| `privacy:status`, `privacy:acknowledge`; `enrollment:status` | Require a verified, enrolled user and operate only on that user's app record. |
+| `enrollment:issueInvite` | Operator action protected by `ENROLLMENT_ADMIN_KEY`; returns the raw invite once and stores only an HMAC digest. |
+| `enrollment:reserveInvite`, `enrollment:createInvite`; `abuse:consume`; Better Auth trigger handlers | Internal only. They reserve and claim an invite, maintain opaque abuse counters, and create or delete app-owned user data in response to component user changes. |
+| Better Auth `/api/auth/*` HTTP routes | Registered exclusively by `authComponent.registerRoutes`. They provide sign-up, sign-in, link verification, recovery, password change, session management, and later account deletion when enabled. |
+| `errorReporting:reportClient` | May be called pre-auth; accepts only allowlisted metadata and never persists form values, messages, stacks, tokens, or full URLs. |
 
-The selected implementation does not remove the future OIDC option: job
-authorization will continue to use authenticated identity plus verified-email
-state, never a client-supplied email address or a browser-visible auth table.
+## Verification
 
-## Convex function-access matrix
-
-**Inventory reviewed 2026-08-01.** This matrix covers every callable
-application endpoint in `web/convex/`. Generated bindings and test setup files
-are excluded: they expose no application endpoint. `auth.config.ts` configures
-the Convex Auth issuer and likewise defines no function.
-
-`Verified user` means both an authenticated Convex Auth password account and a
-verified email address, enforced by `requireVerifiedUser`. `Internal only`
-means the function has no public `api.*` reference and may be called only by
-Convex functions. Authentication and authorization are separate: the public
-job functions require both.
-
-| Endpoint and kind | Authentication requirement | Owner field and authorization scope | Caller-visible fields | Input limits and validation | External side effects |
-| --- | --- | --- | --- | --- | --- |
-| `jobs:list` — public query | Verified user | `jobs.ownerId` must equal the authenticated user ID; the `by_owner_created_at` index applies this filter before reading. | Up to 100 matching job documents, currently including Convex metadata and every stored job field (`ownerId`, company, title, location, URL, source, status, optional score/notes, and timestamps). | No arguments. Result is bounded with `.take(100)`. | None. |
-| `jobs:create` — public mutation | Verified user | `ownerId` is assigned from the authenticated user; the caller cannot supply it. | Newly created job document ID only. | Required company, title, location, and source values are trimmed, internal whitespace is collapsed, and capped at 160, 200, 160, and 160 characters respectively. Optional notes are normalized and capped at 4,000 characters. URLs are capped at 2,048 characters, parsed server-side, and must be credential-free `https:` URLs. New records always receive the controlled `discovered` status. | Writes one normalized `jobs` document. |
-| `jobs:updateStatus` — public mutation | Verified user | Fetches `id` and requires `job.ownerId === authenticatedUserId`; missing and foreign IDs both return `Job not found`. | No document data (void result). | `id` must be a Convex `jobs` ID; `status` is one of `discovered`, `evaluated`, `applied`, `interview`, `offer`, `rejected`, or `discarded`. | Patches the owned job's status and `updatedAt`. |
-| `jobs:remove` — public mutation | Verified user | Fetches `id` and requires `job.ownerId === authenticatedUserId`; missing and foreign IDs both return `Job not found`. | No document data (void result). | `id` must be a Convex `jobs` ID. | Deletes the owned job document. |
-| `errorReporting:reportClient` — public mutation | No session required, so pre-auth browser failures can be observed. | It neither reads an account nor accepts an account identifier, and no client query exposes its records. | No data (void result). | Only deployment version, fixed category, operation type, and route are accepted. The backend strips query/fragment data and replaces unsafe labels; no error message, stack, form value, token, password, email body, or full URL argument exists. | Inserts one metadata-only browser diagnostic into `errorReports`. |
-| `auth:signIn` — public action supplied by Convex Auth | No existing session is required for sign-up, sign-in, verification, or reset; the password-change flow requires a valid session and a verified password account. | Auth tables use the provider account's normalized email and linked user ID; password change also verifies that the retrieved account belongs to the current user. It does not access application-owned records. | On success: only Auth flow results (session tokens, a redirect/verifier, or a `started` marker). The application does not return auth-table records. Authentication failures intentionally use generic errors for sensitive flows. | Convex Auth envelope accepts optional provider, params, verifier, refresh token, and caller marker. Password-profile email is trimmed, lowercased, and checked against the configured email pattern. Sign-up Turnstile tokens must be 1–2,048 characters; passwords require at least 12 characters with a letter and number. No explicit maximum email or password length is currently imposed by application code. OTP expiry is 15 minutes; Convex Auth caps failed sign-in attempts at 5/hour, and HMAC-keyed sign-up/reset/resend attempts at 5/hour. | Creates/updates Auth accounts, verification records, sessions, and credentials. Sign-up sends a Turnstile verification request; reset and verification flows send transactional email through Resend. |
-| `auth:signOut` — public action supplied by Convex Auth | Callable without an app-level verified-user guard; it only invalidates the current authenticated session when one is present. | Current session only; no application-record access. | No data (void result). | No arguments. | Invalidates the current Auth session; no network call. |
-| `auth:isAuthenticated` — public query supplied by Convex Auth | None; it evaluates the credentials supplied with the call. | No owner field or record access. | One boolean indicating whether a user identity is present. | No arguments. | None. |
-| `auth:store` — internal mutation supplied by Convex Auth | Internal only; Convex Auth invokes it from its trusted server implementation. | Auth-table operations are scoped by the library's typed account, session, verification, and user IDs. No application-record access. | Internal caller only; browser callers cannot invoke or read its Auth-table result. | Convex Auth's discriminated `storeArgs` validator; not client-callable. | Creates, reads, updates, and deletes Convex Auth records needed for account, credential, verification-code, and session lifecycle operations. |
-| `auth:getVerifiedPasswordAccount` — internal query | Internal only. | Looks up the password account whose `authAccounts.userId` equals the supplied user ID and requires verified email state. | Internal caller receives only `providerAccountId`; no complete Auth document is returned. | `userId` must be a Convex `users` ID. | None. |
-| `abuse:consume` — internal mutation | Internal only; called from the server-side password provider before protected flows. | `authAbuseLimits` is scoped by a non-reversible HMAC-derived `key` plus `action`, not an email or application owner ID. | No caller-visible data (void result). | `action` is limited to `signUp`, `passwordReset`, or `resendVerification`; `key` must be a string. The application creates the key only from the normalized email with a server-held HMAC secret. | Creates or patches an in-database hourly abuse counter; rejects attempts past the configured limit. |
-| `enrollment:issueInvite` — public action for operators | Requires `ENROLLMENT_ADMIN_KEY`; it is not called by the browser application. | No email or user argument. The action compares the supplied administrative key before issuing an independent random token. | The raw token and expiry are returned only to the operator call; the raw token is not stored. | `expiresInMinutes` must be an integer from 1 to 43,200. | Creates an HMAC-digest-only invite and an `inviteIssued` audit event. |
-| `enrollment:status` — public query | Verified user. | Queries only the invite claimed by the authenticated user ID. | One `enrolled` boolean. | No arguments. | None. |
-| `enrollment:reserveInvite`, `enrollment:claimReservedInvite`, `enrollment:createInvite` — internal mutations | Internal only. | Reservations are keyed by an HMAC token digest; a claim is permanently scoped to one newly created user ID. | Internal callers receive only reservation IDs or no result; browsers cannot access the functions. | Digest, internal IDs, and server-generated reservation IDs are validated by Convex. | Atomically reserves, claims, or creates an invite and writes privacy-safe event records. |
-| `GET /.well-known/openid-configuration` — public HTTP route registered by Convex Auth | None. | No owner data or application-record access. | Public OpenID discovery metadata: issuer, JWKS URL, and authorization endpoint. | No request body or route parameters. | None. |
-| `GET /.well-known/jwks.json` — public HTTP route registered by Convex Auth | None. | No owner data or application-record access. | The public JSON Web Key Set used to verify issued JWTs; no private signing key. | No request body or route parameters. | None. |
-
-### HTTP-route configuration note
-
-`web/convex/http.ts` delegates route registration exclusively to
-`auth.addHttpRoutes(http)`. The configured provider is credentials/password,
-not OAuth or OIDC, so the optional `/api/auth/signin/*` and
-`/api/auth/callback/*` provider routes are not registered in this deployment.
-There are no other application HTTP routes.
-
-### Data-boundary findings for follow-up work
-
-- The list query is owner-filtered and result-bounded, but it currently returns
-  the raw job document. Subsequent UI/data-shape work should return an explicit
-  public projection if `ownerId` or other internal fields must remain hidden.
-- Job creation normalizes and validates text and HTTPS URLs server-side before
-  insert. Future new job fields must define equally explicit size and format
-  limits rather than relying on browser validation.
-- The existing status update already uses the required non-enumerating
-  owner-check pattern. New read, update, and delete endpoints must use the
-  same fetch-then-owner-compare policy and receive anonymous/cross-account
-  tests.
-- Auth endpoints are provided by `@convex-dev/auth`; application code must use
-  its supported APIs for future export/deletion and must not read or mutate
-  Auth tables directly.
+Run `cd web && npm run test:security-regression` before release. The gate audits dependencies, runs auth-boundary tests, validates the guarded production build and headers, and drives the complete UI in an isolated browser mock. Additionally, exercise a disposable deployment with a real Resend sender and mailbox before promoting an identity migration.

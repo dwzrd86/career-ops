@@ -1,9 +1,7 @@
 import { httpRouter } from "convex/server";
-import { auth } from "./auth";
+import { authComponent, createAuth } from "./auth";
 
 const http = httpRouter();
-
-// Convex Auth owns the provider endpoints used by password, reset, and verification flows.
-auth.addHttpRoutes(http);
+authComponent.registerRoutes(http, createAuth, { cors: true });
 
 export default http;
