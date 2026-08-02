@@ -15,6 +15,7 @@ related:
 # Jobbie alpha terms of use
 
 **Effective date:** 2026-08-01
+**Version:** 2026-08-01
 **Applies to:** the invited Jobbie/Career-Ops web alpha in `web/`.
 
 These terms describe an experimental product and are not a substitute for a

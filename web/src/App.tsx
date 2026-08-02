@@ -32,6 +32,13 @@ const statusLabels: Record<JobStatus, string> = {
 
 const activeStatuses: JobStatus[] = ["discovered", "evaluated", "applied", "interview", "offer"];
 
+const policyLinks = {
+  privacy: "https://github.com/dwzrd86/career-ops/blob/main/docs/PRIVACY.md",
+  security: "https://github.com/dwzrd86/career-ops/blob/main/docs/SECURITY_CONTACT.md",
+  terms: "https://github.com/dwzrd86/career-ops/blob/main/docs/TERMS.md",
+};
+const accountDataRequest = "mailto:hi@santifer.io?subject=Jobbie%20alpha%20data%20request";
+
 function passwordMeetsRequirements(password: string) {
   return password.length >= 12 && /[a-z]/i.test(password) && /\d/.test(password);
 }
@@ -383,6 +390,66 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   );
 }
 
+function PrivacyAcknowledgement({
+  onRecovery,
+  onSignOut,
+}: {
+  onRecovery: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
+  const privacyStatus = useQuery(functions.getPrivacyStatus, {});
+  const acknowledgePrivacy = useMutation(functions.acknowledgePrivacy);
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  if (privacyStatus === undefined) {
+    return <main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Loading privacy notice</main>;
+  }
+
+  if (!privacyStatus.requiresAcknowledgement) {
+    return <PipelineDashboard onRecovery={onRecovery} onSignOut={onSignOut} />;
+  }
+
+  async function acknowledge() {
+    setError("");
+    setIsSaving(true);
+    try {
+      await acknowledgePrivacy({});
+    } catch {
+      setError("We could not save your acknowledgement. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <main className="access-screen">
+      <section aria-labelledby="privacy-notice-title" className="access-panel privacy-panel">
+        <div className="access-mark"><ShieldCheck size={22} /></div>
+        <p className="eyebrow">Before you add career data</p>
+        <h1 id="privacy-notice-title">Review the alpha privacy notice.</h1>
+        <p className="access-copy">Jobbie stores the roles, job links, and notes you add to your private pipeline. Please read the current policies before saving that information.</p>
+        <ul className="policy-links">
+          <li><a href={policyLinks.privacy} rel="noreferrer" target="_blank">Privacy notice (version {privacyStatus.currentVersion})</a></li>
+          <li><a href={policyLinks.terms} rel="noreferrer" target="_blank">Alpha terms of use</a></li>
+          <li><a href={policyLinks.security} rel="noreferrer" target="_blank">Security contact</a></li>
+        </ul>
+        <label className="acknowledgement-check">
+          <input checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} type="checkbox" />
+          <span>I have reviewed the privacy notice and understand this alpha stores the career data I choose to add.</span>
+        </label>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
+        <button className="button primary access-submit" disabled={!confirmed || isSaving} onClick={() => void acknowledge()} type="button">
+          {isSaving ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}
+          Acknowledge and continue
+        </button>
+        <button className="text-button" disabled={isSaving} onClick={() => void onSignOut()} type="button">Sign out instead</button>
+      </section>
+    </main>
+  );
+}
+
 function AccountSecurityDialog({
   onClose,
   onRecovery,
@@ -433,7 +500,7 @@ function AccountSecurityDialog({
         <header>
           <div>
             <p className="eyebrow">Account</p>
-            <h2 id="account-security-title">Account security</h2>
+            <h2 id="account-security-title">Account security and data</h2>
           </div>
           <button aria-label="Close" className="icon-button" onClick={onClose} type="button"><X size={18} /></button>
         </header>
@@ -465,6 +532,15 @@ function AccountSecurityDialog({
           <button className="text-button" disabled={isSubmitting} onClick={() => void onSignOut()} type="button">Sign out from this session</button>
           <button className="text-button" disabled={isSubmitting} onClick={() => void onRecovery()} type="button">Use email recovery instead</button>
         </div>
+        <section aria-label="Account data controls" className="account-data-controls">
+          <h3>Account data</h3>
+          <p>Your alpha data export and account-deletion requests are handled manually from your verified account email.</p>
+          <div>
+            <a className="button secondary" href={accountDataRequest}>Request data export</a>
+            <a className="button secondary" href={accountDataRequest}>Request account deletion</a>
+          </div>
+          <p className="account-policy-links"><a href={policyLinks.privacy} rel="noreferrer" target="_blank">Privacy notice</a><span aria-hidden="true">·</span><a href={policyLinks.terms} rel="noreferrer" target="_blank">Terms</a><span aria-hidden="true">·</span><a href={policyLinks.security} rel="noreferrer" target="_blank">Security contact</a></p>
+        </section>
       </section>
     </div>
   );
@@ -585,7 +661,7 @@ export default function App() {
     <>
       <AuthLoading><main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Securing your workspace</main></AuthLoading>
       <Unauthenticated><AccessScreen initialMode={accessMode} /></Unauthenticated>
-      <Authenticated><PipelineDashboard onRecovery={() => signOutTo("reset")} onSignOut={() => signOutTo("signIn")} /></Authenticated>
+      <Authenticated><PrivacyAcknowledgement onRecovery={() => signOutTo("reset")} onSignOut={() => signOutTo("signIn")} /></Authenticated>
     </>
   );
 }

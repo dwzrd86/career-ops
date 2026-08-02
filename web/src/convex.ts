@@ -24,8 +24,16 @@ export type Job = {
   updatedAt: number;
 };
 
+export type PrivacyStatus = {
+  acknowledgedAt: number | null;
+  currentVersion: string;
+  requiresAcknowledgement: boolean;
+};
+
 export const functions = {
+  acknowledgePrivacy: makeFunctionReference<"mutation", Record<string, never>, null>("privacy:acknowledge"),
   listJobs: makeFunctionReference<"query", Record<string, never>, Job[]>("jobs:list"),
+  getPrivacyStatus: makeFunctionReference<"query", Record<string, never>, PrivacyStatus>("privacy:status"),
   createJob: makeFunctionReference<
     "mutation",
     {

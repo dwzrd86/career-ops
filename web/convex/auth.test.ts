@@ -50,7 +50,9 @@ async function verifiedPasswordUser(t: ReturnType<typeof createTest>, email: str
   const account = await passwordAccount(t, email);
   expect(account).not.toBeNull();
   await signIn(t, { code: verificationCode("email verification"), email, flow: "email-verification" });
-  return asPasswordUser(t, account!.userId);
+  const user = asPasswordUser(t, account!.userId);
+  await user.mutation(api.privacy.acknowledge, {});
+  return user;
 }
 
 async function resetRequestNotice(t: ReturnType<typeof createTest>, email: string) {
@@ -118,7 +120,7 @@ describe("password account lifecycle", () => {
     expect(deliveredEmails).toHaveLength(2);
   });
 
-  test("denies pipeline access until verification and permits it after an OTP signup", async () => {
+  test("requires a current privacy acknowledgement before a verified user can save career data", async () => {
     const t = createTest();
     const email = "verified@example.test";
     await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", password: securePassword });
@@ -132,6 +134,34 @@ describe("password account lifecycle", () => {
 
     expect((await passwordAccount(t, email))?.emailVerified).toBe(email);
     await expect(accountUser.query(api.jobs.list)).resolves.toEqual([]);
+    await expect(accountUser.mutation(api.jobs.create, {
+      company: "Example Co",
+      location: "Remote",
+      source: "Test",
+      title: "Security Engineer",
+      url: "https://example.test/jobs/1",
+    })).rejects.toThrow("Privacy acknowledgement required");
+
+    await expect(accountUser.query(api.privacy.status)).resolves.toEqual({
+      acknowledgedAt: null,
+      currentVersion: "2026-08-01",
+      requiresAcknowledgement: true,
+    });
+    await accountUser.mutation(api.privacy.acknowledge, {});
+    const privacyStatus = await accountUser.query(api.privacy.status);
+    expect(privacyStatus).toMatchObject({
+      acknowledgedAt: expect.any(Number),
+      currentVersion: "2026-08-01",
+      requiresAcknowledgement: false,
+    });
+    await t.run(async (ctx) => {
+      const user = await ctx.db.get(account!.userId);
+      expect(user).toMatchObject({
+        privacyAcknowledgedAt: privacyStatus.acknowledgedAt,
+        privacyPolicyVersion: "2026-08-01",
+      });
+      expect(user).not.toHaveProperty("privacyPolicyText");
+    });
     await expect(accountUser.mutation(api.jobs.create, {
       company: "Example Co",
       location: "Remote",

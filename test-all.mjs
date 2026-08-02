@@ -175,7 +175,7 @@ for (const f of systemFiles) {
 const alphaPolicyDocuments = [
   {
     path: 'docs/PRIVACY.md',
-    required: ['# Jobbie alpha privacy notice', 'Data collected and why', 'Retention and deletion', 'automatically submit applications', 'Jobbie alpha data request'],
+    required: ['# Jobbie alpha privacy notice', '**Version:** 2026-08-01', 'Data collected and why', 'Retention and deletion', 'automatically submit applications', 'Jobbie alpha data request'],
   },
   {
     path: 'docs/TERMS.md',

@@ -14,6 +14,21 @@ const jobStatus = v.union(
 
 export default defineSchema({
   ...authTables,
+  // Keep acknowledgement metadata with the authenticated account rather than
+  // duplicating identity data or a copy of the policy in a separate table.
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    privacyAcknowledgedAt: v.optional(v.number()),
+    privacyPolicyVersion: v.optional(v.string()),
+  })
+    .index("email", ["email"])
+    .index("phone", ["phone"]),
   jobs: defineTable({
     ownerId: v.id("users"),
     company: v.string(),

@@ -1,6 +1,7 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import { requireVerifiedUser } from "./auth";
+import { requireCurrentPrivacyAcknowledgement } from "./privacy";
 
 const MAX_JOBS_PER_LIST = 100;
 const jobFieldLimits = {
@@ -77,6 +78,7 @@ export const create = mutationGeneric({
   },
   handler: async (ctx, args) => {
     const ownerId = await requireVerifiedUser(ctx);
+    await requireCurrentPrivacyAcknowledgement(ctx, ownerId);
     const now = Date.now();
     return await ctx.db.insert("jobs", {
       company: normalizeText(args.company, "company"),
@@ -100,6 +102,7 @@ export const updateStatus = mutationGeneric({
   },
   handler: async (ctx, { id, status }) => {
     const userId = await requireVerifiedUser(ctx);
+    await requireCurrentPrivacyAcknowledgement(ctx, userId);
     const job = await ctx.db.get(id);
     if (job === null || job.ownerId !== userId) {
       throw new Error("Job not found");

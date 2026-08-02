@@ -70,3 +70,10 @@ manual role creation, role search, and status tracking. The local Career-Ops
 scanner remains separate from the Convex dataset; automated discovery, document
 generation, browser-assisted form filling, and application submission are not
 implemented in this deployment.
+
+Before a verified account can create or change a pipeline entry, it must review
+and acknowledge the current in-product privacy notice. The backend records only
+the notice version and acknowledgement time on that account, then enforces the
+acknowledgement for pipeline writes. The account dialog links to the published
+privacy notice, terms, security contact, and the current manual export/deletion
+request path.

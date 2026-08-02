@@ -16,6 +16,7 @@ related:
 # Jobbie alpha privacy notice
 
 **Effective date:** 2026-08-01
+**Version:** 2026-08-01
 **Applies to:** the hosted Jobbie/Career-Ops web alpha in `web/`. This notice
 does not change how the separately installed, local Career-Ops CLI handles
 files on a user's computer.
