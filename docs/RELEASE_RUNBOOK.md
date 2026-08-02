@@ -20,6 +20,16 @@ career files or credentials in a release branch or deployment.
 
 - Node.js 24 is installed.
 - The source-only change set passes the `Web Release Safety` GitHub workflow.
+- The security release gate passes from `web/` before the deploy or release tag:
+
+  ```bash
+  npm ci --ignore-scripts
+  npx playwright install chromium
+  npm run test:security-regression
+  ```
+
+  This is also required by the release workflow before Release Please can
+  create a release tag.
 - Netlify has a production `CONVEX_DEPLOY_KEY` in its secret store and
   `CONVEX_DEV_DEPLOYMENT_URLS` lists every known development Convex URL.
 - The deploy key targets the intended Convex production deployment.

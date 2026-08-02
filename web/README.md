@@ -40,6 +40,24 @@ Never publish `dist/` using `npm run build:app`, which omits the guard.
 
 For a manual release, use [the source-controlled release runbook](../docs/RELEASE_RUNBOOK.md).
 
+## Security release gate
+
+Before a release, run the full local security regression from `web/`. It uses
+synthetic browser credentials and a loopback-only Vite server; it does not call
+the deployed Convex service, send email, or create a production account.
+
+```bash
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run test:security-regression
+```
+
+The command audits production dependencies, runs the backend authorization
+tests, verifies the guarded production build and endpoint, checks Netlify
+headers/CSP, and renders the actual UI through registration, verification,
+privacy acknowledgement, role creation and update, sign-out, and sign-in. The
+release workflow runs it before Release Please can create a release tag.
+
 ## Data and secret handling
 
 Do not commit career records (`cv.md`, `article-digest.md`, `data/`, `reports/`,

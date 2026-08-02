@@ -9,7 +9,9 @@
     "build:app": "tsc --noEmit && vite build",
     "verify:production-build": "node scripts/production-build-guard.mjs verify",
     "test:auth": "vitest run --config vitest.auth.config.ts",
+    "test:browser-flow": "node scripts/isolated-browser-flow.mjs",
     "test:production-build-guard": "node --test scripts/production-build-guard.test.mjs",
+    "test:security-regression": "node scripts/security-regression.mjs",
     "test:security-headers": "node --test scripts/security-headers.test.mjs",
     "preview": "vite preview",
     "convex:dev": "convex dev",
@@ -31,6 +33,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "convex-test": "^0.0.54",
+    "playwright": "^1.58.1",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }
