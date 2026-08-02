@@ -30,10 +30,15 @@ export type PrivacyStatus = {
   requiresAcknowledgement: boolean;
 };
 
+export type EnrollmentStatus = {
+  enrolled: boolean;
+};
+
 export const functions = {
   acknowledgePrivacy: makeFunctionReference<"mutation", Record<string, never>, null>("privacy:acknowledge"),
   listJobs: makeFunctionReference<"query", Record<string, never>, Job[]>("jobs:list"),
   getPrivacyStatus: makeFunctionReference<"query", Record<string, never>, PrivacyStatus>("privacy:status"),
+  getEnrollmentStatus: makeFunctionReference<"query", Record<string, never>, EnrollmentStatus>("enrollment:status"),
   createJob: makeFunctionReference<
     "mutation",
     {

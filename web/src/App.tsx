@@ -261,6 +261,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
     const password = String(values.get("password") || "");
     const confirmation = String(values.get("confirmation") || "");
     const code = String(values.get("code") || "").trim();
+    const inviteToken = String(values.get("inviteToken") || "").trim();
 
     if ((mode === "signUp" || isResetVerification) && password !== confirmation) {
       setError("Passwords do not match.");
@@ -287,6 +288,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
       } else {
         const result = await signIn("password", {
           ...(mode === "signUp" ? { botProtectionToken } : {}),
+          ...(mode === "signUp" ? { inviteToken } : {}),
           email: submittedEmail,
           flow: mode,
           password,
@@ -366,6 +368,12 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
             </label>
           ) : null}
           {mode === "signUp" ? (
+            <label>
+              Alpha invite code
+              <input autoComplete="off" name="inviteToken" required />
+            </label>
+          ) : null}
+          {mode === "signUp" ? (
             <div aria-label="Bot protection" ref={botProtectionElement} />
           ) : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -375,7 +383,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
             {submitLabel}
           </button>
         </form>
-        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
+        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" ? " A valid alpha invite code is also required." : ""}{mode === "signUp" && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
         {mode === "verify" ? <>
           <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification code</button>
           <button className="text-button" onClick={() => startOver("signIn")} type="button">Back to sign in</button>
@@ -385,6 +393,35 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           </button>
           {mode === "signIn" ? <button className="text-button" onClick={() => startOver("reset")} type="button">Forgot your password?</button> : null}
         </>}
+      </section>
+    </main>
+  );
+}
+
+function EnrollmentGate({
+  onRecovery,
+  onSignOut,
+}: {
+  onRecovery: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
+  const enrollmentStatus = useQuery(functions.getEnrollmentStatus, {});
+
+  if (enrollmentStatus === undefined) {
+    return <main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Checking alpha enrollment</main>;
+  }
+  if (enrollmentStatus.enrolled) {
+    return <PrivacyAcknowledgement onRecovery={onRecovery} onSignOut={onSignOut} />;
+  }
+
+  return (
+    <main className="access-screen">
+      <section aria-labelledby="enrollment-title" className="access-panel privacy-panel">
+        <div className="access-mark"><LockKeyhole size={22} /></div>
+        <p className="eyebrow">Closed alpha</p>
+        <h1 id="enrollment-title">This account is not enrolled.</h1>
+        <p className="access-copy">This workspace is available only through a single-use alpha invite. Contact the person who invited you if you need access.</p>
+        <button className="button primary access-submit" onClick={() => void onSignOut()} type="button"><LogOut size={16} />Sign out</button>
       </section>
     </main>
   );
@@ -661,7 +698,7 @@ export default function App() {
     <>
       <AuthLoading><main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Securing your workspace</main></AuthLoading>
       <Unauthenticated><AccessScreen initialMode={accessMode} /></Unauthenticated>
-      <Authenticated><PrivacyAcknowledgement onRecovery={() => signOutTo("reset")} onSignOut={() => signOutTo("signIn")} /></Authenticated>
+      <Authenticated><EnrollmentGate onRecovery={() => signOutTo("reset")} onSignOut={() => signOutTo("signIn")} /></Authenticated>
     </>
   );
 }

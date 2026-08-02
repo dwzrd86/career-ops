@@ -18,6 +18,7 @@ import { internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { inviteTokenHash } from "./enrollmentCore";
 
 function publicEmailProfile(params: Record<string, Value | undefined>) {
   const email = typeof params.email === "string" ? params.email.trim().toLowerCase() : "";
@@ -181,12 +182,20 @@ function AbuseProtectedPassword<DataModel extends GenericDataModel>(config: Pass
       if (flow === "signUp") {
         const secret = params.password as string;
         if (secret === undefined) throw new Error("Authentication temporarily unavailable. Please try again later.");
+        const reservation = await ctx.runMutation((internal as any).enrollment.reserveInvite, {
+          tokenHash: await inviteTokenHash(params.inviteToken),
+        });
         const { account, user } = await createAccount(ctx, {
           account: { id: email, secret },
           profile: profile as any,
           provider,
           shouldLinkViaEmail: config.verify !== undefined,
           shouldLinkViaPhone: false,
+        });
+        await ctx.runMutation((internal as any).enrollment.claimReservedInvite, {
+          inviteId: reservation.inviteId,
+          reservationId: reservation.reservationId,
+          userId: user._id,
         });
         if (config.verify && !account.emailVerified) {
           return await signInViaProvider(ctx, config.verify, { accountId: account._id, params: normalizedParams });

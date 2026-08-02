@@ -2,6 +2,7 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireVerifiedUser } from "./auth";
+import { requireEnrolledUser } from "./enrollment";
 
 // This identifies the published notice bundle. Policy content remains in the
 // source-controlled documents; accounts retain only the version and time.
@@ -21,6 +22,7 @@ export const status = queryGeneric({
   args: {},
   handler: async (ctx) => {
     const userId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, userId);
     const user = await ctx.db.get(userId);
     const acknowledgedAt = user?.privacyPolicyVersion === PRIVACY_POLICY_VERSION
       ? user.privacyAcknowledgedAt ?? null
@@ -38,6 +40,7 @@ export const acknowledge = mutationGeneric({
   args: {},
   handler: async (ctx) => {
     const userId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, userId);
     const user = await ctx.db.get(userId);
 
     // Keep the initial acknowledgement time for a version; a changed policy

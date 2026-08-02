@@ -56,4 +56,32 @@ export default defineSchema({
     key: v.string(),
     windowStartedAt: v.number(),
   }).index("by_key_and_action", ["key", "action"]),
+  // Alpha access is granted with an opaque invite token. Only an HMAC digest
+  // is persisted; neither the raw token nor an invitee email is stored here.
+  alphaInvites: defineTable({
+    tokenHash: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    claimedAt: v.optional(v.number()),
+    claimedBy: v.optional(v.id("users")),
+    expiredAt: v.optional(v.number()),
+    reservationId: v.optional(v.string()),
+    reservationExpiresAt: v.optional(v.number()),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_claimed_by", ["claimedBy"]),
+  // Audit records intentionally omit email addresses, raw tokens, IP
+  // addresses, and career content. They support operational investigation
+  // without becoming another source of account-profile data.
+  enrollmentAuditEvents: defineTable({
+    event: v.union(
+      v.literal("inviteIssued"),
+      v.literal("inviteReserved"),
+      v.literal("inviteAccepted"),
+      v.literal("inviteExpired"),
+      v.literal("inviteRejected"),
+    ),
+    inviteId: v.optional(v.id("alphaInvites")),
+    occurredAt: v.number(),
+  }).index("by_invite", ["inviteId"]),
 });

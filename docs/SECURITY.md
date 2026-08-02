@@ -88,6 +88,8 @@ names without secret values.
 | `AUTH_RESEND_FROM` | Convex environment | Verified Resend sender identity, such as `Jobbie <accounts@example.com>`; the domain must be verified with Resend before production use. |
 | `AUTH_RESEND_KEY` | Convex secret | Resend API credential used for verification and reset mail. |
 | `AUTH_ABUSE_KEY` | Convex secret | High-entropy HMAC key used to derive non-reversible rate-limit keys from addresses. |
+| `ENROLLMENT_INVITE_KEY` | Convex secret | Separate high-entropy HMAC key used to derive non-reversible closed-alpha invite digests. |
+| `ENROLLMENT_ADMIN_KEY` | Convex secret | Operator-only credential required to issue a time-limited alpha invite. It is never browser-visible or stored with the invite. |
 | `SITE_URL` | Convex environment | Public application origin used by Convex Auth to form both verification and reset OTP callback URLs (`SITE_URL?code=...`). The application currently sends only the OTP, which users enter on the corresponding access screen. |
 | `CONVEX_SITE_URL` | Convex environment | Convex HTTP-site origin used by the Auth provider and signed session tokens. |
 | `JWT_PRIVATE_KEY`, `JWKS` | Convex secrets | Convex Auth signing key and corresponding public JSON Web Key Set. Generate with the supported Convex Auth key command; never hand-author or commit them. |
@@ -104,9 +106,26 @@ misconfiguration visible during development).
 Run `cd web && npm run test:auth`. The suite starts an isolated,
 in-memory Convex test backend for each case and intercepts Resend requests into
 a test-only outbox; it never needs a real deployment, mailbox, or credential.
-It exercises invalid addresses and passwords, repeat registration,
-unverified-data denial, verification, reset expiry, server rate limits, and the
-same generic reset-screen outcome for known and unknown addresses.
+It exercises invalid addresses and passwords, invite-token validation and
+expiry, same-account reuse and cross-account reuse attempts, unverified-data
+denial, verification, reset expiry, server rate limits, and the same generic
+reset-screen outcome for known and unknown addresses.
+
+### Closed-alpha enrollment
+
+Issue an alpha invite only from an operator-controlled Convex session by
+calling `enrollment:issueInvite` with the server-held administrative key and a
+bounded expiry. Deliver the returned code through an approved private channel,
+then discard the operator's copy once it has been delivered. Do not place an
+invite token in a ticket, a browser-visible environment variable, source
+control, or a support email.
+
+During signup, the backend checks a keyed digest, atomically reserves the
+invite for up to ten minutes, and claims it only for the just-created account.
+Unused codes are rejected after expiry and claimed codes cannot enroll a second
+account. The audit table records only invite ID, event category, and timestamp;
+it deliberately excludes raw tokens, email addresses, IP addresses, account
+IDs, and career data.
 
 ### Why this is supported
 
@@ -177,6 +196,9 @@ job functions require both.
 | `auth:store` — internal mutation supplied by Convex Auth | Internal only; Convex Auth invokes it from its trusted server implementation. | Auth-table operations are scoped by the library's typed account, session, verification, and user IDs. No application-record access. | Internal caller only; browser callers cannot invoke or read its Auth-table result. | Convex Auth's discriminated `storeArgs` validator; not client-callable. | Creates, reads, updates, and deletes Convex Auth records needed for account, credential, verification-code, and session lifecycle operations. |
 | `auth:getVerifiedPasswordAccount` — internal query | Internal only. | Looks up the password account whose `authAccounts.userId` equals the supplied user ID and requires verified email state. | Internal caller receives only `providerAccountId`; no complete Auth document is returned. | `userId` must be a Convex `users` ID. | None. |
 | `abuse:consume` — internal mutation | Internal only; called from the server-side password provider before protected flows. | `authAbuseLimits` is scoped by a non-reversible HMAC-derived `key` plus `action`, not an email or application owner ID. | No caller-visible data (void result). | `action` is limited to `signUp`, `passwordReset`, or `resendVerification`; `key` must be a string. The application creates the key only from the normalized email with a server-held HMAC secret. | Creates or patches an in-database hourly abuse counter; rejects attempts past the configured limit. |
+| `enrollment:issueInvite` — public action for operators | Requires `ENROLLMENT_ADMIN_KEY`; it is not called by the browser application. | No email or user argument. The action compares the supplied administrative key before issuing an independent random token. | The raw token and expiry are returned only to the operator call; the raw token is not stored. | `expiresInMinutes` must be an integer from 1 to 43,200. | Creates an HMAC-digest-only invite and an `inviteIssued` audit event. |
+| `enrollment:status` — public query | Verified user. | Queries only the invite claimed by the authenticated user ID. | One `enrolled` boolean. | No arguments. | None. |
+| `enrollment:reserveInvite`, `enrollment:claimReservedInvite`, `enrollment:createInvite` — internal mutations | Internal only. | Reservations are keyed by an HMAC token digest; a claim is permanently scoped to one newly created user ID. | Internal callers receive only reservation IDs or no result; browsers cannot access the functions. | Digest, internal IDs, and server-generated reservation IDs are validated by Convex. | Atomically reserves, claims, or creates an invite and writes privacy-safe event records. |
 | `GET /.well-known/openid-configuration` — public HTTP route registered by Convex Auth | None. | No owner data or application-record access. | Public OpenID discovery metadata: issuer, JWKS URL, and authorization endpoint. | No request body or route parameters. | None. |
 | `GET /.well-known/jwks.json` — public HTTP route registered by Convex Auth | None. | No owner data or application-record access. | The public JSON Web Key Set used to verify issued JWTs; no private signing key. | No request body or route parameters. | None. |
 

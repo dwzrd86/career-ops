@@ -19,6 +19,13 @@ function signIn(
   return t.action(api.auth.signIn, { params, provider: "password" });
 }
 
+async function issueInvite(t: ReturnType<typeof createTest>, expiresInMinutes = 60 * 24 * 7) {
+  return await t.action(api.enrollment.issueInvite, {
+    adminKey: "test-only-enrollment-admin-key",
+    expiresInMinutes,
+  });
+}
+
 function verificationCode(subject: string) {
   const email = [...deliveredEmails].reverse().find((candidate) => candidate.subject === subject);
   expect(email).toBeDefined();
@@ -46,7 +53,8 @@ function asPasswordUser(t: ReturnType<typeof createTest>, userId: Id<"users">) {
 }
 
 async function verifiedPasswordUser(t: ReturnType<typeof createTest>, email: string) {
-  await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", password: securePassword });
+  const invite = await issueInvite(t);
+  await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", inviteToken: invite.token, password: securePassword });
   const account = await passwordAccount(t, email);
   expect(account).not.toBeNull();
   await signIn(t, { code: verificationCode("email verification"), email, flow: "email-verification" });
@@ -91,14 +99,16 @@ describe("password account lifecycle", () => {
     expect(await passwordAccount(t, "weak@example.test")).toBeNull();
   });
 
-  test("normalizes addresses, rejects duplicate registration, and delivers verification through fake mail", async () => {
+  test("normalizes addresses and delivers verification through fake mail after a valid invite", async () => {
     const t = createTest();
     const email = "candidate@example.test";
+    const invite = await issueInvite(t);
 
     await expect(signIn(t, {
       botProtectionToken: "bot-token",
       email: " Candidate@Example.Test ",
       flow: "signUp",
+      inviteToken: invite.token,
       password: securePassword,
     })).resolves.toMatchObject({ tokens: null });
 
@@ -107,15 +117,27 @@ describe("password account lifecycle", () => {
     expect(account?.emailVerified).toBeUndefined();
     expect(deliveredEmails).toHaveLength(1);
     expect(deliveredEmails[0]).toMatchObject({ subject: "email verification", to: email });
+    await t.run(async (ctx) => {
+      const storedInvite = await ctx.db
+        .query("alphaInvites")
+        .withIndex("by_claimed_by", (query) => query.eq("claimedBy", account!.userId))
+        .unique();
+      expect(storedInvite).toMatchObject({ claimedBy: account!.userId, claimedAt: expect.any(Number) });
+      expect(storedInvite?.tokenHash).not.toBe(invite.token);
+      expect(storedInvite).not.toHaveProperty("token");
 
-    // Convex Auth returns the same non-session response for a repeat sign-up
-    // and sends another verification code, without creating another account.
-    await expect(signIn(t, {
-      botProtectionToken: "bot-token",
-      email,
-      flow: "signUp",
-      password: securePassword,
-    })).resolves.toMatchObject({ tokens: null });
+      const events = await ctx.db.query("enrollmentAuditEvents").collect();
+      expect(events.map((event) => event.event)).toEqual(["inviteIssued", "inviteReserved", "inviteAccepted"]);
+      for (const event of events) {
+        expect(event).not.toHaveProperty("email");
+        expect(event).not.toHaveProperty("token");
+        expect(event).not.toHaveProperty("userId");
+      }
+    });
+
+    // Verification may be resent through its dedicated flow, without making a
+    // second sign-up attempt or reusing an invite.
+    await expect(signIn(t, { email, flow: "email-verification" })).resolves.toMatchObject({ tokens: null });
     expect(await passwordAccounts(t)).toHaveLength(1);
     expect(deliveredEmails).toHaveLength(2);
   });
@@ -123,7 +145,8 @@ describe("password account lifecycle", () => {
   test("requires a current privacy acknowledgement before a verified user can save career data", async () => {
     const t = createTest();
     const email = "verified@example.test";
-    await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", password: securePassword });
+    const invite = await issueInvite(t);
+    await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", inviteToken: invite.token, password: securePassword });
     const account = await passwordAccount(t, email);
     expect(account).not.toBeNull();
     const accountUser = asPasswordUser(t, account!.userId);
@@ -176,7 +199,8 @@ describe("password account lifecycle", () => {
     vi.setSystemTime(new Date("2026-08-01T12:00:00.000Z"));
     const t = createTest();
     const email = "expired-reset@example.test";
-    await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", password: securePassword });
+    const invite = await issueInvite(t);
+    await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", inviteToken: invite.token, password: securePassword });
     await signIn(t, { email, flow: "reset" });
     const code = verificationCode("password reset");
 
@@ -192,7 +216,8 @@ describe("password account lifecycle", () => {
   test("enforces the hourly reset rate limit and gives unknown reset requests the same UI-safe outcome", async () => {
     const t = createTest();
     const email = "limited@example.test";
-    await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", password: securePassword });
+    const invite = await issueInvite(t);
+    await signIn(t, { botProtectionToken: "bot-token", email, flow: "signUp", inviteToken: invite.token, password: securePassword });
 
     expect(await resetRequestNotice(t, email)).toBe(await resetRequestNotice(t, "unknown@example.test"));
 
@@ -203,6 +228,66 @@ describe("password account lifecycle", () => {
 
     // The React access screen intentionally presents this exact same notice whether the request resolves or rejects.
     await expect(signIn(t, { email: "unknown@example.test", flow: "reset" })).rejects.toThrow();
+  });
+});
+
+describe("closed alpha enrollment", () => {
+  test("rejects invalid invite tokens before creating an account", async () => {
+    const t = createTest();
+    await expect(signIn(t, {
+      botProtectionToken: "bot-token",
+      email: "invalid-invite@example.test",
+      flow: "signUp",
+      inviteToken: "not-an-invite",
+      password: securePassword,
+    })).rejects.toThrow("valid alpha invite");
+    expect(await passwordAccount(t, "invalid-invite@example.test")).toBeNull();
+  });
+
+  test("rejects expired unused invites before creating an account", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T12:00:00.000Z"));
+    const t = createTest();
+    const invite = await issueInvite(t, 1);
+    vi.advanceTimersByTime(60 * 1000 + 1);
+
+    await expect(signIn(t, {
+      botProtectionToken: "bot-token",
+      email: "expired-invite@example.test",
+      flow: "signUp",
+      inviteToken: invite.token,
+      password: securePassword,
+    })).rejects.toThrow("expired");
+    expect(await passwordAccount(t, "expired-invite@example.test")).toBeNull();
+  });
+
+  test("rejects reuse of an invite by the same account", async () => {
+    const t = createTest();
+    const invite = await issueInvite(t);
+    const signup = { botProtectionToken: "bot-token", email: "reused-invite@example.test", flow: "signUp", inviteToken: invite.token, password: securePassword };
+    await expect(signIn(t, signup)).resolves.toMatchObject({ tokens: null });
+    await expect(signIn(t, signup)).rejects.toThrow("no longer available");
+    expect(await passwordAccounts(t)).toHaveLength(1);
+  });
+
+  test("rejects a cross-account attempt to use a claimed invite", async () => {
+    const t = createTest();
+    const invite = await issueInvite(t);
+    await signIn(t, {
+      botProtectionToken: "bot-token",
+      email: "first-invite@example.test",
+      flow: "signUp",
+      inviteToken: invite.token,
+      password: securePassword,
+    });
+    await expect(signIn(t, {
+      botProtectionToken: "bot-token",
+      email: "second-invite@example.test",
+      flow: "signUp",
+      inviteToken: invite.token,
+      password: securePassword,
+    })).rejects.toThrow("no longer available");
+    expect(await passwordAccount(t, "second-invite@example.test")).toBeNull();
   });
 });
 

@@ -57,6 +57,13 @@ owner; unauthenticated, unverified, and cross-account requests are rejected by
 the backend. Registration also requires Cloudflare Turnstile and backend rate
 limits.
 
+This is a closed alpha: registration additionally requires a single-use invite
+code. The backend stores only an HMAC digest of each code and expires unused
+codes. An operator issues codes with the server-only `ENROLLMENT_ADMIN_KEY`;
+both that value and the separate `ENROLLMENT_INVITE_KEY` digest key belong only
+in the Convex deployment environment. Never place either in a `VITE_*` value,
+Netlify build setting, client code, ticket, or email body.
+
 Set the required Resend, Turnstile, callback, and signing-key configuration
 before deployment. The exact value-free names and secret-store boundaries are
 documented in [the security policy](../docs/SECURITY.md#required-deployment-configuration).

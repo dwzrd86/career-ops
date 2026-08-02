@@ -2,6 +2,7 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import { requireVerifiedUser } from "./auth";
 import { requireCurrentPrivacyAcknowledgement } from "./privacy";
+import { requireEnrolledUser } from "./enrollment";
 
 const MAX_JOBS_PER_LIST = 100;
 const jobFieldLimits = {
@@ -59,6 +60,7 @@ export const list = queryGeneric({
   args: {},
   handler: async (ctx) => {
     const userId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, userId);
     return await ctx.db
       .query("jobs")
       .withIndex("by_owner_created_at", (query) => query.eq("ownerId", userId))
@@ -78,6 +80,7 @@ export const create = mutationGeneric({
   },
   handler: async (ctx, args) => {
     const ownerId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, ownerId);
     await requireCurrentPrivacyAcknowledgement(ctx, ownerId);
     const now = Date.now();
     return await ctx.db.insert("jobs", {
@@ -102,6 +105,7 @@ export const updateStatus = mutationGeneric({
   },
   handler: async (ctx, { id, status }) => {
     const userId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, userId);
     await requireCurrentPrivacyAcknowledgement(ctx, userId);
     const job = await ctx.db.get(id);
     if (job === null || job.ownerId !== userId) {
@@ -115,6 +119,7 @@ export const remove = mutationGeneric({
   args: { id: v.id("jobs") },
   handler: async (ctx, { id }) => {
     const userId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, userId);
     const job = await ctx.db.get(id);
     if (job === null || job.ownerId !== userId) {
       throw new Error("Job not found");

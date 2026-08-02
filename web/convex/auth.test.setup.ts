@@ -10,6 +10,8 @@ export type DeliveredEmail = {
 export const deliveredEmails: DeliveredEmail[] = [];
 
 process.env.AUTH_ABUSE_KEY = "test-only-abuse-key";
+process.env.ENROLLMENT_ADMIN_KEY = "test-only-enrollment-admin-key";
+process.env.ENROLLMENT_INVITE_KEY = "test-only-enrollment-invite-key";
 process.env.AUTH_RESEND_FROM = "Jobbie Tests <test@example.test>";
 process.env.AUTH_RESEND_KEY = "test-only-resend-key";
 process.env.AUTH_TURNSTILE_HOSTNAME = "tests.example.test";

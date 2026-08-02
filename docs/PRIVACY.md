@@ -43,6 +43,7 @@ dataset.
 | Signup bot-protection token and validation result | Reduce automated account creation | Cloudflare Turnstile validates the token during signup. The application does not store the token in its own tables. |
 | Job-pipeline entries: company, role title, location, job URL, source, status, optional notes, created/updated timestamps, and owning account ID | Display and manage the user's private pipeline | The `jobs` table in the configured Convex deployment. Each entry is scoped to its authenticated, verified owner. |
 | HMAC-derived email rate-limit key, action type, attempt count, and rate-limit-window start time | Rate-limit signup, reset, and verification resend attempts | The `authAbuseLimits` table in the configured Convex deployment. It deliberately stores an HMAC-derived key instead of the email address. |
+| Alpha-invite HMAC digest, issuance/expiry/claim timestamps, a claimed account ID, and limited event category/timestamp records | Limit this early alpha to invited users and investigate invitation lifecycle failures | The `alphaInvites` and `enrollmentAuditEvents` tables in the configured Convex deployment. The application does not store a raw invite token, invitee email, IP address, or career content in its enrollment audit records. |
 
 The current application does not implement advertising trackers, behavioral
 analytics, resume uploads, application-answer collection, job-board
@@ -68,6 +69,7 @@ certification claim.
 | Account and authentication records | Until the user requests account-data deletion or the alpha is retired. There is no self-service account-deletion control yet. | Request deletion through the support channel below from the verified account email. |
 | Verification and reset codes | 15 minutes, as configured in the application. | They expire automatically; no user action is needed. |
 | HMAC-derived rate-limit records | The current alpha has no automated expiry job for these records; they are retained until the operator removes them or retires the alpha. | Include the request in an account-data deletion request. The operator will assess whether any limited record must be retained temporarily for fraud prevention or legal obligations and will explain any exception. |
+| Unused alpha invite | It cannot be used after its stated expiry time. The retained HMAC digest and privacy-safe audit entries remain until the operator removes them or retires the alpha. | Invite tokens are not tied to an email address before redemption. For a redeemed invite, include the request in an account-data deletion request. |
 
 The app currently supports per-role deletion but not a self-service full export
 or account-deletion workflow. To receive a copy of the data held for an alpha
