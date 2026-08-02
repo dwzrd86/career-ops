@@ -185,6 +185,14 @@ const alphaPolicyDocuments = [
     path: 'docs/SECURITY_CONTACT.md',
     required: ['# Jobbie security contact', 'hi@santifer.io', 'Do **not**', '72 hours'],
   },
+  {
+    path: 'docs/INCIDENT_RESPONSE.md',
+    required: ['# Jobbie alpha incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
+  },
+  {
+    path: 'docs/ALPHA_OPERATIONS.md',
+    required: ['# Jobbie closed alpha operations', 'Production data export request', 'Production account-data deletion request', '[[INCIDENT_RESPONSE]]', 'does **not** automatically submit job applications'],
+  },
 ];
 
 for (const { path, required } of alphaPolicyDocuments) {
@@ -238,6 +246,7 @@ const allowedFiles = [
   '.github/SECURITY.md',
   // Published alpha policies intentionally provide the public security contact.
   'docs/PRIVACY.md', 'docs/TERMS.md', 'docs/SECURITY_CONTACT.md',
+  'docs/INCIDENT_RESPONSE.md', 'docs/ALPHA_OPERATIONS.md',
   // Dashboard credit string
   'dashboard/internal/ui/screens/pipeline.go',
 ];
