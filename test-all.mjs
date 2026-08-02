@@ -172,6 +172,35 @@ for (const f of systemFiles) {
   }
 }
 
+const alphaPolicyDocuments = [
+  {
+    path: 'docs/PRIVACY.md',
+    required: ['# Jobbie alpha privacy notice', 'Data collected and why', 'Retention and deletion', 'automatically submit applications', 'Jobbie alpha data request'],
+  },
+  {
+    path: 'docs/TERMS.md',
+    required: ['# Jobbie alpha terms of use', 'does **not** automatically submit job applications', 'Material changes'],
+  },
+  {
+    path: 'docs/SECURITY_CONTACT.md',
+    required: ['# Jobbie security contact', 'hi@santifer.io', 'Do **not**', '72 hours'],
+  },
+];
+
+for (const { path, required } of alphaPolicyDocuments) {
+  if (!fileExists(path)) {
+    fail(`Missing alpha policy document: ${path}`);
+    continue;
+  }
+  const policy = readFile(path);
+  const missing = required.filter(fragment => !policy.includes(fragment));
+  if (missing.length === 0) {
+    pass(`Alpha policy document is complete: ${path}`);
+  } else {
+    fail(`Alpha policy document is missing required content: ${path} (${missing.join(', ')})`);
+  }
+}
+
 // Check user files are NOT tracked (gitignored)
 const userFiles = [
   'config/profile.yml', 'modes/_profile.md', 'portals.yml',
@@ -207,6 +236,8 @@ const allowedFiles = [
   // Community / governance files (added in v1.3.0, all legitimately reference the maintainer)
   'CODE_OF_CONDUCT.md', 'GOVERNANCE.md', 'SECURITY.md', 'SUPPORT.md',
   '.github/SECURITY.md',
+  // Published alpha policies intentionally provide the public security contact.
+  'docs/PRIVACY.md', 'docs/TERMS.md', 'docs/SECURITY_CONTACT.md',
   // Dashboard credit string
   'dashboard/internal/ui/screens/pipeline.go',
 ];
