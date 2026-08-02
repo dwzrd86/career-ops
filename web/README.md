@@ -84,3 +84,15 @@ the notice version and acknowledgement time on that account, then enforces the
 acknowledgement for pipeline writes. The account dialog links to the published
 privacy notice, terms, security contact, and the current manual export/deletion
 request path.
+
+## Privacy-safe error reporting
+
+The app records only deployment version, route path without its query string,
+fixed operation type, fixed error category, and timestamp. Browser reports use
+Convex `errorReports`; failed backend mutations use the same metadata-only
+Convex runtime log because failed mutation writes are rolled back. It never
+records error messages or stacks, submitted form values, job notes, resume
+files, application answers, tokens, passwords, email
+bodies, account IDs, or full URLs. Set the matching non-secret
+`VITE_APP_DEPLOYMENT_VERSION` (Netlify build) and `APP_DEPLOYMENT_VERSION`
+(Convex) release labels before deployment so reports can be tied to a release.

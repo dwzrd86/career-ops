@@ -17,8 +17,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { functions, Job, JobStatus } from "./convex";
+import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
 
 const statusLabels: Record<JobStatus, string> = {
   discovered: "Discovered",
@@ -64,13 +65,22 @@ declare global {
 
 function StatusSelect({ job }: { job: Job }) {
   const updateStatus = useMutation(functions.updateJobStatus);
+  const reportError = useSafeErrorReporter();
+
+  async function update(event: ChangeEvent<HTMLSelectElement>) {
+    try {
+      await updateStatus({ id: job._id, status: event.target.value as JobStatus });
+    } catch {
+      reportError("job.status.update", "operationFailed");
+    }
+  }
 
   return (
     <label className={`status-select status-${job.status}`}>
       <span className="sr-only">Update status for {job.title}</span>
       <select
         value={job.status}
-        onChange={(event) => void updateStatus({ id: job._id, status: event.target.value as JobStatus })}
+        onChange={(event) => void update(event)}
       >
         {Object.entries(statusLabels).map(([value, label]) => (
           <option key={value} value={value}>
@@ -85,10 +95,15 @@ function StatusSelect({ job }: { job: Job }) {
 
 function JobActions({ job }: { job: Job }) {
   const removeJob = useMutation(functions.removeJob);
+  const reportError = useSafeErrorReporter();
 
   async function remove() {
     if (!window.confirm(`Remove ${job.title} at ${job.company} from your pipeline?`)) return;
-    await removeJob({ id: job._id });
+    try {
+      await removeJob({ id: job._id });
+    } catch {
+      reportError("job.remove", "operationFailed");
+    }
   }
 
   return (
@@ -101,6 +116,7 @@ function JobActions({ job }: { job: Job }) {
 
 function NewJobDialog({ onClose }: { onClose: () => void }) {
   const createJob = useMutation(functions.createJob);
+  const reportError = useSafeErrorReporter();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -121,6 +137,7 @@ function NewJobDialog({ onClose }: { onClose: () => void }) {
       });
       onClose();
     } catch {
+      reportError("job.create", "operationFailed");
       setError("The role could not be saved. Check the Convex connection and try again.");
     } finally {
       setIsSaving(false);
@@ -198,6 +215,7 @@ function EmptyPipeline({ onAdd }: { onAdd: () => void }) {
 
 function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   const { signIn } = useAuthActions();
+  const reportError = useSafeErrorReporter();
   const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">(initialMode);
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -300,6 +318,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
         }
       }
     } catch {
+      reportError("auth.submit", "authenticationFailed");
       if (mode === "reset") {
         setEmail(submittedEmail);
         setMode("resetVerification");
@@ -324,6 +343,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
       await signIn("password", { email, flow: "email-verification" });
       setNotice("If the address is eligible for verification, a new code is on its way.");
     } catch {
+      reportError("auth.resend-verification", "authenticationFailed");
       setNotice("If the address is eligible for verification, a new code is on its way.");
     } finally {
       setIsSubmitting(false);
@@ -436,6 +456,7 @@ function PrivacyAcknowledgement({
 }) {
   const privacyStatus = useQuery(functions.getPrivacyStatus, {});
   const acknowledgePrivacy = useMutation(functions.acknowledgePrivacy);
+  const reportError = useSafeErrorReporter();
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -454,6 +475,7 @@ function PrivacyAcknowledgement({
     try {
       await acknowledgePrivacy({});
     } catch {
+      reportError("privacy.acknowledge", "operationFailed");
       setError("We could not save your acknowledgement. Please try again.");
     } finally {
       setIsSaving(false);
@@ -497,6 +519,7 @@ function AccountSecurityDialog({
   onSignOut: () => Promise<void>;
 }) {
   const { signIn } = useAuthActions();
+  const reportError = useSafeErrorReporter();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -525,6 +548,7 @@ function AccountSecurityDialog({
       setNotice("Password updated. Other active sessions have been signed out.");
       event.currentTarget.reset();
     } catch {
+      reportError("auth.change-password", "authenticationFailed");
       setError("We could not change your password. Check your current password and try again.");
     } finally {
       setIsSubmitting(false);
@@ -688,6 +712,7 @@ function PipelineDashboard({
 export default function App() {
   const { signOut } = useAuthActions();
   const [accessMode, setAccessMode] = useState<"signIn" | "reset">("signIn");
+  useUnhandledErrorReporting();
 
   async function signOutTo(mode: "signIn" | "reset") {
     setAccessMode(mode);

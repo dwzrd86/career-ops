@@ -292,6 +292,45 @@ describe("closed alpha enrollment", () => {
 });
 
 describe("job input validation", () => {
+  test("backend failure reports retain diagnostic metadata but not job input", async () => {
+    const t = createTest();
+    const user = await verifiedPasswordUser(t, "error-reporting@example.test");
+    const reportError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const privateNotes = "Private job note: do not contact my manager";
+    const resumeFile = "candidate-resume.pdf";
+    const fullUrl = "http://jobs.example.test/apply?token=secret-token&answer=private-answer";
+
+    try {
+      await expect(user.mutation(api.jobs.create, {
+        company: "Example Company",
+        location: "Remote",
+        notes: `${privateNotes}; attachment=${resumeFile}`,
+        source: "Manual entry",
+        title: "Security Engineer",
+        url: fullUrl,
+      })).rejects.toThrow("valid HTTPS URL");
+
+      expect(reportError).toHaveBeenCalledTimes(1);
+      const report = JSON.parse(String(reportError.mock.calls[0][1]));
+      expect(report).toEqual(expect.objectContaining({
+        deploymentVersion: "unversioned",
+        errorCategory: "validationFailed",
+        operationType: "jobs.create",
+        route: "/convex",
+        occurredAt: expect.any(Number),
+      }));
+      const reportText = JSON.stringify(report);
+      for (const value of [privateNotes, resumeFile, fullUrl, "secret-token", "private-answer"]) {
+        expect(reportText).not.toContain(value);
+      }
+      expect(report).not.toHaveProperty("userId");
+      expect(report).not.toHaveProperty("message");
+      expect(report).not.toHaveProperty("stack");
+    } finally {
+      reportError.mockRestore();
+    }
+  });
+
   test("normalizes persisted job fields and accepts only parseable HTTPS URLs", async () => {
     const t = createTest();
     const user = await verifiedPasswordUser(t, "jobs@example.test");

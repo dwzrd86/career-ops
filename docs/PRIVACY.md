@@ -44,13 +44,15 @@ dataset.
 | Job-pipeline entries: company, role title, location, job URL, source, status, optional notes, created/updated timestamps, and owning account ID | Display and manage the user's private pipeline | The `jobs` table in the configured Convex deployment. Each entry is scoped to its authenticated, verified owner. |
 | HMAC-derived email rate-limit key, action type, attempt count, and rate-limit-window start time | Rate-limit signup, reset, and verification resend attempts | The `authAbuseLimits` table in the configured Convex deployment. It deliberately stores an HMAC-derived key instead of the email address. |
 | Alpha-invite HMAC digest, issuance/expiry/claim timestamps, a claimed account ID, and limited event category/timestamp records | Limit this early alpha to invited users and investigate invitation lifecycle failures | The `alphaInvites` and `enrollmentAuditEvents` tables in the configured Convex deployment. The application does not store a raw invite token, invitee email, IP address, or career content in its enrollment audit records. |
+| Error-report metadata: deployment version, route path without query data, fixed operation type, fixed error category, and timestamp | Diagnose application failures during the alpha | Browser reports are stored in the `errorReports` table in the configured Convex deployment; backend failures use the same metadata-only structured Convex runtime log. Both deliberately exclude form values, job notes, resume files, application answers, auth tokens, passwords, email bodies, error messages, stack traces, account IDs, and full URLs or query strings. |
 
 The current application does not implement advertising trackers, behavioral
 analytics, resume uploads, application-answer collection, job-board
 credentials, or application submission. It also does not implement a separate
-application telemetry service. Infrastructure providers may process ordinary
-service, delivery, or security logs under their own terms; do not put sensitive
-career content in a support request or an email subject line.
+application analytics or behavioral-tracking service. It does implement the
+limited metadata-only error reporting described above. Infrastructure providers
+may process ordinary service, delivery, or security logs under their own terms;
+do not put sensitive career content in a support request or an email subject line.
 
 ## Where data is stored
 

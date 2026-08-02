@@ -36,6 +36,16 @@ export type EnrollmentStatus = {
 
 export const functions = {
   acknowledgePrivacy: makeFunctionReference<"mutation", Record<string, never>, null>("privacy:acknowledge"),
+  reportClientError: makeFunctionReference<
+    "mutation",
+    {
+      deploymentVersion: string;
+      errorCategory: "authenticationFailed" | "operationFailed" | "unexpected" | "validationFailed";
+      operationType: string;
+      route: string;
+    },
+    null
+  >("errorReporting:reportClient"),
   listJobs: makeFunctionReference<"query", Record<string, never>, Job[]>("jobs:list"),
   getPrivacyStatus: makeFunctionReference<"query", Record<string, never>, PrivacyStatus>("privacy:status"),
   getEnrollmentStatus: makeFunctionReference<"query", Record<string, never>, EnrollmentStatus>("enrollment:status"),

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { requireVerifiedUser } from "./auth";
 import { requireCurrentPrivacyAcknowledgement } from "./privacy";
 import { requireEnrolledUser } from "./enrollment";
+import { reportBackendError } from "./errorReporting";
 
 const MAX_JOBS_PER_LIST = 100;
 const jobFieldLimits = {
@@ -79,22 +80,27 @@ export const create = mutationGeneric({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const ownerId = await requireVerifiedUser(ctx);
-    await requireEnrolledUser(ctx, ownerId);
-    await requireCurrentPrivacyAcknowledgement(ctx, ownerId);
-    const now = Date.now();
-    return await ctx.db.insert("jobs", {
-      company: normalizeText(args.company, "company"),
-      location: normalizeText(args.location, "location"),
-      notes: normalizeOptionalText(args.notes, "notes"),
-      ownerId,
-      status: "discovered",
-      source: normalizeText(args.source, "source"),
-      title: normalizeText(args.title, "title"),
-      url: normalizeHttpsUrl(args.url),
-      createdAt: now,
-      updatedAt: now,
-    });
+    try {
+      const ownerId = await requireVerifiedUser(ctx);
+      await requireEnrolledUser(ctx, ownerId);
+      await requireCurrentPrivacyAcknowledgement(ctx, ownerId);
+      const now = Date.now();
+      return await ctx.db.insert("jobs", {
+        company: normalizeText(args.company, "company"),
+        location: normalizeText(args.location, "location"),
+        notes: normalizeOptionalText(args.notes, "notes"),
+        ownerId,
+        status: "discovered",
+        source: normalizeText(args.source, "source"),
+        title: normalizeText(args.title, "title"),
+        url: normalizeHttpsUrl(args.url),
+        createdAt: now,
+        updatedAt: now,
+      });
+    } catch (error) {
+      reportBackendError("jobs.create", "validationFailed");
+      throw error;
+    }
   },
 });
 
@@ -104,26 +110,36 @@ export const updateStatus = mutationGeneric({
     status: jobStatus,
   },
   handler: async (ctx, { id, status }) => {
-    const userId = await requireVerifiedUser(ctx);
-    await requireEnrolledUser(ctx, userId);
-    await requireCurrentPrivacyAcknowledgement(ctx, userId);
-    const job = await ctx.db.get(id);
-    if (job === null || job.ownerId !== userId) {
-      throw new Error("Job not found");
+    try {
+      const userId = await requireVerifiedUser(ctx);
+      await requireEnrolledUser(ctx, userId);
+      await requireCurrentPrivacyAcknowledgement(ctx, userId);
+      const job = await ctx.db.get(id);
+      if (job === null || job.ownerId !== userId) {
+        throw new Error("Job not found");
+      }
+      await ctx.db.patch(id, { status, updatedAt: Date.now() });
+    } catch (error) {
+      reportBackendError("jobs.update-status");
+      throw error;
     }
-    await ctx.db.patch(id, { status, updatedAt: Date.now() });
   },
 });
 
 export const remove = mutationGeneric({
   args: { id: v.id("jobs") },
   handler: async (ctx, { id }) => {
-    const userId = await requireVerifiedUser(ctx);
-    await requireEnrolledUser(ctx, userId);
-    const job = await ctx.db.get(id);
-    if (job === null || job.ownerId !== userId) {
-      throw new Error("Job not found");
+    try {
+      const userId = await requireVerifiedUser(ctx);
+      await requireEnrolledUser(ctx, userId);
+      const job = await ctx.db.get(id);
+      if (job === null || job.ownerId !== userId) {
+        throw new Error("Job not found");
+      }
+      await ctx.db.delete(id);
+    } catch (error) {
+      reportBackendError("jobs.remove");
+      throw error;
     }
-    await ctx.db.delete(id);
   },
 });

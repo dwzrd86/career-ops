@@ -84,4 +84,18 @@ export default defineSchema({
     inviteId: v.optional(v.id("alphaInvites")),
     occurredAt: v.number(),
   }).index("by_invite", ["inviteId"]),
+  // Metadata-only operational diagnostics. This table intentionally has no
+  // user ID, message, stack trace, request body, URL query, or content field.
+  errorReports: defineTable({
+    deploymentVersion: v.string(),
+    errorCategory: v.union(
+      v.literal("authenticationFailed"),
+      v.literal("operationFailed"),
+      v.literal("unexpected"),
+      v.literal("validationFailed"),
+    ),
+    operationType: v.string(),
+    route: v.string(),
+    occurredAt: v.number(),
+  }).index("by_occurred_at", ["occurredAt"]),
 });
