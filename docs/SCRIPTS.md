@@ -186,4 +186,24 @@ Zero-token portal scanner. Hits ATS APIs (Greenhouse, Ashby, Lever) and career p
 npm run scan
 ```
 
+### Optional location filter
+
+`portals.yml` can limit API scan results to a candidate's working market. The
+filter is applied after title matching and before deduplication. It is optional;
+existing portal configurations keep their current behavior when it is absent.
+
+```yaml
+location_filter:
+  include_any:
+    - "United States"
+    - "Remote - USA"
+  exclude_any:
+    - "United Kingdom"
+  allow_unspecified: false
+```
+
+`include_any` matches case-insensitively against the ATS-provided location.
+`exclude_any` takes precedence. Set `allow_unspecified` to `false` when roles
+without a listed location should stay out of the pipeline.
+
 **Exit codes:** `0` scan completed, `1` configuration error or no portals.yml found.
