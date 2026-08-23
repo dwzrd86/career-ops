@@ -77,9 +77,25 @@ export type EnrollmentStatus = {
 };
 
 export type AccountExport = {
+  discovery: Array<{
+    id: string;
+    company: string;
+    discoveredAt: number;
+    freshness: DiscoveredJob["freshness"];
+    localJobId: string;
+    location?: string;
+    matchDecisions: Array<NonNullable<DiscoveredJob["decision"]> & { id: string }>;
+    reviewerOverrides: Array<NonNullable<DiscoveredJob["override"]> & { id: string }>;
+    reviewStatus: DiscoveryReviewStatus;
+    source: DiscoveredJob["source"];
+    statusHistory: Array<{ id: string; occurredAt: number; previousStatus?: DiscoveryReviewStatus; status: DiscoveryReviewStatus }>;
+    title: string;
+    updatedAt: number;
+    url: string;
+  }>;
   exportedAt: string;
   format: string;
-  jobs: Array<Job & { id: string }>;
+  jobs: Array<Omit<Job, "_id" | "_creationTime"> & { id: string }>;
   privacy: { acknowledgedAt: string; policyVersion: string | null } | null;
 };
 

@@ -100,6 +100,27 @@ const jobInput = (label: string) => ({
   url: `https://jobs.example.test/${label}`,
 });
 
+const discoveryProjection = (label: string) => {
+  const now = Date.now();
+  return {
+    company: `${label} Discovery Company`,
+    decision: {
+      decidedAt: now,
+      explanationCodes: ["ROLE_MATCH"],
+      hardFilters: [{ outcome: "unknown" as const, reasonCode: "SALARY_UNKNOWN", ruleId: "SALARY" }],
+      outcome: "needsReview" as const,
+      profileVersion: 1,
+      score: 84,
+    },
+    discoveredAt: now,
+    freshness: { checkedAt: now, status: "unknown" as const },
+    localJobId: `local-${label}`,
+    source: { label: "Greenhouse", provider: "greenhouse" as const },
+    title: `${label} Discovery Engineer`,
+    url: `https://jobs.example.test/discovery-${label}`,
+  };
+};
+
 describe("isolated Convex authorization boundary", () => {
   test("two disposable accounts cannot read, update, or delete each other's jobs", async () => {
     const deployment = createIsolatedDeployment();
@@ -149,12 +170,32 @@ describe("isolated Convex authorization boundary", () => {
     const accountB = await provisionDisposableAccount(deployment, "export-delete-b");
     const jobA = await accountA.client.mutation(api.jobs.create, jobInput("export-delete-a"));
     const jobB = await accountB.client.mutation(api.jobs.create, jobInput("export-delete-b"));
+    const { discoveredJobId: discoveredJobA } = await accountA.client.mutation(api.discovery.project, discoveryProjection("export-delete-a"));
+    const { discoveredJobId: discoveredJobB } = await accountB.client.mutation(api.discovery.project, discoveryProjection("export-delete-b"));
+    await accountA.client.mutation(api.discovery.shortlist, { id: discoveredJobA });
+    await accountA.client.mutation(api.discovery.overrideDecision, {
+      id: discoveredJobA,
+      outcome: "ranked",
+      reason: "Relevant portfolio evidence supports this role.",
+    });
 
     const exportA = await accountA.client.query(api.account.exportData, {});
     expect(exportA.jobs).toEqual([
       expect.objectContaining({ id: jobA, company: "export-delete-a Company" }),
     ]);
+    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v2" }));
+    expect(exportA.discovery).toEqual([
+      expect.objectContaining({
+        id: discoveredJobA,
+        company: "export-delete-a Discovery Company",
+        matchDecisions: [expect.objectContaining({ score: 84 })],
+        reviewerOverrides: [expect.objectContaining({ outcome: "ranked" })],
+        statusHistory: expect.arrayContaining([expect.objectContaining({ status: "shortlisted" })]),
+      }),
+    ]);
     expect(JSON.stringify(exportA)).not.toContain("export-delete-b Company");
+    expect(JSON.stringify(exportA)).not.toContain("export-delete-b Discovery Company");
+    expect(JSON.stringify(exportA)).not.toContain("ownerId");
 
     await accountA.client.mutation(api.account.recordExportRequest, {});
     await deployment.mutation(internal.auth.onDelete, {
@@ -165,8 +206,13 @@ describe("isolated Convex authorization boundary", () => {
     await deployment.run(async (ctx) => {
       expect(await ctx.db.get(jobA)).toBeNull();
       expect(await ctx.db.get(jobB)).toEqual(expect.objectContaining({ ownerId: accountB.userId }));
+      expect(await ctx.db.get(discoveredJobA)).toBeNull();
+      expect(await ctx.db.get(discoveredJobB)).toEqual(expect.objectContaining({ ownerId: accountB.userId }));
       expect(await ctx.db.get(accountA.userId as any)).toBeNull();
       expect(await ctx.db.get(accountB.userId as any)).toEqual(expect.objectContaining({ authId: accountB.authUser._id }));
+      expect(await ctx.db.query("discoveryMatchDecisions").withIndex("by_owner_job_decided_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
+      expect(await ctx.db.query("discoveryReviewerOverrides").withIndex("by_owner_job_overridden_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
+      expect(await ctx.db.query("discoveryStatusHistory").withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
       expect(await ctx.db.query("accountPrivacyEvents").withIndex("by_user", (query) => query.eq("userId", accountA.userId as any)).collect())
         .toEqual(expect.arrayContaining([
           expect.objectContaining({ action: "exportRequested" }),

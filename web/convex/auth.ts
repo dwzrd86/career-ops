@@ -140,11 +140,33 @@ export const authComponent: ReturnType<typeof createClient<DataModel>> = createC
           .withIndex("by_auth_id", (query) => query.eq("authId", authUser._id))
           .unique();
         if (user === null) return;
-        const jobs = await ctx.db
-          .query("jobs")
-          .withIndex("by_owner_created_at", (query) => query.eq("ownerId", user._id))
-          .collect();
+        const [jobs, discoveredJobs, matchDecisions, reviewerOverrides, statusHistory] = await Promise.all([
+          ctx.db
+            .query("jobs")
+            .withIndex("by_owner_created_at", (query) => query.eq("ownerId", user._id))
+            .collect(),
+          ctx.db
+            .query("discoveredJobs")
+            .withIndex("by_owner_discovered_at", (query) => query.eq("ownerId", user._id))
+            .collect(),
+          ctx.db
+            .query("discoveryMatchDecisions")
+            .withIndex("by_owner_job_decided_at", (query) => query.eq("ownerId", user._id))
+            .collect(),
+          ctx.db
+            .query("discoveryReviewerOverrides")
+            .withIndex("by_owner_job_overridden_at", (query) => query.eq("ownerId", user._id))
+            .collect(),
+          ctx.db
+            .query("discoveryStatusHistory")
+            .withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", user._id))
+            .collect(),
+        ]);
         for (const job of jobs) await ctx.db.delete(job._id);
+        for (const decision of matchDecisions) await ctx.db.delete(decision._id);
+        for (const override of reviewerOverrides) await ctx.db.delete(override._id);
+        for (const status of statusHistory) await ctx.db.delete(status._id);
+        for (const job of discoveredJobs) await ctx.db.delete(job._id);
         const invite = await ctx.db
           .query("alphaInvites")
           .withIndex("by_claimed_by", (query) => query.eq("claimedBy", user._id))

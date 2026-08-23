@@ -21,6 +21,7 @@ Career-Ops contains a local job-search workspace alongside a hosted alpha. Keep 
 | --- | --- | --- |
 | Public source | Application code, generated Convex bindings, tests, deployment configuration, non-personal documentation | May be reviewed and committed after the secret scan. |
 | Private career records | `cv.md`, `article-digest.md`, `data/`, `reports/`, `config/profile.yml`, `portals.yml`, writing samples | Keep local and ignored. Never paste into an issue, commit, demo, or test fixture. |
+| Private review metadata | Owner-scoped discovered-role projection: company, title, optional location, canonical URL, safe local record identifier, source/freshness fields, scores, decision codes, review status/history, and reviewer reasons | Store only in the owner-scoped Convex discovery tables. It is a narrow projection, not a copy of a local discovery record; never add resumes, job-description text, browser credentials/state, local paths, or raw captured source content. |
 | Secrets and access material | `.env*`, Netlify and Convex tokens/deploy keys, generated `.convex-home/` credentials, browser profiles | Keep outside Git and logs. Use provider secret stores and rotate if exposed. |
 | Test identities | Production test accounts, real email inboxes, job-board credentials | Do not create or commit them. Use isolated, disposable test identities only when necessary. |
 
@@ -30,7 +31,14 @@ The supported production path is [[RELEASE_RUNBOOK]]. Netlify runs `npx convex d
 
 ## Account lifecycle
 
-The application uses `@convex-dev/better-auth` with Better Auth email/password authentication. Credentials, sessions, verification records, and recovery tokens live in the Better Auth Convex component. The application-owned `users` table holds only an `authId` mapping and privacy metadata. Every pipeline function resolves that mapping from a verified Better Auth session before it reads or writes career data.
+The application uses `@convex-dev/better-auth` with Better Auth email/password authentication. Credentials, sessions, verification records, and recovery tokens live in the Better Auth Convex component. The application-owned `users` table holds only an `authId` mapping and privacy metadata. Every manual-pipeline and discovery-projection function resolves that mapping from a verified Better Auth session before it reads or writes career data.
+
+The hosted discovery queue is deliberately metadata-only. `discoveredJobs` may
+hold an owner-scoped safe local record identifier, role metadata, source label
+and provider, canonical HTTPS URL, freshness, and review status. Its companion
+tables hold only match-decision codes/scores, reviewer reasons, and timestamps.
+The projection must never include browser credentials or state, local paths,
+resumes, job-description contents, or raw captured source content.
 
 Signup requires a Cloudflare Turnstile token, an opaque single-use alpha invite, and an HMAC-keyed rate-limit check. The invite is reserved against an opaque keyed email value before Better Auth creates the account, then claimed by the component's transactional user trigger. Raw invite tokens and email addresses are not persisted in enrollment records.
 
@@ -82,7 +90,7 @@ reviewed on every release rather than rotated as secrets.
 
 ### Production migration boundary
 
-The Better Auth component has been deployed and browser-validated only on the development Convex deployment. The production deployment remains on the legacy identity store until a migration is run. Legacy password hashes must not be copied into Better Auth or manually edited; production users require a controlled account migration and password-reset process that preserves their application-owned `users` and `jobs` ownership mappings. Do not deploy the Better Auth schema to production before that runbook and the account-export/deletion workflow are tested against a disposable deployment.
+The Better Auth component has been deployed and browser-validated only on the development Convex deployment. The production deployment remains on the legacy identity store until a migration is run. Legacy password hashes must not be copied into Better Auth or manually edited; production users require a controlled account migration and password-reset process that preserves their application-owned `users`, manual `jobs`, and owner-scoped discovery-projection ownership mappings. Do not deploy the Better Auth schema to production before that runbook and the account-export/deletion workflow are tested against a disposable deployment.
 
 ## Convex access matrix
 
@@ -91,6 +99,8 @@ The Better Auth component has been deployed and browser-validated only on the de
 | Endpoint | Access and boundary |
 | --- | --- |
 | `jobs:list`, `jobs:create`, `jobs:updateStatus`, `jobs:remove` | Require a verified user. Reads are constrained by `ownerId`; updates and deletes use a non-enumerating owner comparison. New jobs require current privacy acknowledgement. |
+| `discovery:list`, `discovery:history`, `discovery:project`, `discovery:shortlist`, `discovery:archive`, `discovery:approveForEvaluation`, `discovery:overrideDecision` | Require a verified, enrolled owner; mutations also require current privacy acknowledgement. Every read and mutation is constrained by the matching `ownerId`. Projected data is limited to the documented metadata fields, and returned records omit owner identifiers. |
+| `account:exportData`, `account:recordExportRequest`; Better Auth account deletion trigger | The export and export-event record require a verified owner. The portable export contains that owner's manual jobs, privacy acknowledgement, and discovery metadata projection/history only. The deletion trigger removes that owner's manual jobs and all discovery records/history before deleting the application-owned user mapping; it retains only the privacy-safe deletion audit event. |
 | `privacy:status`, `privacy:acknowledge`; `enrollment:status` | Require a verified, enrolled user and operate only on that user's app record. |
 | `enrollment:issueInvite` | Operator action protected by `ENROLLMENT_ADMIN_KEY`; returns the raw invite once and stores only an HMAC digest. |
 | `enrollment:reserveInvite`, `enrollment:createInvite`; `abuse:consume`; Better Auth trigger handlers | Internal only. They reserve and claim an invite, maintain opaque abuse counters, and create or delete app-owned user data in response to component user changes. |
