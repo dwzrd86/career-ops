@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { functions, Job, JobStatus } from "./convex";
+import { DiscoveredJob, DiscoveryDecisionOutcome, functions, Job, JobStatus } from "./convex";
 import { authClient } from "./auth-client";
 import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
 
@@ -208,6 +208,170 @@ function EmptyPipeline({ onAdd }: { onAdd: () => void }) {
         <CirclePlus size={16} />
         Add a role
       </button>
+    </section>
+  );
+}
+
+function humanizeCode(value: string) {
+  return value.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function discoveryNextAction(job: DiscoveredJob) {
+  if (job.reviewStatus === "archived") return "Archived — no further action";
+  if (job.reviewStatus === "approvedForEvaluation") return "Ready for evaluation";
+  if (job.reviewStatus === "shortlisted") return "Shortlisted for evaluation review";
+  if (job.effectiveOutcome === "rejected") return "Archive or override this decision";
+  if (job.effectiveOutcome === "needsReview") return "Review unknowns and hard filters";
+  return "Shortlist or approve for evaluation";
+}
+
+function freshnessLabel(job: DiscoveredJob) {
+  const checked = new Date(job.freshness.checkedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${humanizeCode(job.freshness.status)} · checked ${checked}`;
+}
+
+function OverrideDecisionDialog({ job, onClose }: { job: DiscoveredJob; onClose: () => void }) {
+  const overrideDecision = useMutation(functions.overrideDiscoveredJobDecision);
+  const reportError = useSafeErrorReporter();
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    setError("");
+    setIsSaving(true);
+    try {
+      await overrideDecision({
+        id: job._id,
+        outcome: String(values.get("outcome")) as DiscoveryDecisionOutcome,
+        reason: String(values.get("reason") || "").trim(),
+      });
+      onClose();
+    } catch {
+      reportError("discovery.override-decision", "operationFailed");
+      setError("The override could not be saved. Check the connection and try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" role="presentation">
+      <section aria-modal="true" aria-labelledby="override-decision-title" className="dialog" role="dialog">
+        <header>
+          <div>
+            <p className="eyebrow">Discovery review</p>
+            <h2 id="override-decision-title">Override discovery decision</h2>
+          </div>
+          <button aria-label="Close" className="icon-button" onClick={onClose} type="button"><X size={18} /></button>
+        </header>
+        <p className="dialog-copy">Record why {job.title} at {job.company} needs a different match decision.</p>
+        <form onSubmit={submit}>
+          <label>
+            New decision
+            <select defaultValue={job.effectiveOutcome ?? "needsReview"} name="outcome">
+              <option value="ranked">Ranked</option>
+              <option value="needsReview">Needs review</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+          <label>
+            Override reason
+            <textarea autoFocus name="reason" required rows={4} />
+          </label>
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
+          <footer>
+            <button className="button secondary" onClick={onClose} type="button">Cancel</button>
+            <button className="button primary" disabled={isSaving} type="submit">{isSaving ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Save override</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function DiscoveryActions({ job, onOverride }: { job: DiscoveredJob; onOverride: () => void }) {
+  const shortlist = useMutation(functions.shortlistDiscoveredJob);
+  const archive = useMutation(functions.archiveDiscoveredJob);
+  const approveForEvaluation = useMutation(functions.approveDiscoveredJobForEvaluation);
+  const reportError = useSafeErrorReporter();
+  const [error, setError] = useState("");
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  async function run(action: "shortlist" | "archive" | "approve") {
+    setError("");
+    setPendingAction(action);
+    try {
+      if (action === "shortlist") await shortlist({ id: job._id });
+      if (action === "archive") await archive({ id: job._id });
+      if (action === "approve") await approveForEvaluation({ id: job._id });
+    } catch {
+      reportError(`discovery.${action}`, "operationFailed");
+      setError("The review action could not be saved. Please try again.");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  return (
+    <div className="discovery-actions">
+      <button className="button secondary" disabled={pendingAction !== null} onClick={() => void run("shortlist")} type="button">Shortlist</button>
+      <button className="button secondary" disabled={pendingAction !== null} onClick={() => void run("archive")} type="button">Archive</button>
+      <button className="button secondary" disabled={pendingAction !== null} onClick={onOverride} type="button">Override decision</button>
+      <button className="button primary" disabled={pendingAction !== null} onClick={() => void run("approve")} type="button">Approve for evaluation</button>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
+function DiscoveryReviewQueue() {
+  const discoveredJobs = useQuery(functions.listDiscoveredJobs, {});
+  const [overrideJob, setOverrideJob] = useState<DiscoveredJob | null>(null);
+
+  return (
+    <section className="discovery-panel" id="review-queue" aria-labelledby="review-queue-title">
+      <header className="panel-header">
+        <div>
+          <p className="eyebrow">Private review</p>
+          <h2 id="review-queue-title">Discovery review queue</h2>
+          <p>Review projected job metadata before it enters evaluation.</p>
+        </div>
+      </header>
+      {discoveredJobs === undefined ? <div className="loading-state"><LoaderCircle className="spin" size={20} />Loading discovery queue</div> : discoveredJobs.length === 0 ? (
+        <div className="discovery-empty"><strong>No discovered roles to review.</strong><span>New projected matches will appear here for your decision.</span></div>
+      ) : (
+        <div className="discovery-list">
+          {discoveredJobs.map((job) => {
+            const hardFilterReasons = job.decision?.hardFilters.filter((filter) => filter.outcome === "fail") ?? [];
+            const unknowns = job.decision?.hardFilters.filter((filter) => filter.outcome === "unknown") ?? [];
+            return (
+              <article className="discovery-card" key={job._id}>
+                <div className="discovery-card-heading">
+                  <div>
+                    <h3>{job.title}</h3>
+                    <p>{job.company}{job.location ? ` · ${job.location}` : ""}</p>
+                  </div>
+                  <span className={`review-status review-status-${job.reviewStatus}`}>{humanizeCode(job.reviewStatus)}</span>
+                </div>
+                <dl className="discovery-details">
+                  <div><dt>Source</dt><dd>{job.source.label}</dd></div>
+                  <div><dt>Freshness</dt><dd>{freshnessLabel(job)}</dd></div>
+                  <div><dt>Score</dt><dd>{job.decision?.score ?? "Not scored"}</dd></div>
+                  <div><dt>Decision</dt><dd>{humanizeCode(job.effectiveOutcome ?? job.decision?.outcome ?? "needsReview")}</dd></div>
+                </dl>
+                <div className="discovery-signals">
+                  <div><span>Hard-filter reasons</span>{hardFilterReasons.length ? <ul>{hardFilterReasons.map((filter) => <li key={`${filter.ruleId}-${filter.reasonCode}`}>{humanizeCode(filter.reasonCode)}</li>)}</ul> : <p>None recorded</p>}</div>
+                  <div><span>Unknowns</span>{unknowns.length ? <ul>{unknowns.map((filter) => <li key={`${filter.ruleId}-${filter.reasonCode}`}>{humanizeCode(filter.reasonCode)}</li>)}</ul> : <p>None recorded</p>}</div>
+                  <div><span>Next action</span><p>{discoveryNextAction(job)}</p></div>
+                </div>
+                <DiscoveryActions job={job} onOverride={() => setOverrideJob(job)} />
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {overrideJob ? <OverrideDecisionDialog job={overrideJob} onClose={() => setOverrideJob(null)} /> : null}
     </section>
   );
 }
@@ -667,7 +831,7 @@ function PipelineDashboard({
         <div className="brand"><Sparkles size={20} /><span>Career Ops</span></div>
         <nav aria-label="Primary navigation">
           <a aria-current="page" href="#pipeline"><ClipboardList size={18} />Pipeline</a>
-          <a href="#search"><Search size={18} />Discovery</a>
+          <a href="#review-queue"><Search size={18} />Discovery review</a>
         </nav>
         <div className="sidebar-note">
           <span>Precision mode</span>
@@ -733,6 +897,8 @@ function PipelineDashboard({
             </div>
           )}
         </section>
+
+        <DiscoveryReviewQueue />
       </section>
 
       {showNewJob ? <NewJobDialog onClose={() => setShowNewJob(false)} /> : null}

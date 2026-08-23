@@ -24,6 +24,48 @@ export type Job = {
   updatedAt: number;
 };
 
+export type DiscoveryDecisionOutcome = "rejected" | "ranked" | "needsReview";
+export type DiscoveryReviewStatus = "discovered" | "shortlisted" | "archived" | "approvedForEvaluation";
+export type DiscoveryFreshnessStatus = "fresh" | "stale" | "unknown" | "expired";
+export type DiscoveryHardFilterOutcome = "pass" | "fail" | "unknown" | "notApplicable";
+
+export type DiscoveredJob = {
+  _id: string;
+  _creationTime: number;
+  company: string;
+  discoveredAt: number;
+  freshness: {
+    checkedAt: number;
+    postedAt?: number;
+    status: DiscoveryFreshnessStatus;
+  };
+  location?: string;
+  localJobId: string;
+  reviewStatus: DiscoveryReviewStatus;
+  source: { label: string; provider: string };
+  title: string;
+  updatedAt: number;
+  url: string;
+  decision: {
+    decidedAt: number;
+    explanationCodes: string[];
+    hardFilters: Array<{
+      outcome: DiscoveryHardFilterOutcome;
+      reasonCode: string;
+      ruleId: string;
+    }>;
+    outcome: DiscoveryDecisionOutcome;
+    profileVersion: number;
+    score?: number;
+  } | null;
+  effectiveOutcome: DiscoveryDecisionOutcome | null;
+  override: {
+    outcome: DiscoveryDecisionOutcome;
+    overriddenAt: number;
+    reason: string;
+  } | null;
+};
+
 export type PrivacyStatus = {
   acknowledgedAt: number | null;
   currentVersion: string;
@@ -56,6 +98,7 @@ export const functions = {
     null
   >("errorReporting:reportClient"),
   listJobs: makeFunctionReference<"query", Record<string, never>, Job[]>("jobs:list"),
+  listDiscoveredJobs: makeFunctionReference<"query", Record<string, never>, DiscoveredJob[]>("discovery:list"),
   getPrivacyStatus: makeFunctionReference<"query", Record<string, never>, PrivacyStatus>("privacy:status"),
   getEnrollmentStatus: makeFunctionReference<"query", Record<string, never>, EnrollmentStatus>("enrollment:status"),
   createJob: makeFunctionReference<
@@ -76,4 +119,12 @@ export const functions = {
     null
   >("jobs:updateStatus"),
   removeJob: makeFunctionReference<"mutation", { id: string }, null>("jobs:remove"),
+  shortlistDiscoveredJob: makeFunctionReference<"mutation", { id: string }, null>("discovery:shortlist"),
+  archiveDiscoveredJob: makeFunctionReference<"mutation", { id: string }, null>("discovery:archive"),
+  approveDiscoveredJobForEvaluation: makeFunctionReference<"mutation", { id: string }, null>("discovery:approveForEvaluation"),
+  overrideDiscoveredJobDecision: makeFunctionReference<
+    "mutation",
+    { id: string; outcome: DiscoveryDecisionOutcome; reason: string },
+    null
+  >("discovery:overrideDecision"),
 };

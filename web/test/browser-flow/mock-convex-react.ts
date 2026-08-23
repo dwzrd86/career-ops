@@ -4,7 +4,9 @@ import {
   acknowledgeBrowserFlowPrivacy,
   browserFlowState,
   createBrowserFlowJob,
+  overrideBrowserFlowDiscoveryDecision,
   subscribeBrowserFlow,
+  updateBrowserFlowDiscoveryStatus,
   updateBrowserFlowJobStatus,
 } from "./browser-state";
 
@@ -35,6 +37,7 @@ export function useQuery(reference: string) {
     };
   }
   if (reference === "jobs:list") return state.jobs;
+  if (reference === "discovery:list") return state.discoveredJobs;
   return undefined;
 }
 
@@ -44,6 +47,10 @@ export function useMutation(reference: string) {
     if (reference === "jobs:create") return createBrowserFlowJob(args as Parameters<typeof createBrowserFlowJob>[0]);
     if (reference === "jobs:updateStatus") return updateBrowserFlowJobStatus(args.id, args.status as import("./mock-convex").JobStatus);
     if (reference === "jobs:remove") return undefined;
+    if (reference === "discovery:shortlist") return updateBrowserFlowDiscoveryStatus(args.id, "shortlisted");
+    if (reference === "discovery:archive") return updateBrowserFlowDiscoveryStatus(args.id, "archived");
+    if (reference === "discovery:approveForEvaluation") return updateBrowserFlowDiscoveryStatus(args.id, "approvedForEvaluation");
+    if (reference === "discovery:overrideDecision") return overrideBrowserFlowDiscoveryDecision(args.id, args.outcome as import("./mock-convex").DiscoveryDecisionOutcome, args.reason);
     if (reference === "errorReporting:reportClient") return undefined;
     throw new Error("unsupported browser-flow mutation");
   };

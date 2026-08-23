@@ -56,6 +56,26 @@ async function main() {
     await page.getByRole("button", { name: "Acknowledge and continue" }).click();
     await expectVisible(page, page.locator("h1").filter({ hasText: "Pipeline" }), "pipeline dashboard");
 
+    await expectVisible(page, page.getByRole("heading", { name: "Discovery review queue" }), "discovery review queue");
+    await expectVisible(page, page.getByText("Review target role", { exact: true }), "projected discovery role");
+    await expectVisible(page, page.getByText("Mock Board", { exact: true }), "projected source");
+    await expectVisible(page, page.getByText("84", { exact: true }), "projected score");
+    await expectVisible(page, page.getByText(/Fresh · checked/), "projected freshness");
+    await expectVisible(page, page.getByText("Work Authorization Required", { exact: true }), "projected hard-filter reason");
+    await expectVisible(page, page.getByText("Salary Unknown", { exact: true }), "projected unknown");
+    await page.getByRole("button", { name: "Shortlist" }).click();
+    await expectVisible(page, page.getByText("Shortlisted for evaluation review", { exact: true }), "shortlisted next action");
+    await page.getByRole("button", { name: "Override decision" }).click();
+    await expectVisible(page, page.getByRole("heading", { name: "Override discovery decision" }), "decision override dialog");
+    await page.getByLabel("New decision").selectOption("ranked");
+    await page.getByLabel("Override reason").fill("Relevant portfolio evidence changes this assessment.");
+    await page.getByRole("button", { name: "Save override" }).click();
+    await expectVisible(page, page.getByText("Ranked", { exact: true }), "overridden decision");
+    await page.getByRole("button", { name: "Approve for evaluation" }).click();
+    await expectVisible(page, page.getByText("Ready for evaluation", { exact: true }), "evaluation approval");
+    await page.getByRole("button", { name: "Archive" }).click();
+    await expectVisible(page, page.getByText("Archived — no further action", { exact: true }), "archived discovery role");
+
     await page.getByRole("button", { name: "Add role" }).click();
     await page.getByLabel("Company").fill("Example Company");
     await page.getByLabel("Role title").fill("Security regression role");
