@@ -1,0 +1,8 @@
+{
+  "id": "3a4a913a-dc28-4d2e-859b-9f9cb5acb2ed",
+  "title": "Staff Data Engineer",
+  "jobUrl": "https://jobs.ashbyhq.com/acme/3a4a913a-dc28-4d2e-859b-9f9cb5acb2ed",
+  "location": "New York, NY",
+  "secondaryLocations": [{ "location": "Remote (US)" }],
+  "compensation": { "minValue": 80, "maxValue": 95, "interval": "1 HOUR", "currency": "usd" }
+}

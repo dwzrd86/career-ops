@@ -1,0 +1,7 @@
+{
+  "id": 1234567,
+  "title": "Senior Platform Engineer",
+  "absolute_url": "https://boards.greenhouse.io/acme/jobs/1234567",
+  "location": { "name": "Chicago, IL" },
+  "pay_input_ranges": [{ "min_cents": 15000000, "max_cents": 18500000, "currency_type": "USD" }]
+}
