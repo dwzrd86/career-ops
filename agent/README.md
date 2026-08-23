@@ -50,6 +50,22 @@ Target Profile version, safe error codes, and the bounded outcomes `active`,
 checks canonical URL, then the provider's external ID, then normalized
 company/title/location. All files in this local workspace are ignored by Git.
 
+## Daily shortlist
+
+`npm run daily-shortlist` writes `data/autodiscovery/review/` from active,
+effective `ranked` decisions for the saved Target Profile version. Scheduled
+daemon runs create that same local review artifact after collection. Neither
+path evaluates a role, generates materials, submits an application, emails
+anyone, or makes a network request.
+
+`npm run daily-shortlist -- --projection` additionally writes a small,
+Convex-compatible `discovery:project` payload under
+`data/autodiscovery/projections/`. This is a local hand-off for a separate,
+explicitly authenticated owner-scoped bridge; it is never uploaded by the
+scheduler. It contains only the review metadata accepted by the hosted
+projection contract—not resume content, job descriptions, browser state,
+credentials, or local paths.
+
 ## Interceptor collector setup
 
 Interceptor is an opt-in, local-only fallback for career sources without a

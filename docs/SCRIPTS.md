@@ -253,3 +253,27 @@ profile, and data paths must remain inside the project. Unit files contain no
 secrets and the service logs metadata-safe scheduler summaries only. See
 `docs/SETUP.md` for the scan window, lingering implications, shutdown, and
 recovery steps.
+
+## daily-shortlist
+
+Build a local review artifact from active, effective `ranked` decisions for the
+saved Target Profile version:
+
+```bash
+npm run daily-shortlist
+npm run daily-shortlist -- --date 2026-08-23
+npm run daily-shortlist -- --projection
+```
+
+The artifact is written to
+`data/autodiscovery/review/daily-shortlist-{YYYY-MM-DD}.md`. A scheduled
+daemon run creates the same artifact after collection. It does not evaluate a
+role, generate application materials, submit an application, send email, or
+make network requests.
+
+`--projection` is opt-in and still local-only: it writes a limited,
+Convex-compatible `discovery:project` payload to
+`data/autodiscovery/projections/`. A separately authenticated, owner-scoped
+bridge must upload it; the scheduler never does. The payload excludes raw job
+descriptions, resume/evidence content, browser data, credentials, and local
+paths.

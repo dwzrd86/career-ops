@@ -20,10 +20,11 @@
     "test:discovered-jobs": "node --test agent/test/discovered-jobs.test.mjs",
     "test:matching": "node --test agent/test/matching.test.mjs agent/test/match-command.test.mjs",
     "test:collectors": "node --test agent/test/collectors.test.mjs agent/test/interceptor.test.mjs",
-    "test:scheduler": "node --test agent/test/scheduler.test.mjs agent/test/scheduler-systemd.test.mjs",
+    "test:scheduler": "node --test agent/test/scheduler.test.mjs agent/test/scheduler-systemd.test.mjs agent/test/daily-shortlist.test.mjs",
     "scheduler": "node agent/daemon.mjs",
     "scheduler:status": "node agent/commands/status.mjs",
     "scheduler:systemd": "node agent/commands/scheduler-systemd.mjs",
+    "daily-shortlist": "node agent/commands/daily-shortlist.mjs",
     "match": "node agent/commands/match.mjs",
     "security:regression": "npm --prefix web run test:security-regression",
     "gemini:eval": "node gemini-eval.mjs"

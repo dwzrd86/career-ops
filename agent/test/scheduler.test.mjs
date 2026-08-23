@@ -55,20 +55,22 @@ test("manual collection limits source concurrency and caps each collector result
   assert.equal(loadRunQueue(dataRoot).runs.every((run) => run.status === "succeeded"), true);
 });
 
-test("a failed collector receives bounded exponential retries then a source cooldown", async () => {
+test("a forced collector failure records bounded retry/backoff then a source cooldown", async () => {
   const tick = clockAt("2026-08-23T12:00:00.000Z");
   const dataRoot = root();
   const target = profile(["greenhouse"]);
   let calls = 0;
-  const settings = { rootPath: dataRoot, clock: tick.clock, collectors: { greenhouse: async () => { calls += 1; return { status: "failed", errorCode: "NETWORK_DOWN" }; } }, options: { maxRetries: 1, retryBaseMs: 1000, cooldownMs: 5000 } };
+  const settings = { rootPath: dataRoot, clock: tick.clock, collectors: { greenhouse: async () => { calls += 1; throw new Error("forced collector failure"); } }, options: { maxRetries: 1, retryBaseMs: 1000, cooldownMs: 5000 } };
   const first = await requestCollectionRun(target, settings);
   assert.equal(first.runs[0].status, "queued");
+  assert.equal(first.runs[0].errorCode, "COLLECTOR_FAILED");
   assert.equal(first.runs[0].nextAttemptAt, "2026-08-23T12:00:01.000Z");
   assert.equal(calls, 1);
   tick.advance(1000);
   const second = await runDueCollections(target, settings);
   assert.equal(second.runs[0].status, "failed");
   const queue = loadRunQueue(dataRoot);
+  assert.equal(queue.runs[0].errorCode, "COLLECTOR_FAILED");
   assert.equal(queue.sources.greenhouse.failureCount, 2);
   assert.equal(queue.sources.greenhouse.cooldownUntil, "2026-08-23T12:00:06.000Z");
 });

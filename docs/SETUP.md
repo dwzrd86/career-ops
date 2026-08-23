@@ -74,11 +74,12 @@ node verify-pipeline.mjs     # Check pipeline integrity
 ## Scheduled local discovery (Linux/systemd)
 
 Scheduled discovery is local to the Linux user. It writes only operational
-metadata under `data/autodiscovery/`; it does not run evaluation or generate
-application materials. Before scheduling, complete and validate the Target
-Profile and prove a manual collector run works with your approved collector
-adapter. Do not schedule Interceptor until its separate `Jobbie Discovery`
-browser profile and exact source allowlist are working.
+metadata under `data/autodiscovery/` plus a local daily review artifact; it
+does not run evaluation, generate application materials, submit applications,
+send email, or upload to Convex. Before scheduling, complete and validate the
+Target Profile and prove a manual collector run works with your approved
+collector adapter. Do not schedule Interceptor until its separate `Jobbie
+Discovery` browser profile and exact source allowlist are working.
 
 1. Set `discovery.enabled: true` and `discovery.schedule: daily` or `weekdays`
    in `config/target-profile.yml`.
@@ -104,6 +105,10 @@ npm run scheduler:status
 The installed unit has an explicit Node path, repository working directory,
 and `data/autodiscovery/` read-write path. It uses a restrictive umask and
 contains no secrets, cookies, browser profile paths, or collector output.
+After a successful scheduled collection, it refreshes
+`data/autodiscovery/review/daily-shortlist-{YYYY-MM-DD}.md` from the current
+local ranked decisions. A Convex projection remains opt-in and local-only via
+`npm run daily-shortlist -- --projection`; the timer never uploads it.
 
 ### Login, shutdown, and recovery
 

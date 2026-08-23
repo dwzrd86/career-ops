@@ -284,3 +284,17 @@ export function saveMatchDecision(decision, rootPath = DEFAULT_AUTODISCOVERY_PAT
 export function loadMatchDecision(id, rootPath = DEFAULT_AUTODISCOVERY_PATH) {
   return loadRecord(matchDecisionPath(id, rootPath), assertValidMatchDecision);
 }
+
+/**
+ * Return validated local decisions in a stable order. Callers that need the
+ * current view must still select the Target Profile version explicitly: older
+ * decisions remain useful local history and must not be silently overwritten.
+ */
+export function listMatchDecisions(rootPath = DEFAULT_AUTODISCOVERY_PATH) {
+  const directory = join(resolve(rootPath), "decisions");
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => loadRecord(join(directory, entry.name), assertValidMatchDecision))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}

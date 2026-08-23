@@ -3,6 +3,7 @@
 // Convex import. Deployments provide a narrow collector adapter explicitly.
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { generateDailyShortlist } from "./daily-shortlist.mjs";
 import { loadTargetProfile, DEFAULT_TARGET_PROFILE_PATH } from "./store/target-profile.mjs";
 import { requestCollectionRun } from "./scheduler.mjs";
 
@@ -30,7 +31,16 @@ async function main() {
   const result = args.includes("--once")
     ? await requestCollectionRun(profile, { ...settings, trigger: "manual" })
     : await requestCollectionRun(profile, { ...settings, trigger: "scheduled", options: { maxJitterMs: 0 } });
-  console.log(JSON.stringify(result, null, 2));
+  // A scheduled run may refresh its *local* review queue. This is intentionally
+  // after collection, has no projection/network switch, and never evaluates or
+  // generates application materials.
+  const shortlist = args.includes("--scheduled") && result.status === "ok"
+    ? generateDailyShortlist({ rootPath: settings.rootPath, profileVersion: profile.profileVersion })
+    : null;
+  console.log(JSON.stringify({
+    ...result,
+    ...(shortlist === null ? {} : { dailyShortlist: { date: shortlist.date, reviewCount: shortlist.reviewCount } }),
+  }, null, 2));
   if (result.status === "busy") process.exitCode = 3;
 }
 main().catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
