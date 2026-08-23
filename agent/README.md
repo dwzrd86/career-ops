@@ -36,3 +36,16 @@ stays `unknown` and produces `needs-review`; it is never assumed to match.
 Future collectors may write validated discovery records to the local agent
 store. They must not invoke an AI CLI. Evaluation remains a separate,
 user-approved operation that reuses the existing Career Ops report flow.
+
+## Collector data boundary
+
+Normalization stores only validated, metadata-only discovered-job records.
+When a collector is explicitly given job-detail text, its SHA-256 and an
+ignored local `data/autodiscovery/details/` snapshot path are retained in the
+record; the text is never included in a record, decision, or scan-run log.
+
+Every scan run is saved locally under `data/autodiscovery/scan-runs/` with the
+Target Profile version, safe error codes, and the bounded outcomes `active`,
+`expired`, `blocked`, `duplicate`, `rejected`, or `shortlisted`. Deduplication
+checks canonical URL, then the provider's external ID, then normalized
+company/title/location. All files in this local workspace are ignored by Git.

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "career-ops/scan-run.schema.json",
+  "title": "Career Ops Local Scan Run",
+  "type": "object",
+  "required": ["schemaVersion", "id", "profileVersion", "trigger", "collector", "sourceId", "startedAt", "finishedAt", "status", "outcomes", "counts", "errorCode"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "profileVersion": { "type": "integer", "minimum": 1 },
+    "trigger": { "enum": ["manual", "scheduled"] },
+    "collector": { "enum": ["ats-api", "interceptor", "mixed"] },
+    "sourceId": { "type": "string", "minLength": 1 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["succeeded", "partial", "failed", "blocked"] },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["outcome", "jobId", "canonicalUrl", "errorCode"],
+        "properties": {
+          "outcome": { "enum": ["active", "expired", "blocked", "duplicate", "rejected", "shortlisted"] },
+          "jobId": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+          "canonicalUrl": { "type": ["string", "null"], "format": "uri" },
+          "errorCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]+$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["active", "expired", "blocked", "duplicate", "rejected", "shortlisted"],
+      "properties": {
+        "active": { "type": "integer", "minimum": 0 },
+        "expired": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "duplicate": { "type": "integer", "minimum": 0 },
+        "rejected": { "type": "integer", "minimum": 0 },
+        "shortlisted": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "errorCode": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]+$" }
+  },
+  "additionalProperties": false
+}

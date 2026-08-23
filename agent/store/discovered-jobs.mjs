@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 export const DISCOVERED_JOB_SCHEMA_VERSION = 1;
@@ -266,6 +266,15 @@ export function saveDiscoveredJob(job, rootPath = DEFAULT_AUTODISCOVERY_PATH) {
 
 export function loadDiscoveredJob(id, rootPath = DEFAULT_AUTODISCOVERY_PATH) {
   return loadRecord(discoveredJobPath(id, rootPath), assertValidDiscoveredJob);
+}
+
+export function listDiscoveredJobs(rootPath = DEFAULT_AUTODISCOVERY_PATH) {
+  const directory = join(resolve(rootPath), "jobs");
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => loadRecord(join(directory, entry.name), assertValidDiscoveredJob))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 export function saveMatchDecision(decision, rootPath = DEFAULT_AUTODISCOVERY_PATH) {
