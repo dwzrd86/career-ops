@@ -3,11 +3,12 @@ import { mkdtempSync } from "node:fs";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { chromium } from "playwright";
 import { loadTargetProfile } from "../store/target-profile.mjs";
 
-const repositoryRoot = resolve(import.meta.dirname, "../..");
+const repositoryRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 function startEditor(profilePath) {
   const child = spawn(process.execPath, ["agent/commands/profile.mjs", "edit"], {

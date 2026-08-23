@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "career-ops/discovered-job.schema.json",
+  "title": "Career Ops Discovered Job",
+  "type": "object",
+  "required": ["schemaVersion", "id", "canonicalUrl", "externalIds", "source", "role", "description", "postedAt", "discoveredAt", "normalizedAt", "lifecycle"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "canonicalUrl": { "type": "string", "format": "uri" },
+    "externalIds": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+    "source": {
+      "type": "object",
+      "required": ["provider", "identifier", "sourceUrl"],
+      "properties": {
+        "provider": { "enum": ["greenhouse", "ashby", "lever", "interceptor", "manual"] },
+        "identifier": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    },
+    "role": {
+      "type": "object",
+      "required": ["company", "title", "location", "workplaceMode", "employmentType", "industry", "salary", "workAuthorization", "clearance"],
+      "properties": {
+        "company": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "location": { "type": ["string", "null"] },
+        "workplaceMode": { "enum": ["remote", "hybrid", "onsite", "unknown"] },
+        "employmentType": { "type": ["string", "null"] },
+        "industry": { "type": ["string", "null"] },
+        "salary": { "$ref": "#/$defs/salary" },
+        "workAuthorization": { "enum": ["required", "not-required", "unknown"] },
+        "clearance": { "enum": ["required", "not-required", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "description": {
+      "type": "object",
+      "required": ["sha256", "localPath"],
+      "properties": {
+        "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "localPath": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "postedAt": { "type": ["string", "null"], "format": "date-time" },
+    "discoveredAt": { "type": "string", "format": "date-time" },
+    "normalizedAt": { "type": "string", "format": "date-time" },
+    "lifecycle": { "enum": ["active", "expired", "unknown", "archived"] }
+  },
+  "$defs": {
+    "salary": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["minimum", "maximum", "currency", "basis"],
+          "properties": {
+            "minimum": { "type": ["number", "null"], "minimum": 0 },
+            "maximum": { "type": ["number", "null"], "minimum": 0 },
+            "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+            "basis": { "enum": ["annual", "hourly", "unknown"] }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

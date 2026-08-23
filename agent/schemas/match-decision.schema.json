@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "career-ops/match-decision.schema.json",
+  "title": "Career Ops Match Decision",
+  "type": "object",
+  "required": ["schemaVersion", "id", "jobId", "canonicalUrl", "profileVersion", "decidedAt", "outcome", "hardFilterResults", "score", "subscores", "explanationCodes", "reviewerOverride"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "jobId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "canonicalUrl": { "type": "string", "format": "uri" },
+    "profileVersion": { "type": "integer", "minimum": 1 },
+    "decidedAt": { "type": "string", "format": "date-time" },
+    "outcome": { "enum": ["rejected", "ranked", "needs-review"] },
+    "hardFilterResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ruleId", "outcome", "reasonCode"],
+        "properties": {
+          "ruleId": { "type": "string", "minLength": 1 },
+          "outcome": { "enum": ["pass", "fail", "unknown", "not-applicable"] },
+          "reasonCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "score": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+    "subscores": {
+      "type": "object",
+      "required": ["role", "seniority", "framework", "cloudPlatform", "expertise", "preference"],
+      "properties": {
+        "role": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "seniority": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "framework": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "cloudPlatform": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "expertise": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "preference": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "explanationCodes": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" } },
+    "reviewerOverride": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["outcome", "reasonCode", "reviewerId", "overriddenAt"],
+          "properties": {
+            "outcome": { "enum": ["rejected", "ranked", "needs-review"] },
+            "reasonCode": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+            "reviewerId": { "type": "string", "minLength": 1 },
+            "overriddenAt": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
