@@ -177,6 +177,30 @@ security regression.
    authorization tests and build/header checks pass, and a reviewed release is
    ready. Record the rollback deployment IDs and verification result only.
 
+## Local discovery scheduler containment and recovery
+
+**Trigger:** a scheduled local collector is running unexpectedly, repeatedly
+fails, logs more than safe metadata, or cannot reach the dedicated Interceptor
+context.
+
+1. Stop future runs immediately with `npm run scheduler:status -- --kill-switch on`.
+   If the timer itself must stop, run `npm run scheduler:systemd -- uninstall`.
+   Both commands are user-scoped and do not require root.
+2. Record only the safe scheduler status, error code, source ID, and time. Do
+   not copy journal output containing career content, browser details, tokens,
+   cookies, or profile paths into an incident record.
+3. For a missing context, login page, CAPTCHA, or access denial, keep the run
+   `blocked`. Repair the manually managed `Jobbie Discovery` browser profile
+   and exact source allowlist; never bypass a challenge or export browser
+   credentials.
+4. For a collector failure, inspect the approved local adapter and its
+   metadata-only contract. Do not add a secret to a systemd unit, environment
+   variable, log, or ticket as a workaround.
+5. After one successful manual collection, inspect `npm run scheduler:systemd
+   -- status`, reinstall the user timer if needed, and turn the kill switch off.
+   The systemd timer is non-persistent, so a VM shutdown does not cause a
+   surprise catch-up run on recovery.
+
 ## Post-incident review
 
 Start the review after containment, no later than the next working cycle.

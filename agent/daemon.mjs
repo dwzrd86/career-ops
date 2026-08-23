@@ -4,7 +4,7 @@
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { loadTargetProfile, DEFAULT_TARGET_PROFILE_PATH } from "./store/target-profile.mjs";
-import { requestCollectionRun, runDueCollections } from "./scheduler.mjs";
+import { requestCollectionRun } from "./scheduler.mjs";
 
 function usage() {
   console.log(`Usage: node agent/daemon.mjs (--once | --scheduled) [--profile <path>] [--data-root <path>] [--collector-adapter <module>]\n\nRuns only metadata-safe collectors. Collector adapters export { collectors }, keyed by source ID.`);
@@ -25,7 +25,11 @@ async function main() {
   const profile = loadTargetProfile(profilePath);
   if (!profile || profile.profileVersion < 1) throw new Error("A saved, valid Target Profile is required before collection.");
   const settings = { rootPath: option(args, "--data-root") ? resolve(option(args, "--data-root")) : undefined, collectors: await collectorsFrom(args) };
-  const result = args.includes("--once") ? await requestCollectionRun(profile, { ...settings, trigger: "manual" }) : await runDueCollections(profile, settings);
+  // systemd supplies the randomized delay. Running immediately here preserves
+  // the one-shot service lifecycle while retaining scheduler safety limits.
+  const result = args.includes("--once")
+    ? await requestCollectionRun(profile, { ...settings, trigger: "manual" })
+    : await requestCollectionRun(profile, { ...settings, trigger: "scheduled", options: { maxJitterMs: 0 } });
   console.log(JSON.stringify(result, null, 2));
   if (result.status === "busy") process.exitCode = 3;
 }

@@ -18,6 +18,9 @@ All scripts live in the project root as `.mjs` modules and are exposed via `npm 
 | `npm run rollback` | `update-system.mjs rollback` | Rollback last update |
 | `npm run liveness` | `check-liveness.mjs` | Test if job URLs are still active |
 | `npm run scan` | `scan.mjs` | Zero-token portal scanner |
+| `npm run scheduler` | `agent/daemon.mjs` | Run one metadata-only local discovery collection |
+| `npm run scheduler:status` | `agent/commands/status.mjs` | Inspect scheduler state or set its local kill switch |
+| `npm run scheduler:systemd` | `agent/commands/scheduler-systemd.mjs` | Install, inspect, or remove the Linux user timer |
 
 ---
 
@@ -207,3 +210,46 @@ location_filter:
 without a listed location should stay out of the pipeline.
 
 **Exit codes:** `0` scan completed, `1` configuration error or no portals.yml found.
+
+---
+
+## scheduler and scheduler:status
+
+The local scheduler accepts only a saved, valid Target Profile and an explicitly
+provided collector adapter. It stores safe run metadata in
+`data/autodiscovery/`; it does not import the evaluator, browser-control
+capabilities, Convex, or material generation.
+
+```bash
+npm run scheduler -- --once --collector-adapter agent/collectors/approved-adapter.mjs
+npm run scheduler:status
+npm run scheduler:status -- --kill-switch on
+npm run scheduler:status -- --kill-switch off
+```
+
+`--once` is a manual run. A `blocked` Interceptor result is recorded without
+an aggressive retry. The kill switch prevents new runs but preserves safe
+history for review.
+
+---
+
+## scheduler:systemd
+
+Manages `career-ops-scheduler.service` and
+`career-ops-scheduler.timer` in the current user's systemd unit directory.
+It runs `systemctl --user` only—never `sudo`—and removes unit files without
+deleting local discovery data.
+
+```bash
+npm run scheduler:systemd -- install --collector-adapter agent/collectors/approved-adapter.mjs
+npm run scheduler:systemd -- status
+npm run scheduler:systemd -- uninstall
+```
+
+Installation requires `discovery.enabled: true` plus a `daily` or `weekdays`
+schedule in `config/target-profile.yml`. The generated service has an explicit
+Node executable, project working directory, and local data path; adapter,
+profile, and data paths must remain inside the project. Unit files contain no
+secrets and the service logs metadata-safe scheduler summaries only. See
+`docs/SETUP.md` for the scan window, lingering implications, shutdown, and
+recovery steps.

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Career Ops local discovery on the configured schedule
+
+[Timer]
+OnCalendar={{ON_CALENDAR}}
+RandomizedDelaySec=5m
+AccuracySec=1m
+Persistent=false
+Unit=career-ops-scheduler.service
+
+[Install]
+WantedBy=timers.target

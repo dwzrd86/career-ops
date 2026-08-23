@@ -71,6 +71,61 @@ node cv-sync-check.mjs      # Check configuration
 node verify-pipeline.mjs     # Check pipeline integrity
 ```
 
+## Scheduled local discovery (Linux/systemd)
+
+Scheduled discovery is local to the Linux user. It writes only operational
+metadata under `data/autodiscovery/`; it does not run evaluation or generate
+application materials. Before scheduling, complete and validate the Target
+Profile and prove a manual collector run works with your approved collector
+adapter. Do not schedule Interceptor until its separate `Jobbie Discovery`
+browser profile and exact source allowlist are working.
+
+1. Set `discovery.enabled: true` and `discovery.schedule: daily` or `weekdays`
+   in `config/target-profile.yml`.
+2. Keep the collector adapter inside this repository. The adapter must export
+   only `{ collectors }` and must not contain credentials in its path or unit
+   configuration.
+3. Install the user timer; this uses the current absolute Node executable and
+   requires neither `sudo` nor a system-wide unit:
+
+```bash
+npm run scheduler:systemd -- install --collector-adapter agent/collectors/approved-adapter.mjs
+```
+
+The default window is 09:00 local time every day or Monday–Friday, based on
+the saved profile. systemd adds up to five minutes of jitter. Choose a
+different local window with `--on-calendar "Mon..Fri *-*-* 08:30:00"`.
+
+```bash
+npm run scheduler:systemd -- status
+npm run scheduler:status
+```
+
+The installed unit has an explicit Node path, repository working directory,
+and `data/autodiscovery/` read-write path. It uses a restrictive umask and
+contains no secrets, cookies, browser profile paths, or collector output.
+
+### Login, shutdown, and recovery
+
+`systemd --user` timers normally run while you are logged in. `loginctl
+enable-linger "$USER"` can keep a user manager running after logout, but it
+may require host-administrator approval; Career Ops does not run it or ask for
+root. Enable lingering only on a private VM where that background behavior is
+intended.
+
+Before shutting down the VM, disable the timer or turn on the local kill
+switch. A stopped VM does not queue missed discovery runs (`Persistent=false`).
+After restart, confirm the browser context is available, inspect status, then
+re-enable only when manual collection remains healthy:
+
+```bash
+npm run scheduler:status -- --kill-switch on
+npm run scheduler:systemd -- uninstall
+# After recovery and a successful manual check:
+npm run scheduler:systemd -- install --collector-adapter agent/collectors/approved-adapter.mjs
+npm run scheduler:status -- --kill-switch off
+```
+
 ## Build Dashboard (Optional)
 
 ```bash

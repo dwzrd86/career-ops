@@ -1,0 +1,23 @@
+[Unit]
+Description=Career Ops local discovery scheduler (metadata-only)
+Documentation=https://github.com/santifer/career-ops
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists={{PROFILE_PATH}}
+
+[Service]
+Type=oneshot
+WorkingDirectory={{WORKING_DIRECTORY}}
+ExecStart={{EXEC_START}}
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{DATA_ROOT}}
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+StandardOutput=journal
+StandardError=journal
