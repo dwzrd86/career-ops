@@ -2,6 +2,19 @@
 
 Cuando el candidato pega una oferta (texto o URL), entregar SIEMPRE los 7 bloques (A-F evaluation + G legitimacy):
 
+## Límite de materiales: borradores locales, evidencia obligatoria
+
+Para un rol con aprobación explícita `approved-for-evaluation`, los materiales
+derivados de esta evaluación son únicamente **[DRAFT]**. Mantener el snapshot
+del JD normalizado (`localPath` y `sha256`), la `targetProfileVersion` y las
+`evidenceReferences` que entraron al evaluador. No sustituir esas versiones al
+regenerar un material: crear un nuevo bundle si cambian.
+
+Cada claim de CV, mensaje o respuesta debe incluir una referencia explícita a
+la evidencia que lo respalda. Si no hay evidencia, anotarlo como gap o pregunta
+para el candidato; nunca inventar una habilidad, logro, métrica, autorización o
+hecho. No rellenar formularios, subir archivos ni enviar solicitudes.
+
 ## Paso 0 — Detección de Arquetipo
 
 Clasificar la oferta en uno de los 6 arquetipos (ver `_shared.md`). Si es híbrido, indicar los 2 más cercanos. Esto determina:
@@ -20,9 +33,12 @@ Tabla con:
 - Team size (si se menciona)
 - TL;DR en 1 frase
 
-## Bloque B — Match con CV
+## Bloque B — Match con CV y evidencia
 
-Lee `cv.md`. Crea tabla con cada requisito del JD mapeado a líneas exactas del CV.
+Lee `cv.md` y las `evidenceReferences` del bundle. Crea una tabla con cada
+requisito del JD mapeado a líneas exactas del CV y a una referencia de evidencia
+explícita. Para cada match, conservar la referencia usada; una afirmación sin
+referencia pasa a la sección de gaps.
 
 **Adaptado al arquetipo:**
 - Si FDE → priorizar proof points de delivery rápida y client-facing
@@ -61,6 +77,12 @@ Tabla con datos y fuentes citadas. Si no hay datos, decirlo en vez de inventar.
 | ... | ... | ... | ... | ... |
 
 Top 5 cambios al CV + Top 5 cambios a LinkedIn para maximizar match.
+
+Todo texto propuesto para CV, PDF, cover letter, outreach o LinkedIn debe
+llevar el prefijo **[DRAFT]** y una referencia de evidencia. Los cambios deben
+reordenar o reformular hechos existentes; no pueden añadir experiencia. Anotar
+los requisitos sin cobertura y la decisión necesaria del candidato en una lista
+de gaps sin resolver.
 
 ## Bloque F — Plan de Entrevistas
 
@@ -164,6 +186,10 @@ Guardar evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 **Score:** {X/5}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
 **PDF:** {ruta o pendiente}
+**Material status:** [DRAFT — awaiting human review]
+**Source snapshot:** `{normalizedJdSnapshot.localPath}` (`sha256: {normalizedJdSnapshot.sha256}`)
+**Target Profile version:** {targetProfileVersion}
+**Evidence references:** {evidenceReferences}
 
 ---
 
@@ -189,7 +215,12 @@ Guardar evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 (contenido completo del bloque G)
 
 ## H) Draft Application Answers
-(solo si score >= 4.5 — borradores de respuestas para el formulario de aplicación)
+(solo si score >= 4.5 — cada respuesta comienza con [DRAFT], incluye sus
+referencias de evidencia y requiere revisión antes de copiarla manualmente)
+
+## I) Unresolved Gaps
+(requisito, evidencia revisada, impacto y decisión que debe tomar el candidato;
+no inferir respuestas ni convertir gaps en claims)
 
 ---
 
@@ -214,3 +245,16 @@ Guardar evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 ```markdown
 | # | Fecha | Empresa | Rol | Score | Estado | PDF | Report |
 ```
+
+### 3. Crear checklist manual de materiales
+
+Para todo rol aprobado, crear el checklist local a partir de
+`agent/templates/application-checklist.md`. Enlazarlo desde el Material Bundle
+junto con el report y PDF. Preservar en los tres artefactos el snapshot del JD,
+la versión del Target Profile y las referencias de evidencia.
+
+El checklist debe separar claims verificados de **Unresolved Gaps** y marcar
+todas las respuestas como **[DRAFT]**. El candidato revisa los materiales y,
+si decide aplicar, copia texto, selecciona opciones, carga archivos y envía la
+solicitud personalmente. Esta fase no automatiza el rellenado de páginas ni la
+presentación de una solicitud.

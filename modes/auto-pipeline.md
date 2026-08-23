@@ -2,6 +2,20 @@
 
 Cuando el usuario pega un JD (texto o URL) sin sub-comando explícito, ejecutar TODO el pipeline en secuencia:
 
+## Límite de materiales y procedencia
+
+Este pipeline solo puede preparar materiales locales para un rol que tenga un
+registro explícito `approved-for-evaluation` de Dee. Todos los CVs, PDFs,
+respuestas y mensajes son **[DRAFT]** hasta que el candidato los revise. Nunca
+rellenar campos, cargar archivos, hacer clic en controles de aplicación ni
+enviar una solicitud.
+
+Conservar junto a cada Material Bundle el snapshot del JD normalizado
+(`localPath` y `sha256`), la `targetProfileVersion` y el registro de
+`evidenceReferences` recibido por el evaluador. Usar
+`agent/templates/application-checklist.md` para el checklist local; no incluir
+contenido de CV/JD ni rutas locales en proyecciones públicas.
+
 ## Paso 0 — Extraer JD
 
 Si el input es una **URL** (no texto de JD pegado), seguir esta estrategia para extraer el contenido:
@@ -16,28 +30,50 @@ Si el input es una **URL** (no texto de JD pegado), seguir esta estrategia para 
 
 **Si el input es texto de JD** (no URL): usar directamente, sin necesidad de fetch.
 
-## Paso 1 — Evaluación A-G
+## Paso 1 — Evaluación A-G y registro de evidencia
 Ejecutar exactamente igual que el modo `oferta` (leer `modes/oferta.md` para todos los bloques A-F + Block G Posting Legitimacy).
+
+Antes de redactar materiales, crear un registro de procedencia que conserve la
+versión del Target Profile, el snapshot del JD y las referencias de evidencia.
+Cada requisito del JD, afirmación de match y cambio propuesto al CV debe citar
+una o más referencias explícitas de ese registro. Si la evidencia no respalda
+un claim, registrarlo como gap sin resolver; no inventar experiencia, métricas,
+autorización ni disponibilidad.
 
 ## Paso 2 — Guardar Report .md
 Guardar la evaluación completa en `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` (ver formato en `modes/oferta.md`).
 Include Block G in the saved report. Add `**Legitimacy:** {tier}` to the report header.
 
-## Paso 3 — Generar PDF
+## Paso 3 — Generar borrador de CV/materiales
 Read `config/profile.yml`. Check `cv.output_format`:
 
 - If `"latex"`, execute the full pipeline from `modes/latex.md`
 - Otherwise (default), execute the full pipeline from `modes/pdf.md`
 
-## Paso 4 — Draft Application Answers (solo si score >= 4.5)
+Usar `generate-pdf.mjs` y, cuando corresponda, `batch/batch-runner.sh` como los
+flujos ya existentes. Etiquetar el CV, PDF y cualquier mensaje como
+**[DRAFT — revisión humana obligatoria]** en el report y checklist. Cada bullet
+reordenado, keyword inyectada o texto de material debe conservar al menos una
+referencia de evidencia explícita; reformular evidencia existente es válido,
+inventar un claim no lo es.
 
-Si el score final es >= 4.5, generar borrador de respuestas para el formulario de aplicación:
+## Paso 4 — Borradores de respuestas y checklist manual
 
-1. **Extraer preguntas del formulario**: Usar Playwright para navegar al formulario y hacer snapshot. Si no se pueden extraer, usar las preguntas genéricas.
-2. **Generar respuestas** siguiendo el tono (ver abajo).
-3. **Guardar en el report** como sección `## H) Draft Application Answers`.
+Crear siempre un checklist local desde
+`agent/templates/application-checklist.md`, con rutas de report/PDF/checklist y
+la procedencia conservada. Si el score final es >= 4.5, incluir también
+borradores de respuestas:
 
-### Preguntas genéricas (usar si no se pueden extraer del formulario)
+1. Usar solo preguntas que el candidato pegue o las preguntas genéricas de
+   abajo; no navegar a formularios de aplicación para extraerlas.
+2. Generar respuestas con referencias de evidencia explícitas y el tono de
+   abajo.
+3. Empezar cada respuesta con **[DRAFT]** y guardar su evidencia y cualquier
+   incertidumbre en el checklist y en `## H) Draft Application Answers`.
+4. Enumerar todas las respuestas pendientes, gaps y decisiones del candidato.
+   No inferir ni completar datos faltantes.
+
+### Preguntas genéricas (usar si el candidato no proporciona preguntas)
 
 - Why are you interested in this role?
 - Why do you want to work at [Company]?
@@ -68,4 +104,4 @@ Si el score final es >= 4.5, generar borrador de respuestas para el formulario d
 ## Paso 5 — Actualizar Tracker
 Registrar en `data/applications.md` con todas las columnas incluyendo Report y PDF en ✅.
 
-**Si algún paso falla**, continuar con los siguientes y marcar el paso fallido como pendiente en el tracker.
+**Si algún paso falla**, continuar con los siguientes y marcar el paso fallido como pendiente en el tracker. El tracker y Material Bundle deben indicar que los materiales siguen siendo borradores pendientes de revisión humana; ningún estado de borrador equivale a una solicitud enviada.
