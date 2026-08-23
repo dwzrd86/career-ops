@@ -17,3 +17,19 @@ jobs:
           go-version: '1.22'
       - run: npm install
       - run: node test-all.mjs --quick
+
+  web-authorization:
+    name: Isolated Convex authorization
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run test:authorization

@@ -9,6 +9,7 @@
     "build:app": "tsc --noEmit && vite build",
     "verify:production-build": "node scripts/production-build-guard.mjs verify",
     "test:auth": "vitest run --config vitest.auth.config.ts",
+    "test:authorization": "vitest run --config vitest.auth.config.ts convex/authorization.test.ts",
     "test:browser-flow": "node scripts/isolated-browser-flow.mjs",
     "test:production-build-guard": "node --test scripts/production-build-guard.test.mjs",
     "test:security-regression": "node scripts/security-regression.mjs",

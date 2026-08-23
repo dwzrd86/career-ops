@@ -77,4 +77,4 @@ The Better Auth component has been deployed and browser-validated only on the de
 
 ## Verification
 
-Run `cd web && npm run test:security-regression` before release. The gate audits dependencies, runs auth-boundary tests, validates the guarded production build and headers, and drives the complete UI in an isolated browser mock. Additionally, exercise a disposable deployment with a real Resend sender and mailbox before promoting an identity migration.
+Run `cd web && npm run test:security-regression` before release. The gate audits dependencies, runs auth-boundary tests, validates the guarded production build and headers, and drives the complete UI in an isolated browser mock. Pull requests also run `npm run test:authorization`: an isolated Convex test deployment provisions two disposable Better Auth accounts and verifies cross-account reads, updates, deletes, exports, and account deletion remain owner-scoped. Additionally, exercise a disposable deployment with a real Resend sender and mailbox before promoting an identity migration.
