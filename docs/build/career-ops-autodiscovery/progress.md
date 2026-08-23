@@ -2,7 +2,9 @@
 
 ## Status
 
-**Program state:** Phase 2 complete; browser collection, normalization, and deduplication are next.
+**Program state:** Phase 7 release-gate dry run complete. The local-first MVP is
+ready for human operational review; it remains deliberately manual for browser
+authorization, evaluation approval, material review, and any application step.
 
 **Goal:** a single-user, local-first Cyber/GRC/cloud job-search agent that
 discovers and ranks roles for Dee, preserves a private pipeline, generates
@@ -25,19 +27,20 @@ reviewable materials, and never submits applications automatically.
   the hosted alpha.
 - [x] Local Target Profile persistence, validation, monotonic versioning, and a
   loopback-only editor exist under `agent/`.
-- [x] No local scheduler, Interceptor collector, scan-run store, explainable
-  matcher, or scanner-to-web ingestion exists.
+- [x] Local scheduler, dedicated-context Interceptor boundary, scan-run store,
+  explainable matcher, and bounded local projection hand-off exist. None can
+  submit an application or upload a projection by itself.
 
 ## Delivery checklist
 
 - [x] Phase 0: integration baseline and local-agent boundary
 - [x] Phase 1: Target Profile persistence and UI
 - [x] Phase 2: explainable matching and rejection rules
-- [ ] Phase 3: browser collection, normalization, and deduplication
-- [ ] Phase 4: private pipeline and review UI
-- [ ] Phase 5: scheduled scan runs, retries, history, and daily shortlist
-- [ ] Phase 6: tailored materials and checklist integration
-- [ ] Phase 7: tests, hardening, and operations
+- [x] Phase 3: browser collection, normalization, and deduplication
+- [x] Phase 4: private pipeline and review UI
+- [x] Phase 5: scheduled scan runs, retries, history, and daily shortlist
+- [x] Phase 6: tailored materials and checklist integration
+- [x] Phase 7: tests, hardening, and operations
 
 ## Decisions recorded
 
@@ -65,23 +68,55 @@ reviewable materials, and never submits applications automatically.
   target criteria need no changes until the Target Profile and explanation model
   make tradeoffs visible.
 
+## Controlled end-to-end dry run — 2026-08-23
+
+- Completed a disposable, local Target Profile with fixture-only evidence; no
+  personal profile, resume content, browser profile, or employer application
+  was used.
+- Simulated one public Greenhouse ATS record, normalized it with its job-detail
+  snapshot held only in local private storage, and confirmed canonical-URL
+  deduplication on the repeated record.
+- Matched the normalized fixture to a ranked decision, then used a separate
+  `approved-for-evaluation` record to enqueue it. The evaluator received
+  `draftOnly: true` and `submissionAllowed: false`, and produced a draft report
+  and manual checklist in `draft-awaiting-review` state.
+- Generated the local daily shortlist plus an optional local projection. The
+  projection contained only allowed review metadata; it omitted job-detail
+  text, evidence references, local paths, and draft artifact paths. The
+  controlled run's network guard recorded zero outbound calls, so no
+  application submission route was called.
+- Added `agent/test/controlled-dry-run.test.mjs` as the repeatable regression
+  for this sequence. Node 24.18.0 `node test-all.mjs --quick` passed **112**
+  checks with **0** failures and **14** pre-existing documentation warnings.
+
+### Remaining operational limitations
+
+- This was a fixture-backed Greenhouse dry run, not a live posting collection;
+  validate configured public ATS sources when real target criteria produce a
+  candidate.
+- Interceptor remains opt-in and must use the dedicated `Jobbie Discovery`
+  browser context with a narrow approved-source allowlist; it must never use a
+  personal browser profile.
+- A real evaluator adapter, human review of the draft bundle, and a deliberate
+  manual application step are still required. The local projection is only a
+  file hand-off and is not uploaded without a separate authenticated bridge.
+- The release gate requires Node 24.18.0; the default shell currently selects
+  Node 18 and must be changed before an operator runs the gate.
+
 ## Next shippable milestone
 
-**Phase 2: explainable matching and rejection rules** is next. It will run the
-saved Target Profile against existing ATS results and show deterministic reject,
-review, or rank reasons. It does not require an authenticated job board,
-scheduler, public deployment, or AI-driven evaluation.
-
-Estimated effort: **1.5-2 engineer-weeks**. Total MVP estimate: **11-15
-engineer-weeks** for one desktop OS and 3-5 authorized sources.
+**Operational readiness review** is next: validate a real, authorized public
+ATS source against the completed Target Profile, review the resulting material
+bundle, and keep any application submission manual. See [[RELEASE_RUNBOOK]]
+before enabling a recurring scheduler.
 
 ## Remaining user inputs
 
-1. Complete the Target Profile using `npm run profile -- edit`. The local editor
-   collects role, seniority, location, compensation, clearance/authorization,
-   exclusions, expertise, and local evidence references.
-2. Create a dedicated `Jobbie Discovery` browser profile and log into any
-   authenticated sources manually before Phase 3. The first public ATS phase
+1. Validate the real Target Profile via `npm run profile -- edit`; do not use
+   the disposable fixture profile from the dry run.
+2. Create a dedicated `Jobbie Discovery` browser profile and manually sign in
+   only to any future approved authenticated sources. Public ATS collection
    does not require a job-board login.
 
-No user decision blocks Phase 2 implementation.
+No user decision blocks the local release gate; the remaining actions are
+deliberate operator review and authorized-source validation.
