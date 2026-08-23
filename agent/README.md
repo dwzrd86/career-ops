@@ -117,3 +117,17 @@ bounded `blocked` outcome and fix the dedicated browser setup manually—never
 attempt a bypass, CAPTCHA solver, or credential export. Pass detail text
 directly to normalization so it remains only in ignored local snapshots, never
 in scan-run logs.
+
+## Evaluation queue
+
+`agent/evaluation/queue.mjs` is a local-only boundary between reviewed
+discovery and the existing evaluator/report flow. Only a caller with a distinct
+`approved-for-evaluation` record from Dee can enqueue a saved discovered-job ID;
+collector, discovery, browser, scheduler, and projection origins are refused.
+The queue stores a normalized-JD snapshot reference, Target Profile version,
+and evidence-reference metadata—never raw JD or resume content.
+
+`agent/evaluation/worker.mjs` requires an explicit local evaluator adapter. It
+passes that bounded context to the report/PDF flow and records returned report,
+PDF, and checklist references in a private Material Bundle marked
+`draft-awaiting-review`. It cannot submit an application.
