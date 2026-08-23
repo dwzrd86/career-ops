@@ -51,6 +51,12 @@ const hardFilterOutcome = v.union(
   v.literal("unknown"),
   v.literal("notApplicable"),
 );
+const materialReviewState = v.union(
+  v.literal("draftAwaitingReview"),
+  v.literal("approved"),
+  v.literal("changesRequested"),
+  v.literal("rejected"),
+);
 
 type TextField = keyof typeof fieldLimits;
 
@@ -108,6 +114,24 @@ function validateScore(value: number | undefined) {
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error("score must be between 0 and 100");
   return value;
+}
+
+function normalizeMaterialStatus(value: {
+  artifacts: { checklistReady: boolean; pdfReady: boolean; reportReady: boolean };
+  createdAt: number;
+  reviewState: "draftAwaitingReview" | "approved" | "changesRequested" | "rejected";
+  targetProfileVersion: number;
+} | undefined) {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value.targetProfileVersion) || value.targetProfileVersion < 1) {
+    throw new Error("materialStatus.targetProfileVersion must be a positive integer");
+  }
+  return {
+    artifacts: { ...value.artifacts },
+    createdAt: validateTimestamp(value.createdAt, "materialStatus.createdAt"),
+    reviewState: value.reviewState,
+    targetProfileVersion: value.targetProfileVersion,
+  };
 }
 
 async function requireOwnedDiscoveredJob(ctx: any, id: any, ownerId: any) {
@@ -216,6 +240,12 @@ export const project = mutationGeneric({
     url: v.string(),
     source: v.object({ label: v.string(), provider: sourceProvider }),
     freshness: v.object({ checkedAt: v.number(), postedAt: v.optional(v.number()), status: freshnessStatus }),
+    materialStatus: v.optional(v.object({
+      artifacts: v.object({ checklistReady: v.boolean(), pdfReady: v.boolean(), reportReady: v.boolean() }),
+      createdAt: v.number(),
+      reviewState: materialReviewState,
+      targetProfileVersion: v.number(),
+    })),
     discoveredAt: v.number(),
     decision: v.object({
       profileVersion: v.number(),
@@ -253,6 +283,7 @@ export const project = mutationGeneric({
           label: normalizeText(args.source.label, "sourceLabel"),
           provider: args.source.provider,
         },
+        ...(args.materialStatus === undefined ? {} : { materialStatus: normalizeMaterialStatus(args.materialStatus) }),
         title: normalizeText(args.title, "title"),
         updatedAt: now,
         url: normalizeHttpsUrl(args.url),

@@ -46,6 +46,13 @@ const hardFilterOutcome = v.union(
   v.literal("notApplicable"),
 );
 
+const materialReviewState = v.union(
+  v.literal("draftAwaitingReview"),
+  v.literal("approved"),
+  v.literal("changesRequested"),
+  v.literal("rejected"),
+);
+
 export default defineSchema({
   // Application-owned account metadata. Authentication credentials and sessions
   // are isolated in the Better Auth component; authId is its stable user id.
@@ -97,6 +104,18 @@ export default defineSchema({
       status: discoveryFreshness,
     }),
     reviewStatus: discoveryReviewStatus,
+    // Read-only local Material Bundle progress. Artifact paths and all career
+    // content stay local and are never part of this hosted projection.
+    materialStatus: v.optional(v.object({
+      artifacts: v.object({
+        checklistReady: v.boolean(),
+        pdfReady: v.boolean(),
+        reportReady: v.boolean(),
+      }),
+      createdAt: v.number(),
+      reviewState: materialReviewState,
+      targetProfileVersion: v.number(),
+    })),
     discoveredAt: v.number(),
     updatedAt: v.number(),
   })

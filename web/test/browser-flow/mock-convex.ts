@@ -17,6 +17,7 @@ export type Job = {
 
 export type DiscoveryDecisionOutcome = "rejected" | "ranked" | "needsReview";
 export type DiscoveryReviewStatus = "discovered" | "shortlisted" | "archived" | "approvedForEvaluation";
+export type MaterialReviewState = "draftAwaitingReview" | "approved" | "changesRequested" | "rejected";
 
 export type DiscoveredJob = {
   _id: string;
@@ -26,6 +27,12 @@ export type DiscoveredJob = {
   freshness: { checkedAt: number; postedAt?: number; status: "fresh" | "stale" | "unknown" | "expired" };
   location?: string;
   localJobId: string;
+  materialStatus?: {
+    artifacts: { checklistReady: boolean; pdfReady: boolean; reportReady: boolean };
+    createdAt: number;
+    reviewState: MaterialReviewState;
+    targetProfileVersion: number;
+  };
   reviewStatus: DiscoveryReviewStatus;
   source: { label: string; provider: string };
   title: string;

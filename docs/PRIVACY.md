@@ -75,7 +75,7 @@ certification claim.
 | Data | Retention in the current alpha | How to delete it |
 | --- | --- | --- |
 | A job-pipeline entry | Until the user removes that entry, deletes the account, or the alpha is retired. There is no automatic job-record expiry. | Select the entry's remove control in the pipeline, or delete the account from Account security. |
-| A discovered-role projection and its match decisions, reviewer overrides, and review-status history | Until the user deletes the account or the alpha is retired. Archiving changes review status but does not delete the metadata; there is no automatic expiry. | Delete the account from Account security. |
+| A discovered-role projection and its match decisions, reviewer overrides, review-status history, and material review metadata (state, timestamp, profile version, and artifact-ready flags only) | Until the user deletes the account or the alpha is retired. Archiving changes review status but does not delete the metadata; there is no automatic expiry. | Delete the account from Account security. |
 | Account and authentication records | Until the user deletes the account or the alpha is retired. | Use the Account security control and enter the current password to permanently delete the account and associated pipeline data. |
 | Verification and reset links | 15 minutes, as configured in the application. | They expire automatically; no user action is needed. |
 | HMAC-derived rate-limit records | The current alpha has no automated expiry job for these records; they are retained until the operator removes them or retires the alpha. | These keyed anti-abuse records are not linked to a readable account profile and may be retained temporarily for fraud prevention. |

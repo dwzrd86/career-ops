@@ -28,6 +28,7 @@ export type DiscoveryDecisionOutcome = "rejected" | "ranked" | "needsReview";
 export type DiscoveryReviewStatus = "discovered" | "shortlisted" | "archived" | "approvedForEvaluation";
 export type DiscoveryFreshnessStatus = "fresh" | "stale" | "unknown" | "expired";
 export type DiscoveryHardFilterOutcome = "pass" | "fail" | "unknown" | "notApplicable";
+export type MaterialReviewState = "draftAwaitingReview" | "approved" | "changesRequested" | "rejected";
 
 export type DiscoveredJob = {
   _id: string;
@@ -41,6 +42,12 @@ export type DiscoveredJob = {
   };
   location?: string;
   localJobId: string;
+  materialStatus?: {
+    artifacts: { checklistReady: boolean; pdfReady: boolean; reportReady: boolean };
+    createdAt: number;
+    reviewState: MaterialReviewState;
+    targetProfileVersion: number;
+  };
   reviewStatus: DiscoveryReviewStatus;
   source: { label: string; provider: string };
   title: string;
@@ -84,6 +91,7 @@ export type AccountExport = {
     freshness: DiscoveredJob["freshness"];
     localJobId: string;
     location?: string;
+    materialStatus?: DiscoveredJob["materialStatus"];
     matchDecisions: Array<NonNullable<DiscoveredJob["decision"]> & { id: string }>;
     reviewerOverrides: Array<NonNullable<DiscoveredJob["override"]> & { id: string }>;
     reviewStatus: DiscoveryReviewStatus;

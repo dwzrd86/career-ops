@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { generateDailyShortlist } from "../daily-shortlist.mjs";
 import { saveDiscoveredJob, saveMatchDecision } from "../store/discovered-jobs.mjs";
+import { saveMaterialBundle } from "../evaluation/worker.mjs";
 
 const NOW = "2026-08-23T12:00:00.000Z";
 
@@ -102,6 +103,39 @@ test("writes a bounded Convex-compatible payload only when explicitly requested"
   assert.equal(projection.items[0].decision.outcome, "ranked");
   assert.doesNotMatch(encoded, /localPath|description|resume|details\//i);
   assert.equal(statSync(result.projectionPath).mode & 0o777, 0o600);
+});
+
+test("adds read-only material status without local paths to local and private review projections", () => {
+  const dataRoot = root();
+  const safe = saveDiscoveredJob(job("materials"), dataRoot);
+  saveMatchDecision(decision(safe), dataRoot);
+  saveMaterialBundle({
+    schemaVersion: 1,
+    id: "bundle-materials",
+    requestId: "eval-materials",
+    jobId: safe.id,
+    targetProfileVersion: 3,
+    normalizedJdSnapshot: { sha256: "a".repeat(64), localPath: "details/materials.txt" },
+    evidenceReferences: [{ kind: "resume", label: "Primary resume", localPath: "cv.md" }],
+    reportPath: "reports/materials.md",
+    pdfPath: "output/materials.pdf",
+    checklistPath: "materials/materials-checklist.md",
+    reviewState: "draft-awaiting-review",
+    createdAt: NOW,
+  }, dataRoot);
+
+  const result = generateDailyShortlist({ rootPath: dataRoot, profileVersion: 3, now: NOW, includeProjection: true });
+  const markdown = readFileSync(result.artifactPath, "utf8");
+  const projection = JSON.parse(readFileSync(result.projectionPath, "utf8"));
+
+  assert.match(markdown, /draft awaiting review \(report, PDF, checklist\)/);
+  assert.deepEqual(projection.items[0].materialStatus, {
+    artifacts: { checklistReady: true, pdfReady: true, reportReady: true },
+    createdAt: Date.parse(NOW),
+    reviewState: "draftAwaitingReview",
+    targetProfileVersion: 3,
+  });
+  assert.doesNotMatch(`${markdown}\n${JSON.stringify(projection)}`, /localPath|details\/|cv\.md|materials\.pdf|materials-checklist/i);
 });
 
 test("rejects an invalid calendar date before creating a local artifact", () => {

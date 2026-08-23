@@ -225,6 +225,16 @@ function discoveryNextAction(job: DiscoveredJob) {
   return "Shortlist or approve for evaluation";
 }
 
+function materialStatusLabel(job: DiscoveredJob) {
+  if (job.materialStatus === undefined) return "Not generated";
+  const artifacts = [
+    job.materialStatus.artifacts.reportReady ? "report" : null,
+    job.materialStatus.artifacts.pdfReady ? "PDF" : null,
+    job.materialStatus.artifacts.checklistReady ? "checklist" : null,
+  ].filter(Boolean);
+  return `${humanizeCode(job.materialStatus.reviewState)} · ${artifacts.join(", ") || "no artifacts"}`;
+}
+
 function freshnessLabel(job: DiscoveredJob) {
   const checked = new Date(job.freshness.checkedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return `${humanizeCode(job.freshness.status)} · checked ${checked}`;
@@ -359,6 +369,7 @@ function DiscoveryReviewQueue() {
                   <div><dt>Freshness</dt><dd>{freshnessLabel(job)}</dd></div>
                   <div><dt>Score</dt><dd>{job.decision?.score ?? "Not scored"}</dd></div>
                   <div><dt>Decision</dt><dd>{humanizeCode(job.effectiveOutcome ?? job.decision?.outcome ?? "needsReview")}</dd></div>
+                  <div><dt>Materials</dt><dd>{materialStatusLabel(job)}</dd></div>
                 </dl>
                 <div className="discovery-signals">
                   <div><span>Hard-filter reasons</span>{hardFilterReasons.length ? <ul>{hardFilterReasons.map((filter) => <li key={`${filter.ruleId}-${filter.reasonCode}`}>{humanizeCode(filter.reasonCode)}</li>)}</ul> : <p>None recorded</p>}</div>

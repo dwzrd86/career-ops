@@ -34,6 +34,12 @@ const initialState = (): BrowserFlowState => ({
     discoveredAt: 1,
     freshness: { checkedAt: Date.UTC(2026, 7, 22), status: "fresh" },
     localJobId: "browser-flow-discovery-1",
+    materialStatus: {
+      artifacts: { checklistReady: true, pdfReady: true, reportReady: true },
+      createdAt: Date.UTC(2026, 7, 23),
+      reviewState: "draftAwaitingReview",
+      targetProfileVersion: 1,
+    },
     location: "Remote",
     reviewStatus: "discovered",
     source: { label: "Mock Board", provider: "manual" },

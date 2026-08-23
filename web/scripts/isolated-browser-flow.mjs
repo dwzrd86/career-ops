@@ -63,6 +63,7 @@ async function main() {
     await expectVisible(page, page.getByText(/Fresh · checked/), "projected freshness");
     await expectVisible(page, page.getByText("Work Authorization Required", { exact: true }), "projected hard-filter reason");
     await expectVisible(page, page.getByText("Salary Unknown", { exact: true }), "projected unknown");
+    await expectVisible(page, page.getByText("Draft Awaiting Review · report, PDF, checklist", { exact: true }), "read-only material status");
     await page.getByRole("button", { name: "Shortlist" }).click();
     await expectVisible(page, page.getByText("Shortlisted for evaluation review", { exact: true }), "shortlisted next action");
     await page.getByRole("button", { name: "Override decision" }).click();

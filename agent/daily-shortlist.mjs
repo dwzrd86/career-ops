@@ -5,6 +5,7 @@ import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { DEFAULT_AUTODISCOVERY_PATH, listDiscoveredJobs, listMatchDecisions } from "./store/discovered-jobs.mjs";
+import { listMaterialStatuses } from "./evaluation/worker.mjs";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
@@ -42,7 +43,7 @@ function httpsUrl(value) {
   } catch { return null; }
 }
 
-function asConvexProjection(entry) {
+function asConvexProjection(entry, materialStatus) {
   const url = httpsUrl(entry.job.canonicalUrl);
   if (!url) return null;
   const provider = entry.job.source.provider;
@@ -77,10 +78,24 @@ function asConvexProjection(entry) {
       explanationCodes: [...entry.decision.explanationCodes],
       decidedAt: Date.parse(entry.decision.decidedAt),
     },
+    ...(materialStatus === undefined ? {} : {
+      materialStatus: {
+        artifacts: materialStatus.artifacts,
+        createdAt: Date.parse(materialStatus.createdAt),
+        reviewState: materialStatus.reviewState.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()),
+        targetProfileVersion: materialStatus.targetProfileVersion,
+      },
+    }),
   };
 }
 
-function artifact(entries, { date, generatedAt, profileVersion }) {
+function materialLabel(status) {
+  if (status === undefined) return "Not generated";
+  const artifacts = [status.artifacts.reportReady ? "report" : null, status.artifacts.pdfReady ? "PDF" : null, status.artifacts.checklistReady ? "checklist" : null].filter(Boolean);
+  return `${status.reviewState.replace(/-/g, " ")} (${artifacts.join(", ") || "no artifacts"})`;
+}
+
+function artifact(entries, { date, generatedAt, materialStatuses, profileVersion }) {
   const rows = entries.map((entry) => [
     markdownCell(entry.job.role.title),
     markdownCell(entry.job.role.company),
@@ -88,6 +103,7 @@ function artifact(entries, { date, generatedAt, profileVersion }) {
     Number.isFinite(entry.decision.score) ? entry.decision.score.toFixed(2).replace(/\.00$/, "") : "Not scored",
     markdownCell(entry.job.canonicalUrl),
     markdownCell(entry.decision.explanationCodes.join(", ")),
+    markdownCell(materialLabel(materialStatuses.get(entry.job.id))),
   ]);
   return [
     `# Daily discovery shortlist — ${date}`,
@@ -95,9 +111,9 @@ function artifact(entries, { date, generatedAt, profileVersion }) {
     `Generated locally at ${generatedAt} from ranked decisions for Target Profile v${profileVersion}.`,
     "This is a review queue only: it does not evaluate roles, generate materials, submit applications, send email, or contact a third party.",
     "",
-    "| Role | Company | Location | Score | URL | Match signals |",
-    "| --- | --- | --- | ---: | --- | --- |",
-    ...(rows.length === 0 ? ["| No active ranked decisions | — | — | — | — | — |"] : rows.map((row) => `| ${row.join(" | ")} |`)),
+    "| Role | Company | Location | Score | URL | Match signals | Materials |",
+    "| --- | --- | --- | ---: | --- | --- | --- |",
+    ...(rows.length === 0 ? ["| No active ranked decisions | — | — | — | — | — | — |"] : rows.map((row) => `| ${row.join(" | ")} |`)),
     "",
   ].join("\n");
 }
@@ -145,11 +161,12 @@ export function generateDailyShortlist({
     profileVersion,
     now: new Date(generatedAt),
   });
-  const artifactPath = writePrivate(join(root, "review", `daily-shortlist-${day}.md`), artifact(entries, { date: day, generatedAt, profileVersion }));
+  const materialStatuses = new Map(listMaterialStatuses(root).map((status) => [status.jobId, status]));
+  const artifactPath = writePrivate(join(root, "review", `daily-shortlist-${day}.md`), artifact(entries, { date: day, generatedAt, materialStatuses, profileVersion }));
   let projectionPath = null;
   let projectedCount = 0;
   if (includeProjection) {
-    const items = entries.map(asConvexProjection).filter(Boolean);
+    const items = entries.map((entry) => asConvexProjection(entry, materialStatuses.get(entry.job.id))).filter(Boolean);
     projectionPath = writePrivate(join(root, "projections", `daily-shortlist-${day}.json`), `${JSON.stringify({
       schemaVersion: 1,
       kind: "career-ops/convex-discovery-project",

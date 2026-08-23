@@ -56,6 +56,12 @@ function projectedJob(label: string) {
     discoveredAt: now,
     freshness: { checkedAt: now, postedAt: now - 86_400_000, status: "fresh" as const },
     localJobId: `local-${label}`,
+    materialStatus: {
+      artifacts: { checklistReady: true, pdfReady: true, reportReady: true },
+      createdAt: now,
+      reviewState: "draftAwaitingReview" as const,
+      targetProfileVersion: 1,
+    },
     location: "Remote",
     source: { label: "Greenhouse", provider: "greenhouse" as const },
     title: `${label} Engineer`,
@@ -88,6 +94,12 @@ describe("discovery projection authorization boundary", () => {
         effectiveOutcome: "ranked",
         reviewStatus: "approvedForEvaluation",
         decision: expect.objectContaining({ score: 84 }),
+        materialStatus: {
+          artifacts: { checklistReady: true, pdfReady: true, reportReady: true },
+          createdAt: expect.any(Number),
+          reviewState: "draftAwaitingReview",
+          targetProfileVersion: 1,
+        },
         override: expect.objectContaining({ reason: "Portfolio evidence supports the role." }),
       }),
     ]);

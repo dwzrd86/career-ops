@@ -1,6 +1,6 @@
 // Explicit adapter boundary to the established evaluator/report/PDF flow. This
 // module has no collector, scheduler, browser, network, or submission ability.
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { DEFAULT_AUTODISCOVERY_PATH } from "../store/discovered-jobs.mjs";
@@ -32,6 +32,35 @@ export function materialBundlePath(id, rootPath = DEFAULT_AUTODISCOVERY_PATH) { 
 function savePrivate(path, value) { mkdirSync(dirname(path), { recursive: true, mode: 0o700 }); const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`; writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 }); renameSync(temporary, path); return structuredClone(value); }
 export function saveMaterialBundle(bundle, rootPath = DEFAULT_AUTODISCOVERY_PATH) { return savePrivate(materialBundlePath(bundle.id, rootPath), assertValidMaterialBundle(structuredClone(bundle))); }
 export function loadMaterialBundle(id, rootPath = DEFAULT_AUTODISCOVERY_PATH) { const path = materialBundlePath(id, rootPath); return existsSync(path) ? assertValidMaterialBundle(JSON.parse(readFileSync(path, "utf8"))) : null; }
+
+/**
+ * Returns the deliberately narrow, read-only material view used by local and
+ * private review surfaces. Artifact paths, evidence references, and normalized
+ * JD references remain local implementation details and never leave a bundle.
+ */
+export function listMaterialStatuses(rootPath = DEFAULT_AUTODISCOVERY_PATH) {
+  const directory = join(resolve(rootPath), "material-bundles");
+  if (!existsSync(directory)) return [];
+  const latestByJob = new Map();
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const bundle = assertValidMaterialBundle(JSON.parse(readFileSync(join(directory, entry.name), "utf8")));
+    const previous = latestByJob.get(bundle.jobId);
+    if (previous === undefined || Date.parse(bundle.createdAt) > Date.parse(previous.createdAt)
+      || (bundle.createdAt === previous.createdAt && bundle.id.localeCompare(previous.bundleId) > 0)) {
+      latestByJob.set(bundle.jobId, {
+        artifacts: { checklistReady: bundle.checklistPath !== null, pdfReady: bundle.pdfPath !== null, reportReady: bundle.reportPath !== null },
+        bundleId: bundle.id,
+        createdAt: bundle.createdAt,
+        jobId: bundle.jobId,
+        reviewState: bundle.reviewState,
+        targetProfileVersion: bundle.targetProfileVersion,
+      });
+    }
+  }
+  return [...latestByJob.values()].sort((left, right) => left.jobId.localeCompare(right.jobId));
+}
+
 function evaluationContext(request) { return Object.freeze({ requestId: request.id, jobId: request.jobId, approval: structuredClone(request.approval), targetProfileVersion: request.workItem.targetProfileVersion, normalizedJdSnapshot: structuredClone(request.workItem.normalizedJdSnapshot), normalizedJob: structuredClone(request.workItem.job), evidenceReferences: structuredClone(request.workItem.evidenceReferences), draftOnly: true, submissionAllowed: false }); }
 
 /** Claims an approved request and delegates to an evaluator adapter returning { reportPath, pdfPath?, checklistPath? }. */
