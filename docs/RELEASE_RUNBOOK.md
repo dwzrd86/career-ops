@@ -33,6 +33,14 @@ career files or credentials in a release branch or deployment.
 - Netlify has a production `CONVEX_DEPLOY_KEY` in its secret store and
   `CONVEX_DEV_DEPLOYMENT_URLS` lists every known development Convex URL.
 - The deploy key targets the intended Convex production deployment.
+- Review the local discovery boundary before enabling or changing any recurring
+  scheduler: `data/autodiscovery/`, `data/autodiscovery-backups/`, and
+  `data/autodiscovery-exports/` must be ignored and absent from the release
+  change set. Confirm retention and encrypted-backup ownership locally; do not
+  attach those records, browser profiles, or local exports to a deployment.
+- If a future explicit worker bridge is introduced, its credential has an
+  identified owner, is stored outside Git and systemd unit files, and has a
+  tested revocation/rotation procedure. This release has no worker token.
 - Convex warning and disable limits have been approved for the alpha budget;
   verify them without printing any credentials:
 
@@ -91,6 +99,22 @@ npm run release:smoke -- \
 
 Do not use `--skip-browser` for a production release. That flag exists only
 for narrow local diagnostics.
+
+## Local scheduler emergency stop
+
+For an unexpected collection run, source failure that could expose data, or a
+lost dedicated browser context, stop the local scheduler before changing a web
+deployment:
+
+```bash
+npm run scheduler:status -- --kill-switch on
+npm run scheduler:systemd -- uninstall
+```
+
+Verify the timer is inactive with `npm run scheduler:systemd -- status`. Do not
+export browser cookies or tokens to restore the context. Recover with a new
+dedicated context, a manually reviewed HTTPS allowlist, and one successful
+manual metadata-only run; see [[INCIDENT_RESPONSE]].
 
 ## Rollback
 

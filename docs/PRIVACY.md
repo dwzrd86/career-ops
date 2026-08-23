@@ -25,6 +25,21 @@ This is a product notice for an invited alpha, not legal advice. It must be
 reviewed by qualified counsel before public use or before the data practices
 change.
 
+## Local discovery boundary
+
+The separately installed local discovery tools keep their discovered-job
+workspace on the user's device. This may include locally retained job-detail
+snapshots, Target Profile form values, and generated review materials. The
+hosted alpha neither receives nor manages that workspace, so deleting a hosted
+account does not delete local records, local backups, or local exports.
+
+Local discovery data has no automatic retention period: the local owner must
+choose a retention period, review it before enabling a recurring scheduler, and
+delete or securely retain the workspace accordingly. An owner who wants a
+backup should use an encrypted local destination, keep the backup key separate,
+and never include a browser profile, cookies, tokens, passwords, or provider
+credentials. See [[SECURITY]] and `DATA_CONTRACT.md` for the local boundary.
+
 ## What the alpha does
 
 The hosted alpha provides verified email/password accounts, a private manual

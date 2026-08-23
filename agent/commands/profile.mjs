@@ -21,7 +21,7 @@ function usage() {
 
 Commands:
   init       Create config/target-profile.yml from the committed example
-  show       Print the validated local Target Profile as YAML
+  show       Print a metadata-only summary of the local Target Profile
   validate   Validate config/target-profile.yml
   edit       Open a loopback-only editor at a tokenized local URL
 `);
@@ -30,6 +30,22 @@ Commands:
 function fail(error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
+}
+
+/** Keep private form values and evidence paths out of captured command output. */
+function profileSummary(profile) {
+  return {
+    schemaVersion: profile.schemaVersion,
+    profileVersion: profile.profileVersion,
+    updatedAt: profile.updatedAt,
+    targetRoleCount: profile.targetRoles.length,
+    discovery: {
+      enabled: profile.discovery.enabled,
+      schedule: profile.discovery.schedule,
+      sourceCount: profile.discovery.sources.length,
+      interceptorEnabled: profile.discovery.sources.includes("interceptor"),
+    },
+  };
 }
 
 function json(response, status, body) {
@@ -100,17 +116,17 @@ function startEditor() {
 try {
   if (command === "help" || command === "--help" || command === "-h") usage();
   else if (command === "init") {
-    if (existsSync(profilePath)) throw new Error(`${profilePath} already exists; use edit or validate instead`);
+    if (existsSync(profilePath)) throw new Error("Target Profile already exists; use edit or validate instead");
     copyFileSync(templatePath, profilePath, 0);
     chmodSync(profilePath, 0o600);
-    console.log(`Created ${profilePath}`);
+    console.log("Created Target Profile.");
   } else if (command === "show") {
     const profile = loadTargetProfile(profilePath);
-    if (profile === null) throw new Error(`${profilePath} does not exist; run npm run profile -- init`);
-    console.log(readFileSync(profilePath, "utf8"));
+    if (profile === null) throw new Error("Target Profile does not exist; run npm run profile -- init");
+    console.log(JSON.stringify(profileSummary(profile), null, 2));
   } else if (command === "validate") {
     const profile = loadTargetProfile(profilePath);
-    if (profile === null) throw new Error(`${profilePath} does not exist; run npm run profile -- init`);
+    if (profile === null) throw new Error("Target Profile does not exist; run npm run profile -- init");
     console.log(`Target Profile is valid: ${profile.targetRoles.length} target role(s), version ${profile.schemaVersion}`);
   } else if (command === "edit") startEditor();
   else {

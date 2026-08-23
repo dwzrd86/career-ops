@@ -25,6 +25,50 @@ Career-Ops contains a local job-search workspace alongside a hosted alpha. Keep 
 | Secrets and access material | `.env*`, Netlify and Convex tokens/deploy keys, generated `.convex-home/` credentials, browser profiles | Keep outside Git and logs. Use provider secret stores and rotate if exposed. |
 | Test identities | Production test accounts, real email inboxes, job-board credentials | Do not create or commit them. Use isolated, disposable test identities only when necessary. |
 
+## Local-agent output audit
+
+Local collection, matching, scheduling, and evaluation remain private-device
+operations. Their ordinary terminal and scheduler outputs are restricted to
+counts, stable error codes, safe record identifiers, and bounded role/review
+metadata. They must not emit raw resume content, raw job-description content,
+browser cookies or tokens, application answers, or captured page text.
+
+`npm run profile -- show` is deliberately metadata-only: it reports versions,
+counts, and discovery state rather than Target Profile form values or evidence
+paths. The loopback Profile editor is the only supported interactive surface
+for those values. Its temporary URL token is usable only while that local
+process runs; do not paste the URL into a ticket, chat, shell history, or log.
+
+The daily-shortlist projection remains local unless a separate authenticated
+bridge is deliberately invoked. Its optional Convex-compatible payload is
+limited to the fields enforced by `discovery:project`; local paths, raw content,
+form values, draft materials, application answers, and browser state are
+excluded. Backend and browser diagnostics use the metadata-only event contract
+in `errorReporting`; do not add exception messages, request payloads, stack
+traces, or full URLs to it.
+
+## Local discovery retention and recovery
+
+The ignored `data/autodiscovery/` workspace has no automatic retention or
+remote deletion path. The local owner chooses its retention period and may
+delete it only after confirming that active review/evaluation work is no longer
+needed. Back up the workspace only to an encrypted local destination such as
+`data/autodiscovery-backups/`; restoration must be tested in a separate private
+directory. Local exports belong in `data/autodiscovery-exports/`, remain
+ignored, and require a content review before sharing.
+
+The Interceptor must use a dedicated, manually managed browser context. If it
+is lost, expired, or corrupt, leave collection blocked, create a new dedicated
+context, sign in manually if the source requires it, and re-enter only its safe
+context identifier and HTTPS allowlist. Never restore it by exporting cookies,
+storage, passwords, or session tokens from a personal browser.
+
+No local evaluation worker credential exists in this release. If a future
+explicit worker bridge requires one, treat it as a server secret: keep it in a
+masked provider/local secret store outside systemd unit files and Git, rotate it
+on suspected exposure or operator change, revoke the old value, and run the
+release checks before re-enabling the bridge.
+
 ## Supported deployment flow
 
 The supported production path is [[RELEASE_RUNBOOK]]. Netlify runs `npx convex deploy --cmd 'npm run build'`; the build guard rejects known development URLs and verifies the emitted bundle uses only the production Convex endpoint. Do not manually publish a frontend bundle or substitute a Convex URL.

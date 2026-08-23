@@ -201,6 +201,33 @@ context.
    The systemd timer is non-persistent, so a VM shutdown does not cause a
    surprise catch-up run on recovery.
 
+## Local discovery data or context loss
+
+**Trigger:** a local discovery workspace or backup may be exposed, deleted,
+corrupted, copied to the wrong destination, or the dedicated browser context is
+lost.
+
+1. Stop collection first with `npm run scheduler:status -- --kill-switch on`.
+   If runs are still scheduled, run `npm run scheduler:systemd -- uninstall`.
+   Verify the timer is inactive before inspecting or restoring any data.
+2. Do not upload, email, or attach the workspace, backup, browser profile, or
+   terminal output for diagnosis. Record only the approximate time, affected
+   local boundary, safe scheduler status, and whether browser credentials could
+   be involved.
+3. For a lost or corrupt browser context, create a new dedicated context and
+   authenticate manually. Do not recover it by exporting cookies, storage,
+   passwords, or session tokens from another browser profile.
+4. For a source failure, preserve the stable error code and source identifier,
+   keep the run blocked or failed, and inspect the approved collector adapter
+   with synthetic input. Do not capture raw page text, application answers, or
+   profile form values in logs or incident notes.
+5. Restore only an encrypted, owner-approved local backup into a separate
+   private directory. Confirm its file permissions and content boundary before
+   replacing a live workspace. If a worker token is ever introduced and might
+   be exposed, revoke and rotate it before the scheduler is re-enabled.
+6. Run one manual metadata-only collection and review its safe status before
+   disabling the kill switch or reinstalling the timer.
+
 ## Post-incident review
 
 Start the review after containment, no later than the next working cycle.

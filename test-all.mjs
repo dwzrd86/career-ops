@@ -237,7 +237,15 @@ const alphaPolicyDocuments = [
   },
   {
     path: 'docs/INCIDENT_RESPONSE.md',
-    required: ['# Jobbie alpha incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
+    required: ['# Jobbie alpha incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Local discovery data or context loss', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
+  },
+  {
+    path: 'docs/SECURITY.md',
+    required: ['# Security and data handling', 'Local-agent output audit', 'Local discovery retention and recovery', 'worker credential exists in this release'],
+  },
+  {
+    path: 'docs/RELEASE_RUNBOOK.md',
+    required: ['# Career-Ops web release runbook', 'Local scheduler emergency stop', 'data/autodiscovery-backups/', 'This release has no worker token.'],
   },
   {
     path: 'docs/ALPHA_OPERATIONS.md',
@@ -263,7 +271,8 @@ for (const { path, required } of alphaPolicyDocuments) {
 // context and raw job-detail storage.
 const localOnlyPaths = [
   'config/profile.yml', 'config/target-profile.yml', 'modes/_profile.md', 'portals.yml',
-  'data/autodiscovery/', 'agent/.local/', '.interceptor-isolated-profile/',
+  'data/autodiscovery/', 'data/autodiscovery-backups/', 'data/autodiscovery-exports/',
+  'agent/.local/', '.interceptor-isolated-profile/',
 ];
 for (const f of localOnlyPaths) {
   const tracked = run('git', ['ls-files', f]);

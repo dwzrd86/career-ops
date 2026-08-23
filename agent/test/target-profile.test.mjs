@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   TargetProfileValidationError,
@@ -57,6 +58,27 @@ test("requires a dedicated context and source allowlist when Interceptor is enab
   };
   errors = validateTargetProfile(profile);
   assert.deepEqual(errors, []);
+});
+
+test("profile show emits only metadata, never profile form values or local evidence paths", () => {
+  const directory = mkdtempSync(join(tmpdir(), "career-ops-profile-output-"));
+  const profilePath = join(directory, "target-profile.yml");
+  const profile = validProfile();
+  profile.criteria.notes = "Private narrative never belongs in command output";
+  profile.evidenceReferences[0].localPath = "private/resume.pdf";
+  saveTargetProfile(profile, profilePath);
+
+  const result = spawnSync(process.execPath, ["agent/commands/profile.mjs", "show"], {
+    cwd: resolve("."),
+    encoding: "utf8",
+    env: { ...process.env, CAREER_OPS_TARGET_PROFILE: profilePath },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const summary = JSON.parse(result.stdout);
+  assert.deepEqual(Object.keys(summary).sort(), ["discovery", "profileVersion", "schemaVersion", "targetRoleCount", "updatedAt"]);
+  assert.equal(summary.targetRoleCount, 1);
+  assert.doesNotMatch(result.stdout, /Private narrative|private\/resume\.pdf|Cloud Security Architect/);
 });
 
 test("rejects compensation targets below the salary floor", () => {

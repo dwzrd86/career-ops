@@ -32,6 +32,8 @@ modes/_profile.md
 
 # Local autonomous-discovery workspace and isolated browser profile
 data/autodiscovery/
+data/autodiscovery-backups/
+data/autodiscovery-exports/
 agent/.local/
 .interceptor-isolated-profile/
 

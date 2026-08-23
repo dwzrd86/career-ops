@@ -24,6 +24,8 @@ These files contain your personal data, customizations, and work product. Update
 | `output/*` | Your generated PDFs |
 | `jds/*` | Your saved job descriptions |
 | `data/autodiscovery/*` | Local discovery records, scan runs, matches, and material references |
+| `data/autodiscovery-backups/*` | Operator-created encrypted backups of the local discovery workspace |
+| `data/autodiscovery-exports/*` | Operator-created local exports; they are not a hosted projection or release artifact |
 
 ## System Layer (safe to auto-update)
 
@@ -71,3 +73,27 @@ These files contain system logic, scripts, templates, and instructions that impr
 **If a file is in the User Layer, no update process may read, modify, or delete it.**
 
 **If a file is in the System Layer, it can be safely replaced with the latest version from the upstream repo.**
+
+## Local discovery retention, backup, and export boundary
+
+`data/autodiscovery/` is a private local workspace, not a cache that an update,
+scheduler, or hosted account-deletion action may prune. It can contain
+discovered-job records, raw local job-detail snapshots, review artifacts,
+evaluation references, and scheduler state. Retain it only for the period the
+owner needs for their job search, then delete it locally using the owner's
+approved retention procedure.
+
+If the owner needs a backup, create an encrypted local backup in
+`data/autodiscovery-backups/`, keep the encryption key outside the repository,
+and test restoration into a separate private directory. Do not include an
+Interceptor browser profile, browser cookies, browser tokens, `.env` files, or
+provider credentials. Any local export belongs under
+`data/autodiscovery-exports/`, remains ignored, and must be reviewed before it
+leaves the device.
+
+The optional Convex discovery projection is a separate, explicit bridge. It
+may contain only its bounded metadata contract; it must never upload raw resume
+content, raw job-description content, local paths, Target Profile form values,
+browser state, application answers, or generated draft material. A hosted
+account export/deletion affects only hosted alpha records and does not alter
+the local discovery workspace or its backups.
