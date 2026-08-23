@@ -58,6 +58,28 @@ Set browser values in Netlify and server values in Convex. Never copy a server s
 
 Missing account-lifecycle configuration fails closed. Configure a real verified Resend sender and a production Turnstile hostname before a production cutover.
 
+### Provider configuration audit and rotation ownership
+
+The technical owner performs this audit by **name and scope only**. Never
+retrieve, print, or paste a secret value while auditing. The provider stores
+must mark deploy credentials and server secrets as masked/sealed; `VITE_*`
+values must be limited to public endpoints, public site keys, and release
+labels.
+
+| Provider | 2026-08-22 name/scope audit | Required disposition |
+| --- | --- | --- |
+| Netlify production | `CONVEX_DEPLOY_KEY` (Builds, masked); `NODE_VERSION` (Builds and post-processing) | Retain the deploy key only in the build scope; retain Node version as a non-secret build setting. No other Netlify production variables were configured. |
+| Convex production (`beaming-bass-637`) | `JWKS`, `JWT_PRIVATE_KEY`, `SITE_URL` | These are legacy identity settings. Do not remove or alter them until the documented production identity migration is approved. The Better Auth and enrollment variables in the table above are not yet configured in production. |
+
+The technical owner owns every secret in the required deployment-configuration
+table above. Rotate a server secret or deploy key through the provider's
+revocation-and-replacement flow on suspected exposure, loss of administrator
+access, or a provider-required rotation event; store the replacement only in
+the same provider secret store, remove the old value, then release through
+[[RELEASE_RUNBOOK]]. Follow the detailed sequence in
+[[INCIDENT_RESPONSE#Exposed credential rotation]]. Public `VITE_*` values are
+reviewed on every release rather than rotated as secrets.
+
 ### Production migration boundary
 
 The Better Auth component has been deployed and browser-validated only on the development Convex deployment. The production deployment remains on the legacy identity store until a migration is run. Legacy password hashes must not be copied into Better Auth or manually edited; production users require a controlled account migration and password-reset process that preserves their application-owned `users` and `jobs` ownership mappings. Do not deploy the Better Auth schema to production before that runbook and the account-export/deletion workflow are tested against a disposable deployment.

@@ -33,6 +33,17 @@ career files or credentials in a release branch or deployment.
 - Netlify has a production `CONVEX_DEPLOY_KEY` in its secret store and
   `CONVEX_DEV_DEPLOYMENT_URLS` lists every known development Convex URL.
 - The deploy key targets the intended Convex production deployment.
+- Convex warning and disable limits have been approved for the alpha budget;
+  verify them without printing any credentials:
+
+  ```bash
+  cd web
+  npx convex deployment usage-limits list --deployment beaming-bass-637
+  ```
+
+  Confirm in the Convex dashboard that warning notifications reach the current
+  technical owner and backup administrator. The CLI verifies configured limits;
+  recipient delivery is a provider-dashboard check.
 
 ## Release
 
@@ -65,6 +76,21 @@ curl --fail --silent --show-error https://your-site.example/assets/your-bundle.j
 Determine the current asset path from the first response before issuing the
 second command. A missing expected endpoint or an unexpected Convex endpoint is
 a failed release: stop and roll back.
+
+Run the release smoke test before marking the deploy ready. It validates the
+anonymous SPA shell, enforced security headers, entry-document and immutable
+asset caching, the single bundled Convex endpoint, an anonymous browser route,
+and the existing authenticated isolated-browser flow.
+
+```bash
+cd web
+npm run release:smoke -- \
+  --site https://your-site.example \
+  --expected-convex-url https://your-production-deployment.convex.cloud
+```
+
+Do not use `--skip-browser` for a production release. That flag exists only
+for narrow local diagnostics.
 
 ## Rollback
 
