@@ -1,0 +1,64 @@
+schemaVersion: 1
+profileVersion: 4
+updatedAt: 2026-08-23T12:00:00.000Z
+targetRoles:
+  - title: "Cloud Security Architect"
+    aliases:
+      - "Security Architect"
+    priority: primary
+    seniority:
+      - "Principal"
+location:
+  home: "Nashville, TN"
+  radiusMiles: 50
+  workplaceModes:
+    - remote
+    - hybrid
+  allowedRegions:
+    - "United States"
+  excludedRegions:
+    - "California"
+compensation:
+  floor: 180000
+  target: 220000
+  currency: USD
+  basis: annual
+eligibility:
+  workAuthorization:
+    - "United States work authorized"
+  clearance:
+    required: false
+    levels: []
+preferences:
+  industries:
+    - cybersecurity
+  excludedIndustries:
+    - gambling
+  companies:
+    - "Trusted Security"
+  excludedCompanies:
+    - "Excluded Corp"
+expertise:
+  frameworks:
+    - "NIST CSF"
+    - "ISO 27001"
+  cloudPlatforms:
+    - AWS
+    - Azure
+  tools:
+    - IAM
+  skills:
+    - "Security architecture"
+criteria:
+  mustHave:
+    - "Security architecture ownership"
+  dealBreakers:
+    - "24/7 on-call"
+  notes: "Fixture profile only."
+evidenceReferences: []
+discovery:
+  sources:
+    - greenhouse
+  schedule: manual
+  maxPerRun: 10
+  enabled: true

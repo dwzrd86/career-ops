@@ -78,10 +78,12 @@ test("rejects invalid normalized records and unknown fields", () => {
   job.role.workplaceMode = "distributed";
   job.lifecycle = "deleted";
   job.untracked = true;
+  job.evidence = { frameworks: ["NIST CSF"], unexpected: true };
   const errors = validateDiscoveredJob(job);
   assert.ok(errors.some((error) => error.includes("workplaceMode")));
   assert.ok(errors.some((error) => error.includes("lifecycle")));
   assert.ok(errors.some((error) => error.includes("untracked")));
+  assert.ok(errors.some((error) => error.includes("evidence.unexpected")));
   assert.throws(() => saveDiscoveredJob(job, mkdtempSync(join(tmpdir(), "career-ops-invalid-"))), DiscoveredJobValidationError);
 
   const decision = validDecision();

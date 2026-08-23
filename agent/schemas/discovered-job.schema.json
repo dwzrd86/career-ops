@@ -35,6 +35,17 @@
       },
       "additionalProperties": false
     },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "seniority": { "type": ["string", "null"], "minLength": 1 },
+        "frameworks": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 } },
+        "cloudPlatforms": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 } },
+        "expertise": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 } },
+        "requirements": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
     "description": {
       "type": "object",
       "required": ["sha256", "localPath"],

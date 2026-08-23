@@ -2,7 +2,7 @@
 
 ## Status
 
-**Program state:** Phase 1 complete; explainable matching is next.
+**Program state:** Phase 2 complete; browser collection, normalization, and deduplication are next.
 
 **Goal:** a single-user, local-first Cyber/GRC/cloud job-search agent that
 discovers and ranks roles for Dee, preserves a private pipeline, generates
@@ -32,7 +32,7 @@ reviewable materials, and never submits applications automatically.
 
 - [x] Phase 0: integration baseline and local-agent boundary
 - [x] Phase 1: Target Profile persistence and UI
-- [ ] Phase 2: explainable matching and rejection rules
+- [x] Phase 2: explainable matching and rejection rules
 - [ ] Phase 3: browser collection, normalization, and deduplication
 - [ ] Phase 4: private pipeline and review UI
 - [ ] Phase 5: scheduled scan runs, retries, history, and daily shortlist

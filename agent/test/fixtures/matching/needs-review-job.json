@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-needs-review-job",
+  "canonicalUrl": "https://boards.example.com/trusted-security/jobs/101",
+  "externalIds": { "fixture": "101" },
+  "source": { "provider": "manual", "identifier": "fixture", "sourceUrl": "https://boards.example.com/trusted-security" },
+  "role": {
+    "company": "Trusted Security",
+    "title": "Principal Cloud Security Architect",
+    "location": "Remote, United States",
+    "workplaceMode": "remote",
+    "employmentType": "full-time",
+    "industry": "cybersecurity",
+    "salary": null,
+    "workAuthorization": "unknown",
+    "clearance": "unknown"
+  },
+  "evidence": {
+    "seniority": "Principal",
+    "frameworks": ["NIST CSF"],
+    "cloudPlatforms": ["AWS"],
+    "expertise": ["IAM"],
+    "requirements": null
+  },
+  "description": { "sha256": "ff9d5d24e0d84f7c0954742ce4b911a3ba3d46eb4762e9e53bd055b8e9b8f11d", "localPath": "descriptions/fixture-needs-review-job.txt" },
+  "postedAt": "2026-08-23T12:00:00.000Z",
+  "discoveredAt": "2026-08-23T12:00:00.000Z",
+  "normalizedAt": "2026-08-23T12:00:00.000Z",
+  "lifecycle": "active"
+}

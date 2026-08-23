@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-ranked-job",
+  "canonicalUrl": "https://boards.example.com/trusted-security/jobs/102",
+  "externalIds": { "fixture": "102" },
+  "source": { "provider": "manual", "identifier": "fixture", "sourceUrl": "https://boards.example.com/trusted-security" },
+  "role": {
+    "company": "Trusted Security",
+    "title": "Principal Cloud Security Architect",
+    "location": "Nashville, TN, United States",
+    "workplaceMode": "hybrid",
+    "employmentType": "full-time",
+    "industry": "cybersecurity",
+    "salary": { "minimum": 190000, "maximum": 230000, "currency": "USD", "basis": "annual" },
+    "workAuthorization": "required",
+    "clearance": "not-required"
+  },
+  "evidence": {
+    "seniority": "Principal",
+    "frameworks": ["NIST CSF", "ISO 27001"],
+    "cloudPlatforms": ["AWS", "Azure"],
+    "expertise": ["IAM", "Security architecture"],
+    "requirements": []
+  },
+  "description": { "sha256": "80f8ebd7710c3d0c170ab13e9e61b92c0530da6e9033cc95cc936247359ce7dc", "localPath": "descriptions/fixture-ranked-job.txt" },
+  "postedAt": "2026-08-23T12:00:00.000Z",
+  "discoveredAt": "2026-08-23T12:00:00.000Z",
+  "normalizedAt": "2026-08-23T12:00:00.000Z",
+  "lifecycle": "active"
+}

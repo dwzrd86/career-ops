@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-rejected-job",
+  "canonicalUrl": "https://boards.example.com/trusted-security/jobs/100",
+  "externalIds": { "fixture": "100" },
+  "source": { "provider": "manual", "identifier": "fixture", "sourceUrl": "https://boards.example.com/trusted-security" },
+  "role": {
+    "company": "Excluded Corp",
+    "title": "Principal Cloud Security Architect",
+    "location": "Nashville, TN, United States",
+    "workplaceMode": "hybrid",
+    "employmentType": "full-time",
+    "industry": "cybersecurity",
+    "salary": { "minimum": 200000, "maximum": 230000, "currency": "USD", "basis": "annual" },
+    "workAuthorization": "required",
+    "clearance": "not-required"
+  },
+  "evidence": {
+    "seniority": "Principal",
+    "frameworks": ["NIST CSF", "ISO 27001"],
+    "cloudPlatforms": ["AWS", "Azure"],
+    "expertise": ["IAM", "Security architecture"],
+    "requirements": ["24/7 on-call rotation"]
+  },
+  "description": { "sha256": "b4c1d85f3ed6f84f143b457a5e6d6a26b99fc84a3998fbc4d5d58d6f193d0438", "localPath": "descriptions/fixture-rejected-job.txt" },
+  "postedAt": "2026-08-23T12:00:00.000Z",
+  "discoveredAt": "2026-08-23T12:00:00.000Z",
+  "normalizedAt": "2026-08-23T12:00:00.000Z",
+  "lifecycle": "active"
+}

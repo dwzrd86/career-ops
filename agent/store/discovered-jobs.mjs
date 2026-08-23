@@ -120,6 +120,21 @@ function validateRole(value, errors) {
   if (!knowledgeStates.has(value.clearance)) errors.push("role.clearance must be required, not-required, or unknown");
 }
 
+function validateEvidence(value, errors) {
+  if (value === undefined) return;
+  if (!requireObject(value, "evidence", errors)) return;
+  rejectUnknownKeys(value, new Set(["seniority", "frameworks", "cloudPlatforms", "expertise", "requirements"]), "evidence", errors);
+  if (value.seniority !== undefined) requireString(value.seniority, "evidence.seniority", errors, { nullable: true });
+  for (const field of ["frameworks", "cloudPlatforms", "expertise", "requirements"]) {
+    const entries = value[field];
+    if (entries === undefined) continue;
+    if (entries === null) continue;
+    if (!Array.isArray(entries) || entries.some((entry) => typeof entry !== "string" || entry.trim() === "")) {
+      errors.push(`evidence.${field} must be an array of non-empty strings or null`);
+    }
+  }
+}
+
 function validateDescriptionReference(value, errors) {
   if (!requireObject(value, "description", errors)) return;
   rejectUnknownKeys(value, new Set(["sha256", "localPath"]), "description", errors);
@@ -131,7 +146,7 @@ export function validateDiscoveredJob(job) {
   const errors = [];
   if (!isPlainObject(job)) return ["job must be an object"];
   rejectRawContent(job, "job", errors);
-  rejectUnknownKeys(job, new Set(["schemaVersion", "id", "canonicalUrl", "externalIds", "source", "role", "description", "postedAt", "discoveredAt", "normalizedAt", "lifecycle"]), "job", errors);
+  rejectUnknownKeys(job, new Set(["schemaVersion", "id", "canonicalUrl", "externalIds", "source", "role", "evidence", "description", "postedAt", "discoveredAt", "normalizedAt", "lifecycle"]), "job", errors);
   if (job.schemaVersion !== DISCOVERED_JOB_SCHEMA_VERSION) errors.push(`schemaVersion must equal ${DISCOVERED_JOB_SCHEMA_VERSION}`);
   validateRecordId(job.id, "id", errors);
   requireString(job.canonicalUrl, "canonicalUrl", errors, { pattern: URL_PATTERN });
@@ -145,6 +160,7 @@ export function validateDiscoveredJob(job) {
   }
 
   validateRole(job.role, errors);
+  validateEvidence(job.evidence, errors);
   validateDescriptionReference(job.description, errors);
   requireTimestamp(job.postedAt, "postedAt", errors, { nullable: true });
   requireTimestamp(job.discoveredAt, "discoveredAt", errors);
