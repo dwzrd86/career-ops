@@ -25,9 +25,15 @@ writing-samples/*
 # User config and customization (never auto-updated)
 config/profile.yml
 portals.yml
+config/target-profile.yml
 modes/_profile.md
 .update-dismissed
 .update-lock
+
+# Local autonomous-discovery workspace and isolated browser profile
+data/autodiscovery/
+agent/.local/
+.interceptor-isolated-profile/
 
 # Secrets and generated credentials (never commit — use examples as templates)
 .env*

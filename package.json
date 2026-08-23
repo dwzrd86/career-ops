@@ -15,6 +15,8 @@
     "rollback": "node update-system.mjs rollback",
     "liveness": "node check-liveness.mjs",
     "scan": "node scan.mjs",
+    "profile": "node agent/commands/profile.mjs",
+    "test:target-profile": "node --test agent/test/target-profile.test.mjs agent/test/target-profile-editor.test.mjs",
     "security:regression": "npm --prefix web run test:security-regression",
     "gemini:eval": "node gemini-eval.mjs"
   },

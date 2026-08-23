@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Career Ops Target Profile</title>
+    <style>
+      :root { color: #172033; background: #f4f6f8; font-family: system-ui, sans-serif; }
+      body { margin: 0; }
+      main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+      h1 { margin: 0; font-size: 28px; } p { line-height: 1.5; }
+      form { display: grid; gap: 18px; margin-top: 24px; }
+      fieldset { border: 1px solid #c7cdd6; background: #fff; padding: 18px; }
+      legend { font-weight: 700; padding: 0 6px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+      label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+      input, select, textarea, button { font: inherit; }
+      input, select, textarea { border: 1px solid #9ba6b4; border-radius: 4px; box-sizing: border-box; padding: 9px; width: 100%; }
+      textarea { min-height: 82px; resize: vertical; }
+      .hint, #status { color: #4f5d70; font-size: 13px; font-weight: 400; }
+      .checkboxes { display: flex; flex-wrap: wrap; gap: 12px; }
+      .checkboxes label { display: flex; align-items: center; gap: 5px; font-weight: 400; }
+      .checkboxes input { width: auto; }
+      button { background: #0563bb; border: 1px solid #04549e; border-radius: 4px; color: #fff; cursor: pointer; padding: 10px 16px; width: fit-content; }
+      button:disabled { cursor: wait; opacity: .6; }
+      #status.error { color: #ad1d1d; } #status.success { color: #146c43; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Target Profile</h1>
+      <p>Local-only preferences for discovery and matching. Resume and evidence references remain paths on this machine.</p>
+      <form id="profile-form">
+        <fieldset><legend>Role targets</legend><div class="grid">
+          <label>Target roles <textarea name="roles" placeholder="Cloud Security Architect&#10;Director of Security Architecture"></textarea><span class="hint">One title per line.</span></label>
+          <label>Seniority <textarea name="seniority" placeholder="Principal&#10;Director"></textarea><span class="hint">Applied to every listed role in this MVP.</span></label>
+        </div></fieldset>
+        <fieldset><legend>Location and compensation</legend><div class="grid">
+          <label>Home location <input name="home" /></label><label>Radius in miles <input name="radiusMiles" inputmode="numeric" min="0" type="number" /></label>
+          <label>Allowed regions <textarea name="allowedRegions" placeholder="United States"></textarea><label>Excluded regions <textarea name="excludedRegions"></textarea></label>
+          <label>Salary floor <input name="floor" inputmode="numeric" min="0" type="number" /></label><label>Target compensation <input name="target" inputmode="numeric" min="0" type="number" /></label>
+        </div><div class="checkboxes" aria-label="Workplace modes"><label><input name="workplaceModes" type="checkbox" value="remote" />Remote</label><label><input name="workplaceModes" type="checkbox" value="hybrid" />Hybrid</label><label><input name="workplaceModes" type="checkbox" value="onsite" />On-site</label></div></fieldset>
+        <fieldset><legend>Eligibility</legend><div class="grid">
+          <label>Work authorization <textarea name="workAuthorization"></textarea></label><label>Clearance levels <textarea name="clearanceLevels"></textarea></label>
+        </div><div class="checkboxes"><label><input name="clearanceRequired" type="checkbox" />Require a clearance</label></div></fieldset>
+        <fieldset><legend>Preferences and expertise</legend><div class="grid">
+          <label>Preferred industries <textarea name="industries"></textarea></label><label>Excluded industries <textarea name="excludedIndustries"></textarea></label>
+          <label>Preferred companies <textarea name="companies"></textarea></label><label>Excluded companies <textarea name="excludedCompanies"></textarea></label>
+          <label>Frameworks/compliance <textarea name="frameworks" placeholder="NIST CSF&#10;ISO 27001"></textarea></label><label>Cloud platforms <textarea name="cloudPlatforms" placeholder="AWS&#10;Azure"></textarea></label>
+          <label>Tools <textarea name="tools"></textarea></label><label>Skills <textarea name="skills"></textarea></label>
+        </div></fieldset>
+        <fieldset><legend>Decision rules and local evidence</legend><div class="grid">
+          <label>Must-have criteria <textarea name="mustHave"></textarea></label><label>Deal-breakers <textarea name="dealBreakers"></textarea></label>
+          <label>Evidence references <textarea name="evidenceReferences" placeholder="resume|cv.md|Primary resume&#10;portfolio|article-digest.md|Career evidence"></textarea><span class="hint">One line: kind|local path|label.</span></label>
+          <label>Notes <textarea name="notes"></textarea></label>
+        </div></fieldset>
+        <fieldset><legend>Discovery</legend><div class="grid">
+          <label>Schedule <select name="schedule"><option value="manual">Manual</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option></select></label>
+          <label>Maximum roles per run <input name="maxPerRun" inputmode="numeric" min="1" max="500" type="number" /></label>
+        </div><div class="checkboxes"><label><input name="sources" type="checkbox" value="greenhouse" />Greenhouse</label><label><input name="sources" type="checkbox" value="ashby" />Ashby</label><label><input name="sources" type="checkbox" value="lever" />Lever</label><label><input name="sources" type="checkbox" value="interceptor" />Interceptor (future collector)</label><label><input name="enabled" type="checkbox" />Discovery enabled</label></div></fieldset>
+        <button id="save" type="submit">Save Target Profile</button><output id="status" aria-live="polite"></output>
+      </form>
+    </main>
+    <script>
+      const form = document.querySelector('#profile-form');
+      const status = document.querySelector('#status');
+      const token = new URLSearchParams(location.hash.slice(1)).get('token');
+      let loadedProfileVersion = 0;
+      const split = (value) => value.split('\n').map((item) => item.trim()).filter(Boolean);
+      const join = (items) => (items || []).join('\n');
+      const checked = (name) => [...form.querySelectorAll(`[name="${name}"]:checked`)].map((input) => input.value);
+      const setChecked = (name, values) => form.querySelectorAll(`[name="${name}"]`).forEach((input) => { input.checked = (values || []).includes(input.value); });
+      const set = (name, value) => { form.elements[name].value = value ?? ''; };
+      const request = async (method, body) => {
+        const response = await fetch('/api/profile', { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+        const payload = await response.json();
+        if (!response.ok) throw new Error((payload.details || [payload.error]).join('; '));
+        return payload.profile;
+      };
+      const render = (profile) => {
+        loadedProfileVersion = profile.profileVersion;
+        set('roles', join(profile.targetRoles.map((role) => role.title))); set('seniority', join(profile.targetRoles[0]?.seniority));
+        set('home', profile.location.home); set('radiusMiles', profile.location.radiusMiles); set('allowedRegions', join(profile.location.allowedRegions)); set('excludedRegions', join(profile.location.excludedRegions)); setChecked('workplaceModes', profile.location.workplaceModes);
+        set('floor', profile.compensation.floor); set('target', profile.compensation.target);
+        set('workAuthorization', join(profile.eligibility.workAuthorization)); set('clearanceLevels', join(profile.eligibility.clearance.levels)); form.elements.clearanceRequired.checked = profile.eligibility.clearance.required;
+        for (const field of ['industries', 'excludedIndustries', 'companies', 'excludedCompanies']) set(field, join(profile.preferences[field]));
+        for (const field of ['frameworks', 'cloudPlatforms', 'tools', 'skills']) set(field, join(profile.expertise[field]));
+        set('mustHave', join(profile.criteria.mustHave)); set('dealBreakers', join(profile.criteria.dealBreakers)); set('notes', profile.criteria.notes);
+        set('evidenceReferences', profile.evidenceReferences.map((ref) => `${ref.kind}|${ref.localPath}|${ref.label}`).join('\n'));
+        set('schedule', profile.discovery.schedule); set('maxPerRun', profile.discovery.maxPerRun); setChecked('sources', profile.discovery.sources); form.elements.enabled.checked = profile.discovery.enabled;
+      };
+      const numberOrNull = (value) => value.trim() === '' ? null : Number(value);
+      const profileFromForm = () => {
+        const roles = split(form.elements.roles.value); const seniority = split(form.elements.seniority.value);
+        return { schemaVersion: 1, profileVersion: loadedProfileVersion, targetRoles: roles.map((title, index) => ({ title, aliases: [], priority: index === 0 ? 'primary' : 'secondary', seniority })),
+          location: { home: form.elements.home.value.trim(), radiusMiles: numberOrNull(form.elements.radiusMiles.value), workplaceModes: checked('workplaceModes'), allowedRegions: split(form.elements.allowedRegions.value), excludedRegions: split(form.elements.excludedRegions.value) },
+          compensation: { floor: numberOrNull(form.elements.floor.value), target: numberOrNull(form.elements.target.value), currency: 'USD', basis: 'annual' },
+          eligibility: { workAuthorization: split(form.elements.workAuthorization.value), clearance: { required: form.elements.clearanceRequired.checked, levels: split(form.elements.clearanceLevels.value) } },
+          preferences: Object.fromEntries(['industries', 'excludedIndustries', 'companies', 'excludedCompanies'].map((field) => [field, split(form.elements[field].value)])),
+          expertise: Object.fromEntries(['frameworks', 'cloudPlatforms', 'tools', 'skills'].map((field) => [field, split(form.elements[field].value)])),
+          criteria: { mustHave: split(form.elements.mustHave.value), dealBreakers: split(form.elements.dealBreakers.value), notes: form.elements.notes.value.trim() },
+          evidenceReferences: split(form.elements.evidenceReferences.value).map((line) => { const [kind, localPath, label] = line.split('|').map((part) => part.trim()); return { kind, localPath, label, updatedAt: null }; }),
+          discovery: { sources: checked('sources'), schedule: form.elements.schedule.value, maxPerRun: Number(form.elements.maxPerRun.value), enabled: form.elements.enabled.checked } };
+      };
+      form.addEventListener('submit', async (event) => { event.preventDefault(); const button = document.querySelector('#save'); button.disabled = true; status.className = ''; status.value = 'Saving...'; try { const profile = await request('PUT', profileFromForm()); render(profile); status.className = 'success'; status.value = `Saved at ${new Date(profile.updatedAt).toLocaleString()}`; } catch (error) { status.className = 'error'; status.value = error.message; } finally { button.disabled = false; } });
+      if (!token) { status.className = 'error'; status.value = 'Missing local editor capability token.'; document.querySelector('#save').disabled = true; } else request('GET').then(render).catch((error) => { status.className = 'error'; status.value = error.message; });
+    </script>
+  </body>
+</html>
