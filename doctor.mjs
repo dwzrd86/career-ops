@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = __dirname;
+const REQUIRED_NODE_MAJOR = 24;
 
 // ANSI colors (only on TTY)
 const isTTY = process.stdout.isTTY;
@@ -20,13 +21,13 @@ const dim = (s) => isTTY ? `\x1b[2m${s}\x1b[0m` : s;
 
 function checkNodeVersion() {
   const major = parseInt(process.versions.node.split('.')[0]);
-  if (major >= 18) {
-    return { pass: true, label: `Node.js >= 18 (v${process.versions.node})` };
+  if (major === REQUIRED_NODE_MAJOR) {
+    return { pass: true, label: `Node.js ${REQUIRED_NODE_MAJOR}.x (v${process.versions.node})` };
   }
   return {
     pass: false,
-    label: `Node.js >= 18 (found v${process.versions.node})`,
-    fix: 'Install Node.js 18 or later from https://nodejs.org',
+    label: `Node.js ${REQUIRED_NODE_MAJOR}.x required (found v${process.versions.node})`,
+    fix: `Install and select Node.js ${REQUIRED_NODE_MAJOR}.x from https://nodejs.org`,
   };
 }
 

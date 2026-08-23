@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -42,13 +43,14 @@ async function stopEditor(child) {
 }
 
 test("loopback Target Profile editor saves a validated local profile", async () => {
-  const directory = mkdtempSync(join(repositoryRoot, "agent/.local/editor-test-"));
+  const directory = mkdtempSync(join(tmpdir(), "career-ops-editor-test-"));
   const profilePath = join(directory, "target-profile.yml");
   const editor = startEditor(profilePath);
   const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext();
 
   try {
-    const page = await browser.newPage();
+    const page = await context.newPage();
     await page.goto(await editor.url());
     await page.locator('textarea[name="roles"]').fill("Cloud Security Architect");
     await page.locator('textarea[name="seniority"]').fill("Principal");
@@ -64,7 +66,9 @@ test("loopback Target Profile editor saves a validated local profile", async () 
     assert.deepEqual(profile.location.allowedRegions, ["United States"]);
     assert.deepEqual(profile.discovery.sources, ["greenhouse", "ashby", "lever"]);
   } finally {
+    await context.close();
     await browser.close();
     await stopEditor(editor.child);
+    rmSync(directory, { recursive: true, force: true });
   }
 });

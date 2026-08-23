@@ -25,10 +25,12 @@ async function main() {
   const baseUrl = server.resolvedUrls?.local.find((url) => url.startsWith("http://127.0.0.1"));
   if (!baseUrl) failure("local test server did not expose a loopback URL");
   let browser;
+  let context;
 
   try {
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+    context = await browser.newContext();
+    const page = await context.newPage();
     page.setDefaultTimeout(5_000);
     await page.route("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", async (route) => {
       await route.fulfill({
@@ -100,6 +102,7 @@ async function main() {
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");
     console.log("Isolated browser flow passed");
   } finally {
+    await context?.close();
     await browser?.close();
     await server.close();
   }

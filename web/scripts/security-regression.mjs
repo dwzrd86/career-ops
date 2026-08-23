@@ -7,6 +7,7 @@ const webDirectory = resolve(scriptDirectory, "..");
 const productionUrl = "https://security-regression-production.convex.cloud";
 const developmentUrl = "https://security-regression-development.convex.cloud";
 const turnstileSiteKey = "1x00000000000000000000AA";
+const REQUIRED_NODE_MAJOR = 24;
 
 const checks = [
   {
@@ -42,6 +43,12 @@ const checks = [
 
 const failures = [];
 console.log("Security regression: starting");
+
+const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
+if (nodeMajor !== REQUIRED_NODE_MAJOR) {
+  console.error(`Security regression requires Node.js ${REQUIRED_NODE_MAJOR}.x (found v${process.versions.node}).`);
+  process.exit(1);
+}
 
 for (const check of checks) {
   const result = spawnSync(check.command, check.args, {

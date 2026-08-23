@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
 const QUICK = process.argv.includes('--quick');
+const REQUIRED_NODE_MAJOR = 24;
 
 let passed = 0;
 let failed = 0;
@@ -42,13 +43,37 @@ function run(cmd, args = [], opts = {}) {
 function fileExists(path) { return existsSync(join(ROOT, path)); }
 function readFile(path) { return readFileSync(join(ROOT, path), 'utf-8'); }
 
+function filesMatching(directory, predicate) {
+  const absoluteDirectory = join(ROOT, directory);
+  if (!existsSync(absoluteDirectory)) return [];
+  return readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = join(directory, entry.name);
+    if (entry.isDirectory()) return filesMatching(relativePath, predicate);
+    return predicate(relativePath) ? [relativePath] : [];
+  });
+}
+
 console.log('\n🧪 career-ops test suite\n');
 
-// ── 1. SYNTAX CHECKS ────────────────────────────────────────────
+// ── 1. RUNTIME ─────────────────────────────────────────────────
 
-console.log('1. Syntax checks');
+console.log('1. Runtime');
 
-const mjsFiles = readdirSync(ROOT).filter(f => f.endsWith('.mjs'));
+const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
+if (nodeMajor === REQUIRED_NODE_MAJOR) {
+  pass(`Node.js ${REQUIRED_NODE_MAJOR}.x is active (v${process.versions.node})`);
+} else {
+  fail(`Node.js ${REQUIRED_NODE_MAJOR}.x is required for the release gate (found v${process.versions.node})`);
+}
+
+// ── 2. SYNTAX CHECKS ────────────────────────────────────────────
+
+console.log('\n2. Syntax checks');
+
+const mjsFiles = [
+  ...readdirSync(ROOT).filter(f => f.endsWith('.mjs')),
+  ...filesMatching('agent', (path) => path.endsWith('.mjs')),
+];
 for (const f of mjsFiles) {
   const result = run('node', ['--check', f]);
   if (result !== null) {
@@ -58,9 +83,9 @@ for (const f of mjsFiles) {
   }
 }
 
-// ── 2. SCRIPT EXECUTION ─────────────────────────────────────────
+// ── 3. SCRIPT EXECUTION ─────────────────────────────────────────
 
-console.log('\n2. Script execution (graceful on empty data)');
+console.log('\n3. Script execution (graceful on empty data)');
 
 const scripts = [
   { name: 'cv-sync-check.mjs', expectExit: 1, allowFail: true }, // fails without cv.md (normal in repo)
@@ -82,9 +107,34 @@ for (const { name, allowFail } of scripts) {
   }
 }
 
-// ── 3. LIVENESS CLASSIFICATION ──────────────────────────────────
+// ── 4. AUTODISCOVERY TEST SUITE ─────────────────────────────────
 
-console.log('\n3. Liveness classification');
+console.log('\n4. Autonomous-discovery fixture suite');
+
+const agentTests = filesMatching('agent/test', (path) => path.endsWith('.test.mjs'));
+const requiredAgentTests = [
+  'agent/test/target-profile.test.mjs',
+  'agent/test/matching.test.mjs',
+  'agent/test/collectors.test.mjs',
+  'agent/test/scheduler.test.mjs',
+  'agent/test/interceptor.test.mjs',
+  'agent/test/evaluation.test.mjs',
+];
+const missingAgentTests = requiredAgentTests.filter((path) => !agentTests.includes(path));
+if (missingAgentTests.length > 0) {
+  fail(`Missing required autonomous-discovery test coverage: ${missingAgentTests.join(', ')}`);
+} else {
+  const result = run('node', ['--test', ...agentTests], { timeout: 120000, stdio: ['pipe', 'pipe', 'pipe'] });
+  if (result !== null) {
+    pass(`Autonomous-discovery fixture suite passed (${agentTests.length} files)`);
+  } else {
+    fail('Autonomous-discovery fixture suite failed');
+  }
+}
+
+// ── 5. LIVENESS CLASSIFICATION ──────────────────────────────────
+
+console.log('\n5. Liveness classification');
 
 try {
   const { classifyLiveness } = await import(pathToFileURL(join(ROOT, 'liveness-core.mjs')).href);
@@ -137,10 +187,10 @@ try {
   fail(`Liveness classification tests crashed: ${e.message}`);
 }
 
-// ── 4. DASHBOARD BUILD ──────────────────────────────────────────
+// ── 6. DASHBOARD BUILD ──────────────────────────────────────────
 
 if (!QUICK) {
-  console.log('\n4. Dashboard build');
+  console.log('\n6. Dashboard build');
   const goBuild = run('cd dashboard && go build -o /tmp/career-dashboard-test . 2>&1');
   if (goBuild !== null) {
     pass('Dashboard compiles');
@@ -148,12 +198,12 @@ if (!QUICK) {
     fail('Dashboard build failed');
   }
 } else {
-  console.log('\n4. Dashboard build (skipped --quick)');
+  console.log('\n6. Dashboard build (skipped --quick)');
 }
 
-// ── 5. DATA CONTRACT ────────────────────────────────────────────
+// ── 7. DATA CONTRACT ────────────────────────────────────────────
 
-console.log('\n5. Data contract validation');
+console.log('\n7. Data contract validation');
 
 // Check system files exist
 const systemFiles = [
@@ -209,24 +259,25 @@ for (const { path, required } of alphaPolicyDocuments) {
   }
 }
 
-// Check user files are NOT tracked (gitignored)
-const userFiles = [
-  'config/profile.yml', 'modes/_profile.md', 'portals.yml',
+// User-specific and local-agent state must both be ignored, including browser
+// context and raw job-detail storage.
+const localOnlyPaths = [
+  'config/profile.yml', 'config/target-profile.yml', 'modes/_profile.md', 'portals.yml',
+  'data/autodiscovery/', 'agent/.local/', '.interceptor-isolated-profile/',
 ];
-for (const f of userFiles) {
+for (const f of localOnlyPaths) {
   const tracked = run('git', ['ls-files', f]);
-  if (tracked === '') {
-    pass(`User file gitignored: ${f}`);
-  } else if (tracked === null) {
-    pass(`User file gitignored: ${f}`);
+  const ignored = run('git', ['check-ignore', '-q', f]);
+  if ((tracked === '' || tracked === null) && ignored !== null) {
+    pass(`Local-only path is untracked and ignored: ${f}`);
   } else {
-    fail(`User file IS tracked (should be gitignored): ${f}`);
+    fail(`Local-only path must be untracked and ignored: ${f}`);
   }
 }
 
-// ── 6. PERSONAL DATA LEAK CHECK ─────────────────────────────────
+// ── 8. PERSONAL DATA LEAK CHECK ─────────────────────────────────
 
-console.log('\n6. Personal data leak check');
+console.log('\n8. Personal data leak check');
 
 const leakPatterns = [
   'Santiago', 'santifer.io', 'Santifer iRepair', 'Zinkee', 'ALMAS',
@@ -277,9 +328,9 @@ if (!leakFound) {
   pass('No personal data leaks outside allowed files');
 }
 
-// ── 7. ABSOLUTE PATH CHECK ──────────────────────────────────────
+// ── 9. ABSOLUTE PATH CHECK ──────────────────────────────────────
 
-console.log('\n7. Absolute path check');
+console.log('\n9. Absolute path check');
 
 // Same git grep approach: only scans tracked files. Untracked AI tool
 // outputs, local debate artifacts, etc. can't false-positive here.
@@ -294,9 +345,9 @@ if (!absPathResult) {
   }
 }
 
-// ── 8. MODE FILE INTEGRITY ──────────────────────────────────────
+// ── 10. MODE FILE INTEGRITY ─────────────────────────────────────
 
-console.log('\n8. Mode file integrity');
+console.log('\n10. Mode file integrity');
 
 const expectedModes = [
   '_shared.md', '_profile.template.md', 'oferta.md', 'pdf.md', 'scan.md',
@@ -320,9 +371,9 @@ if (shared.includes('_profile.md')) {
   fail('_shared.md does NOT reference _profile.md');
 }
 
-// ── 9. CLAUDE.md INTEGRITY ──────────────────────────────────────
+// ── 11. CLAUDE.md INTEGRITY ─────────────────────────────────────
 
-console.log('\n9. CLAUDE.md integrity');
+console.log('\n11. CLAUDE.md integrity');
 
 const claude = readFile('CLAUDE.md');
 const requiredSections = [
@@ -339,9 +390,9 @@ for (const section of requiredSections) {
   }
 }
 
-// ── 10. VERSION FILE ─────────────────────────────────────────────
+// ── 12. VERSION FILE ────────────────────────────────────────────
 
-console.log('\n10. Version file');
+console.log('\n12. Version file');
 
 if (fileExists('VERSION')) {
   const version = readFile('VERSION').trim();

@@ -22,6 +22,7 @@
     "test:collectors": "node --test agent/test/collectors.test.mjs agent/test/interceptor.test.mjs",
     "test:scheduler": "node --test agent/test/scheduler.test.mjs agent/test/scheduler-systemd.test.mjs agent/test/daily-shortlist.test.mjs",
     "test:evaluation": "node --test agent/test/evaluation.test.mjs",
+    "test:agent": "node --test agent/test/*.test.mjs",
     "scheduler": "node agent/daemon.mjs",
     "scheduler:status": "node agent/commands/status.mjs",
     "scheduler:systemd": "node agent/commands/scheduler-systemd.mjs",
