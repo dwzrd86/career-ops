@@ -11,6 +11,41 @@ const jobStatus = v.union(
   v.literal("discarded"),
 );
 
+const discoverySourceProvider = v.union(
+  v.literal("greenhouse"),
+  v.literal("ashby"),
+  v.literal("lever"),
+  v.literal("interceptor"),
+  v.literal("manual"),
+);
+
+const discoveryFreshness = v.union(
+  v.literal("fresh"),
+  v.literal("stale"),
+  v.literal("unknown"),
+  v.literal("expired"),
+);
+
+const discoveryReviewStatus = v.union(
+  v.literal("discovered"),
+  v.literal("shortlisted"),
+  v.literal("archived"),
+  v.literal("approvedForEvaluation"),
+);
+
+const discoveryDecisionOutcome = v.union(
+  v.literal("rejected"),
+  v.literal("ranked"),
+  v.literal("needsReview"),
+);
+
+const hardFilterOutcome = v.union(
+  v.literal("pass"),
+  v.literal("fail"),
+  v.literal("unknown"),
+  v.literal("notApplicable"),
+);
+
 export default defineSchema({
   // Application-owned account metadata. Authentication credentials and sessions
   // are isolated in the Better Auth component; authId is its stable user id.
@@ -42,6 +77,61 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_created_at", ["createdAt"])
     .index("by_owner_created_at", ["ownerId", "createdAt"]),
+  // Local discovery records remain canonical. This is a deliberately narrow,
+  // owner-scoped projection for the private review UI: no resume/JD content,
+  // browser data, local paths, or component-auth records are stored here.
+  discoveredJobs: defineTable({
+    ownerId: v.id("users"),
+    localJobId: v.string(),
+    company: v.string(),
+    title: v.string(),
+    location: v.optional(v.string()),
+    url: v.string(),
+    source: v.object({
+      label: v.string(),
+      provider: discoverySourceProvider,
+    }),
+    freshness: v.object({
+      checkedAt: v.number(),
+      postedAt: v.optional(v.number()),
+      status: discoveryFreshness,
+    }),
+    reviewStatus: discoveryReviewStatus,
+    discoveredAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner_local_job", ["ownerId", "localJobId"])
+    .index("by_owner_discovered_at", ["ownerId", "discoveredAt"])
+    .index("by_owner_review_status", ["ownerId", "reviewStatus"]),
+  discoveryMatchDecisions: defineTable({
+    ownerId: v.id("users"),
+    discoveredJobId: v.id("discoveredJobs"),
+    profileVersion: v.number(),
+    outcome: discoveryDecisionOutcome,
+    score: v.optional(v.number()),
+    hardFilters: v.array(v.object({
+      outcome: hardFilterOutcome,
+      reasonCode: v.string(),
+      ruleId: v.string(),
+    })),
+    explanationCodes: v.array(v.string()),
+    decidedAt: v.number(),
+  }).index("by_owner_job_decided_at", ["ownerId", "discoveredJobId", "decidedAt"]),
+  discoveryStatusHistory: defineTable({
+    ownerId: v.id("users"),
+    discoveredJobId: v.id("discoveredJobs"),
+    previousStatus: v.optional(discoveryReviewStatus),
+    status: discoveryReviewStatus,
+    occurredAt: v.number(),
+  }).index("by_owner_job_occurred_at", ["ownerId", "discoveredJobId", "occurredAt"]),
+  discoveryReviewerOverrides: defineTable({
+    ownerId: v.id("users"),
+    discoveredJobId: v.id("discoveredJobs"),
+    baseDecisionId: v.optional(v.id("discoveryMatchDecisions")),
+    outcome: discoveryDecisionOutcome,
+    reason: v.string(),
+    overriddenAt: v.number(),
+  }).index("by_owner_job_overridden_at", ["ownerId", "discoveredJobId", "overriddenAt"]),
   // This table intentionally stores an HMAC-derived address key, never an email address.
   authAbuseLimits: defineTable({
     action: v.union(

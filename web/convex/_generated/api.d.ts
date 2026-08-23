@@ -11,6 +11,7 @@
 import type * as abuse from "../abuse.js";
 import type * as account from "../account.js";
 import type * as auth from "../auth.js";
+import type * as discovery from "../discovery.js";
 import type * as enrollment from "../enrollment.js";
 import type * as enrollmentCore from "../enrollmentCore.js";
 import type * as errorReporting from "../errorReporting.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   abuse: typeof abuse;
   account: typeof account;
   auth: typeof auth;
+  discovery: typeof discovery;
   enrollment: typeof enrollment;
   enrollmentCore: typeof enrollmentCore;
   errorReporting: typeof errorReporting;
