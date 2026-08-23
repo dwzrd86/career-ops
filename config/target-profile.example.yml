@@ -85,3 +85,9 @@ discovery:
   schedule: "manual"
   maxPerRun: 100
   enabled: true
+  # Interceptor stays disabled until this dedicated local browser context and
+  # exact HTTPS career-site allowlist are configured. This ID is not a cookie,
+  # password, or browser profile path.
+  interceptor:
+    contextId: null
+    allowedSources: []

@@ -42,7 +42,20 @@
     "expertise": { "type": "object" },
     "criteria": { "type": "object" },
     "evidenceReferences": { "type": "array" },
-    "discovery": { "type": "object" }
+    "discovery": {
+      "type": "object",
+      "properties": {
+        "interceptor": {
+          "type": "object",
+          "required": ["contextId", "allowedSources"],
+          "properties": {
+            "contextId": { "type": ["string", "null"] },
+            "allowedSources": { "type": "array", "items": { "type": "string", "format": "uri" } }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
   },
   "additionalProperties": false
 }

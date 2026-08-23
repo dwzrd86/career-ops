@@ -49,3 +49,55 @@ Target Profile version, safe error codes, and the bounded outcomes `active`,
 `expired`, `blocked`, `duplicate`, `rejected`, or `shortlisted`. Deduplication
 checks canonical URL, then the provider's external ID, then normalized
 company/title/location. All files in this local workspace are ignored by Git.
+
+## Interceptor collector setup
+
+Interceptor is an opt-in, local-only fallback for career sources without a
+public ATS feed. Before enabling it, create a separate Chrome profile named
+`Jobbie Discovery`, install/enable Interceptor only in that profile, and sign
+in manually only to sources you approve. Never pair Interceptor with a personal
+browser profile.
+
+In `config/target-profile.yml` (which is ignored and written with mode 0600),
+enable the `interceptor` source and configure its exact dedicated context ID
+plus each approved HTTPS career-site path:
+
+```yaml
+discovery:
+  sources: [greenhouse, ashby, lever, interceptor]
+  schedule: manual
+  maxPerRun: 100
+  enabled: true
+  interceptor:
+    contextId: jobbie-discovery-2026
+    allowedSources:
+      - https://careers.example.com/jobs
+```
+
+The allowlist applies to the URL path as well as the host: an entry permits the
+listed path and its descendants only. Do not allowlist login, apply, submit,
+account, or generic-home URLs.
+
+`readInterceptorCareerPage` accepts only a matching explicit context ID, an
+allowlisted URL, `listing` or `detail` page kind, and the fixed main-content
+selectors. Its injected local CLI adapter receives this one narrow request:
+
+```js
+{
+  action: "read-career-page",
+  contextId: "jobbie-discovery-2026",
+  url: "https://careers.example.com/jobs/123",
+  pageKind: "detail",
+  selectors: ["main", "[role=\"main\"]"]
+}
+```
+
+No other browser operation is available. In particular, the collector never
+requests or exports cookies, browser storage, history, passwords, credentials,
+or session data; it refuses apply/submit routes and selectors. The adapter must
+return `{ ok: true, page: { url, title, text } }` for a read. Treat missing
+context, login, CAPTCHA, access denial, and navigation errors as the returned
+bounded `blocked` outcome and fix the dedicated browser setup manually—never
+attempt a bypass, CAPTCHA solver, or credential export. Pass detail text
+directly to normalization so it remains only in ignored local snapshots, never
+in scan-run logs.

@@ -57,7 +57,7 @@
         <fieldset><legend>Discovery</legend><div class="grid">
           <label>Schedule <select name="schedule"><option value="manual">Manual</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option></select></label>
           <label>Maximum roles per run <input name="maxPerRun" inputmode="numeric" min="1" max="500" type="number" /></label>
-        </div><div class="checkboxes"><label><input name="sources" type="checkbox" value="greenhouse" />Greenhouse</label><label><input name="sources" type="checkbox" value="ashby" />Ashby</label><label><input name="sources" type="checkbox" value="lever" />Lever</label><label><input name="sources" type="checkbox" value="interceptor" />Interceptor (future collector)</label><label><input name="enabled" type="checkbox" />Discovery enabled</label></div></fieldset>
+        </div><div class="checkboxes"><label><input name="sources" type="checkbox" value="greenhouse" />Greenhouse</label><label><input name="sources" type="checkbox" value="ashby" />Ashby</label><label><input name="sources" type="checkbox" value="lever" />Lever</label><label><input name="sources" type="checkbox" value="interceptor" />Interceptor</label><label><input name="enabled" type="checkbox" />Discovery enabled</label></div><div class="grid"><label>Dedicated Interceptor context ID <input name="interceptorContextId" autocomplete="off" /><span class="hint">Use only the manually created Jobbie Discovery context.</span></label><label>Interceptor source allowlist <textarea name="interceptorAllowedSources" placeholder="https://careers.example.com/"></textarea><span class="hint">One exact HTTPS career-site URL/path per line. No login, apply, or submit URLs.</span></label></div></fieldset>
         <button id="save" type="submit">Save Target Profile</button><output id="status" aria-live="polite"></output>
       </form>
     </main>
@@ -88,6 +88,8 @@
         set('mustHave', join(profile.criteria.mustHave)); set('dealBreakers', join(profile.criteria.dealBreakers)); set('notes', profile.criteria.notes);
         set('evidenceReferences', profile.evidenceReferences.map((ref) => `${ref.kind}|${ref.localPath}|${ref.label}`).join('\n'));
         set('schedule', profile.discovery.schedule); set('maxPerRun', profile.discovery.maxPerRun); setChecked('sources', profile.discovery.sources); form.elements.enabled.checked = profile.discovery.enabled;
+        const interceptor = profile.discovery.interceptor || { contextId: null, allowedSources: [] };
+        set('interceptorContextId', interceptor.contextId || ''); set('interceptorAllowedSources', join(interceptor.allowedSources));
       };
       const numberOrNull = (value) => value.trim() === '' ? null : Number(value);
       const profileFromForm = () => {
@@ -100,7 +102,8 @@
           expertise: Object.fromEntries(['frameworks', 'cloudPlatforms', 'tools', 'skills'].map((field) => [field, split(form.elements[field].value)])),
           criteria: { mustHave: split(form.elements.mustHave.value), dealBreakers: split(form.elements.dealBreakers.value), notes: form.elements.notes.value.trim() },
           evidenceReferences: split(form.elements.evidenceReferences.value).map((line) => { const [kind, localPath, label] = line.split('|').map((part) => part.trim()); return { kind, localPath, label, updatedAt: null }; }),
-          discovery: { sources: checked('sources'), schedule: form.elements.schedule.value, maxPerRun: Number(form.elements.maxPerRun.value), enabled: form.elements.enabled.checked } };
+          discovery: { sources: checked('sources'), schedule: form.elements.schedule.value, maxPerRun: Number(form.elements.maxPerRun.value), enabled: form.elements.enabled.checked,
+            interceptor: { contextId: form.elements.interceptorContextId.value.trim() || null, allowedSources: split(form.elements.interceptorAllowedSources.value) } } };
       };
       form.addEventListener('submit', async (event) => { event.preventDefault(); const button = document.querySelector('#save'); button.disabled = true; status.className = ''; status.value = 'Saving...'; try { const profile = await request('PUT', profileFromForm()); render(profile); status.className = 'success'; status.value = `Saved at ${new Date(profile.updatedAt).toLocaleString()}`; } catch (error) { status.className = 'error'; status.value = error.message; } finally { button.disabled = false; } });
       if (!token) { status.className = 'error'; status.value = 'Missing local editor capability token.'; document.querySelector('#save').disabled = true; } else request('GET').then(render).catch((error) => { status.className = 'error'; status.value = error.message; });

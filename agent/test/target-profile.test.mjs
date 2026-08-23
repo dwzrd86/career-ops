@@ -44,6 +44,21 @@ test("rejects a profile without a target role or with invalid discovery controls
   assert.throws(() => saveTargetProfile(profile, join(tmpdir(), "invalid-target-profile.yml")), TargetProfileValidationError);
 });
 
+test("requires a dedicated context and source allowlist when Interceptor is enabled", () => {
+  const profile = validProfile();
+  profile.discovery.sources.push("interceptor");
+  let errors = validateTargetProfile(profile);
+  assert.ok(errors.some((error) => error.includes("contextId is required")));
+  assert.ok(errors.some((error) => error.includes("allowedSources is required")));
+
+  profile.discovery.interceptor = {
+    contextId: "jobbie-discovery-2026",
+    allowedSources: ["https://careers.example.test/jobs"],
+  };
+  errors = validateTargetProfile(profile);
+  assert.deepEqual(errors, []);
+});
+
 test("rejects compensation targets below the salary floor", () => {
   const profile = validProfile();
   profile.compensation.floor = 200000;

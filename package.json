@@ -19,7 +19,7 @@
     "test:target-profile": "node --test agent/test/target-profile.test.mjs agent/test/target-profile-editor.test.mjs",
     "test:discovered-jobs": "node --test agent/test/discovered-jobs.test.mjs",
     "test:matching": "node --test agent/test/matching.test.mjs agent/test/match-command.test.mjs",
-    "test:collectors": "node --test agent/test/collectors.test.mjs",
+    "test:collectors": "node --test agent/test/collectors.test.mjs agent/test/interceptor.test.mjs",
     "match": "node agent/commands/match.mjs",
     "security:regression": "npm --prefix web run test:security-regression",
     "gemini:eval": "node gemini-eval.mjs"

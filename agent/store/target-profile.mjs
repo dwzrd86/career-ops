@@ -9,6 +9,7 @@ const workplaceModes = new Set(["remote", "hybrid", "onsite"]);
 const priorities = new Set(["primary", "secondary", "adjacent"]);
 const discoverySources = new Set(["greenhouse", "ashby", "lever", "interceptor"]);
 const schedules = new Set(["manual", "daily", "weekdays"]);
+const INTERCEPTOR_CONTEXT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$/;
 
 export class TargetProfileValidationError extends Error {
   constructor(errors) {
@@ -31,7 +32,13 @@ export function emptyTargetProfile() {
     expertise: { frameworks: [], cloudPlatforms: [], tools: [], skills: [] },
     criteria: { mustHave: [], dealBreakers: [], notes: "" },
     evidenceReferences: [],
-    discovery: { sources: ["greenhouse", "ashby", "lever"], schedule: "manual", maxPerRun: 100, enabled: true },
+    discovery: {
+      sources: ["greenhouse", "ashby", "lever"],
+      schedule: "manual",
+      maxPerRun: 100,
+      enabled: true,
+      interceptor: { contextId: null, allowedSources: [] },
+    },
   };
 }
 
@@ -54,6 +61,33 @@ function requireStringArray(value, path, errors) {
 
 function requireOptionalMoney(value, path, errors) {
   if (value !== null && (!Number.isFinite(value) || value < 0)) errors.push(`${path} must be a non-negative number or null`);
+}
+
+function requireInterceptorConfiguration(value, sources, errors) {
+  if (value === undefined && (!Array.isArray(sources) || !sources.includes("interceptor"))) return;
+  if (!isPlainObject(value)) {
+    errors.push("discovery.interceptor must be an object");
+    return;
+  }
+  const allowedKeys = new Set(["contextId", "allowedSources"]);
+  for (const key of Object.keys(value)) if (!allowedKeys.has(key)) errors.push(`discovery.interceptor.${key} is not allowed`);
+  const validContext = value.contextId === null || (typeof value.contextId === "string" && INTERCEPTOR_CONTEXT_ID_PATTERN.test(value.contextId));
+  if (!validContext) errors.push("discovery.interceptor.contextId must be a safe context ID or null");
+  const validSources = requireStringArray(value.allowedSources, "discovery.interceptor.allowedSources", errors);
+  if (validSources) {
+    value.allowedSources.forEach((source, index) => {
+      try {
+        const url = new URL(source);
+        if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("not an HTTPS origin/path");
+      } catch {
+        errors.push(`discovery.interceptor.allowedSources[${index}] must be an HTTPS URL without credentials, query, or fragment`);
+      }
+    });
+  }
+  if (Array.isArray(sources) && sources.includes("interceptor")) {
+    if (value.contextId === null) errors.push("discovery.interceptor.contextId is required when Interceptor is enabled");
+    if (!Array.isArray(value.allowedSources) || value.allowedSources.length === 0) errors.push("discovery.interceptor.allowedSources is required when Interceptor is enabled");
+  }
 }
 
 export function validateTargetProfile(profile) {
@@ -128,6 +162,7 @@ export function validateTargetProfile(profile) {
     if (!schedules.has(profile.discovery.schedule)) errors.push("discovery.schedule must be manual, daily, or weekdays");
     if (!Number.isInteger(profile.discovery.maxPerRun) || profile.discovery.maxPerRun < 1 || profile.discovery.maxPerRun > 500) errors.push("discovery.maxPerRun must be an integer from 1 through 500");
     if (typeof profile.discovery.enabled !== "boolean") errors.push("discovery.enabled must be boolean");
+    requireInterceptorConfiguration(profile.discovery.interceptor, profile.discovery.sources, errors);
   }
 
   return errors;
