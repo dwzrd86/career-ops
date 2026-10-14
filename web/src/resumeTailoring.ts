@@ -35,3 +35,23 @@ export function draftChanges(source: string, draft: string) {
   const sourceLines = new Set(source.split(/\r?\n/).map(normalize));
   return [...new Set(draft.split(/\r?\n/).map(normalize).filter(line => line && !sourceLines.has(line)))];
 }
+
+// Literal evidence checks guide review; they do not establish factual accuracy.
+export function unsupportedDetails(source: string, draft: string) {
+  const contacts = /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}|https?:\/\/[^\s<>]+/gi;
+  const figures = /(?<![\p{L}\p{N}])[$€£]?\d+(?:[,.]\d+)*(?:\s?(?:%|percent\b|million\b|billion\b|thousand\b)|[kmb]\b)?(?![\p{L}\p{N}])/giu;
+  const extract = (text: string, pattern: RegExp) => [...text.matchAll(pattern)].map(match => match[0]);
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
+  const missing = (pattern: RegExp, stripContacts = false) => {
+    const clean = (text: string) => stripContacts ? text.replace(contacts, " ") : text;
+    const known = new Set(extract(clean(source), pattern).map(normalize));
+    const seen = new Set<string>();
+    return extract(clean(draft), pattern).filter(value => {
+      const key = normalize(value);
+      if (known.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  return { contacts: missing(contacts), figures: missing(figures, true) };
+}

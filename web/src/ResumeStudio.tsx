@@ -3,7 +3,7 @@ import { Download, FileText, Printer } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { functions, type Job } from "./convex";
 
-import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges } from "./resumeTailoring";
+import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges, unsupportedDetails } from "./resumeTailoring";
 
 export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const [jobId, setJobId] = useState("");
@@ -131,6 +131,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   importContext.current = { jobId, sourceResume, description, resume };
   useEffect(() => () => { importContext.current = null; }, []);
   const changes = useMemo(() => draftChanges(sourceResume, resume), [sourceResume, resume]);
+  const details = useMemo(() => unsupportedDetails(sourceResume, resume), [sourceResume, resume]);
   const newSkills = resumeTerms.filter(term => containsTerm(resume, term) && !containsTerm(sourceResume, term));
 
   async function generateDraft() {
@@ -215,6 +216,12 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
       </div>
       <div className="resume-draft">
         <label>Resume text<textarea aria-label="Resume text" disabled={!job || loading} rows={20} maxLength={40000} placeholder={"YOUR NAME\nEmail · Phone · Location\n\nSUMMARY\n\nEXPERIENCE\n\nEDUCATION\n\nSKILLS"} value={resume} onChange={(event) => { setResume(event.target.value); setReviewed(false); setDirty(true); setMessage(""); }} /></label>
+        {sourceResume.trim() && resume.trim() && (details.figures.length > 0 || details.contacts.length > 0) && <div className="resume-evidence" role="status">
+          <h3>Check details absent from your source</h3>
+          {details.figures.length > 0 && <p>Numbers, dates, or metrics: {details.figures.join(", ")}</p>}
+          {details.contacts.length > 0 && <p>Contact details or links: {details.contacts.join(", ")}</p>}
+          <p>Verify each detail against your original evidence or remove it. Formatting changes may also appear here; this check cannot verify facts.</p>
+        </div>}
         {sourceResume.trim() && resume.trim() && <details className="resume-evidence">
           <summary>Review {changes.length} changed or added lines against source</summary>
           <p>Check changed claims, dates, metrics, employers, and contact details against your original evidence. Wording changes can be valid; this comparison does not verify facts.</p>
