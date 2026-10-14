@@ -62,9 +62,17 @@ else console.log(${JSON.stringify(stream("Zoë Example\nSQL reporting"))});
     for (const mode of ["error", "timeout"]) {
       const failed = { ...options, out: join(directory, mode + ".txt"), send: true };
       await assert.rejects(runTailoring(failed, { executable, timeoutMs: mode === "timeout" ? 300 : 3000,
-        env: { ...process.env, FAKE_MODE: mode } }), /no draft saved/i);
+        env: { ...process.env, FAKE_MODE: mode } }), error => error.code === (mode === "timeout" ? "timeout" : "failed"));
       await assert.rejects(readFile(failed.out), /ENOENT/);
     }
     assert.deepEqual(await readdir(join(local, "resume-runs")), []);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("provider failures expose fixed actionable messages without private error details", () => {
+  for (const [statusCode, code] of [[401, "authentication"], [403, "authentication"], [429, "quota"], [500, "failed"]]) {
+    const event = JSON.stringify({ type: "error", error: { data: { statusCode, message: "SECRET evidence and credential" } } });
+    assert.throws(() => draftFromEvents(event), error => error.code === code && !error.message.includes("SECRET"));
+  }
+  assert.throws(() => draftFromEvents(JSON.stringify({ type: "step_start" })), error => error.code === "incomplete");
 });

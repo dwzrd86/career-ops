@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { ResumeGenerationError, providerFailure } from "./resume-generation-errors.mjs";
 import { access, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,12 +41,12 @@ export function draftFromEvents(stdout) {
     let event;
     try { event = JSON.parse(line); }
     catch { throw new Error("OpenCode returned an invalid event stream; no draft saved."); }
-    if (event.type === "error") throw new Error("OpenCode reported a provider error; check Coding Plan sign-in and quota. No draft saved.");
+    if (event.type === "error") throw providerFailure(event.error);
     if (event.type === "tool_use") throw new Error("The agent attempted a tool action; no draft saved.");
     if (event.type === "text" && typeof event.part?.text === "string") texts.push(event.part.text);
     if (event.type === "step_finish" && event.part?.reason === "stop") completed = true;
   }
-  if (!completed) throw new Error("OpenCode did not complete a draft; no partial output saved.");
+  if (!completed) throw new ResumeGenerationError("incomplete");
   const draft = parseResumeDraft(texts.join("\n"));
   if (/```/.test(draft)) throw new Error("The agent returned Markdown fences instead of a plain text resume; no draft saved.");
   return draft;
@@ -90,19 +91,19 @@ export async function runTailoring({ brief, out, model, send = false }, {
         "--agent", "resume-tailor", "--file", attachment, "--", "Tailor the attached factual resume brief."],
       { cwd: workspace, env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "", size = 0, failure;
-      const timer = setTimeout(() => { failure = "OpenCode timed out; no draft saved."; child.kill("SIGKILL"); }, timeoutMs);
+      const timer = setTimeout(() => { failure = new ResumeGenerationError("timeout"); child.kill("SIGKILL"); }, timeoutMs);
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", chunk => {
         size += Buffer.byteLength(chunk);
-        if (size > 1000000) { failure = "OpenCode exceeded the output limit; no draft saved."; child.kill("SIGKILL"); }
+        if (size > 1000000) { failure = new Error("OpenCode exceeded the output limit; no draft saved."); child.kill("SIGKILL"); }
         else stdout += chunk.toString();
       });
       // Never echo provider errors or logs: they may contain personal evidence or credentials.
       child.stderr.resume();
-      child.on("error", () => { clearTimeout(timer); reject(new Error("Could not start OpenCode. Install it and authenticate with Z.AI Coding Plan.")); });
+      child.on("error", () => { clearTimeout(timer); reject(new ResumeGenerationError("unavailable")); });
       child.on("close", code => {
         clearTimeout(timer);
-        if (failure || code !== 0) reject(new Error(failure || "OpenCode failed; check Coding Plan sign-in and quota. No draft saved."));
+        if (failure || code !== 0) reject(failure || new ResumeGenerationError("failed"));
         else accept(stdout);
       });
     });

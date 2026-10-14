@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { generationFailureResponse } from "./resume-generation-errors.mjs";
+
 const endpoint = "/__career_ops/resume";
 const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
@@ -59,8 +61,8 @@ export function resumeMiddleware({ root, model, generate }) {
       await (generate ?? runner.runTailoring)({ brief, out, model, send: true });
       const draft = await readFile(out, "utf8");
       reply(200, { draft });
-    } catch {
-      reply(502, { error: "GLM generation failed. Check OpenCode Coding Plan sign-in and quota, then retry. Your editor is unchanged." });
+    } catch (error) {
+      reply(502, generationFailureResponse(error));
     } finally {
       if (directory) await rm(directory, { recursive: true, force: true });
       running = false;

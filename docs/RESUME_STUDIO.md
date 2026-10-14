@@ -224,3 +224,31 @@ sent. The model listing succeeded. Next diagnose this provider/session setup
 without printing private provider logs, then verify an actual completed draft.
 The frontend remains unreleased; the current origin previously rejected pushes
 with 403. Preserve the pre-existing discovery/Target Profile changes.
+
+## Iteration 7 handoff — actionable local-generation failures
+
+The local bridge now returns fixed, actionable messages and safe failure codes:
+`authentication` (structured provider HTTP 401/403), `quota` (429), `timeout`,
+`incomplete`, `unavailable`, or `failed`. It never forwards provider message
+text, stderr, evidence, or arbitrary thrown errors. An incomplete stream still
+creates no output; errors leave the editor unchanged. Implementation is shared
+by the bridge and CLI in `web/scripts/resume-generation-errors.mjs`.
+
+Verification: seven runner/bridge tests, six resume tests, app TypeScript/Vite
+build, and the isolated browser flow passed. Tests cover provider status mapping,
+private-error redaction, actionable bridge responses, timeout codes, cleanup,
+and unchanged output restrictions. The browser test's intentional failed
+provider fixture emits a 502 console line, then the full flow passes.
+
+A separate minimal live probe asked `zai-coding-plan/glm-4.7` to return fictional
+text under the same tool restrictions. It timed out after 90 seconds with no
+stdout events. Sanitized stderr checks found no recognized authentication,
+quota, network, or error markers; this does not establish the cause. OpenCode
+1.15.10 reports a registered Z.AI Coding Plan credential via `opencode auth list`;
+no credential file was read. No real resume was sent. Do not claim successful
+GLM generation. Next inspect safe startup-stage diagnostics or try another
+explicitly available Coding Plan model; avoid general API fallback.
+
+The frontend remains unreleased. Preserve all pre-existing discovery/Target
+Profile edits on `feat/autodiscovery-target-profile`. See [[RESUME_STUDIO]] for
+the working local launch command and export workflow.

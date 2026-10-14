@@ -5,6 +5,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { resumeMiddleware } from "./local-resume-bridge.mjs";
+import { ResumeGenerationError } from "./resume-generation-errors.mjs";
 import { tailoringBrief } from "../src/resumeTailoring.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -86,4 +87,16 @@ test("bridge returns a private draft, prevents concurrent runs, cleans attachmen
     assert.equal(failed.status, 502);
     assert.ok(!(await failed.text()).includes("SECRET"));
   });
+});
+
+test("bridge preserves safe generation failure codes without forwarding arbitrary messages", async () => {
+  for (const code of ["authentication", "quota", "timeout", "incomplete", "unavailable"]) {
+    await fixture("zai-coding-plan/glm-4.7", async () => { throw new ResumeGenerationError(code); }, async ({ request }) => {
+      const response = await request({ brief, consent: true });
+      assert.equal(response.status, 502);
+      const failure = await response.json();
+      assert.equal(failure.code, code);
+      assert.match(failure.error, /Your editor is unchanged/);
+    });
+  }
 });
