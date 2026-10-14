@@ -83,6 +83,7 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_created_at", ["createdAt"])
+    .index("by_owner_url", ["ownerId", "url"])
     .index("by_owner_created_at", ["ownerId", "createdAt"]),
   resumeBundles: defineTable({
     ownerId: v.id("users"),

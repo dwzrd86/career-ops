@@ -87,6 +87,12 @@ async function main() {
     await expectVisible(page, page.getByText("Ranked", { exact: true }), "overridden decision");
     await page.getByRole("button", { name: "Approve for evaluation" }).click();
     await expectVisible(page, page.getByText("Ready for evaluation", { exact: true }), "evaluation approval");
+    const discoveredTarget = page.locator("#resume-studio").getByLabel("Resume target role", { exact: true });
+    await discoveredTarget.selectOption({ label: "Example Discovery Co. · Review target role" });
+    assert.equal(await page.locator("#resume-studio").getByLabel("Source resume", { exact: true }).isEnabled(), true);
+    await discoveredTarget.selectOption("");
+    await page.getByRole("button", { name: "Approve for evaluation" }).click();
+    assert.equal(await discoveredTarget.locator("option").filter({ hasText: "Example Discovery Co. · Review target role" }).count(), 1, "repeat approval does not duplicate target");
     await page.getByRole("button", { name: "Archive" }).click();
     await expectVisible(page, page.getByText("Archived — no further action", { exact: true }), "archived discovery role");
 

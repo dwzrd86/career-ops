@@ -1,4 +1,5 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireVerifiedUser } from "./auth";
 import { requireEnrolledUser } from "./enrollment";
@@ -345,11 +346,37 @@ export const archive = mutationGeneric({
   },
 });
 
-export const approveForEvaluation = mutationGeneric({
+export const approveForEvaluation = mutation({
   args: { id: v.id("discoveredJobs") },
+  returns: v.null(),
   handler: async (ctx, { id }) => {
     try {
-      await setReviewStatus(ctx, await requireReadyOwner(ctx), id, "approvedForEvaluation");
+      const ownerId = await requireReadyOwner(ctx);
+      const discovered = await requireOwnedDiscoveredJob(ctx, id, ownerId);
+      // URL is the shared identity for manually saved and discovered roles.
+      // Approval must not reset a tracked application or replace its resume.
+      const url = normalizeHttpsUrl(discovered.url);
+      const existing = await ctx.db.query("jobs")
+        .withIndex("by_owner_url", (q) => q.eq("ownerId", ownerId).eq("url", url))
+        .first();
+      if (!existing) {
+        const now = Date.now();
+        await ctx.db.insert("jobs", {
+          ownerId,
+          company: normalizeText(discovered.company, "company"),
+          title: normalizeText(discovered.title, "title"),
+          location: normalizeOptionalText(discovered.location, "location") ?? "Not specified",
+          url,
+          source: normalizeText(discovered.source.label, "sourceLabel"),
+          status: "discovered",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      if (discovered.reviewStatus !== "approvedForEvaluation") {
+        await setReviewStatus(ctx, ownerId, id, "approvedForEvaluation");
+      }
+      return null;
     } catch (error) {
       reportBackendError("discovery.approve-for-evaluation");
       throw error;

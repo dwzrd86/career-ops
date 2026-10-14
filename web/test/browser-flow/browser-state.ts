@@ -126,6 +126,14 @@ export function updateBrowserFlowJobStatus(id: string, status: JobStatus) {
 }
 
 export function updateBrowserFlowDiscoveryStatus(id: string, reviewStatus: DiscoveryReviewStatus) {
+  if (reviewStatus === "approvedForEvaluation") {
+    const discovered = state.discoveredJobs.find(job => job._id === id);
+    if (!discovered) throw new Error("Discovered job not found");
+    if (!state.jobs.some(job => job.url === discovered.url)) {
+      createBrowserFlowJob({ company: discovered.company, title: discovered.title,
+        location: discovered.location || "Not specified", url: discovered.url, source: discovered.source.label });
+    }
+  }
   publish({ discoveredJobs: state.discoveredJobs.map((job) => job._id === id ? { ...job, reviewStatus, updatedAt: Date.now() } : job) });
 }
 

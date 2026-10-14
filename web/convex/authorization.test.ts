@@ -270,3 +270,31 @@ describe("saved resume bundles", () => {
     });
   });
 });
+
+
+test("discovery approval creates a private resume target once and preserves tracked work", async () => {
+  const deployment = createIsolatedDeployment();
+  const alice = await provisionDisposableAccount(deployment, "approval-a");
+  const bob = await provisionDisposableAccount(deployment, "approval-b");
+  const id = (await alice.client.mutation(api.discovery.project, discoveryProjection("approval"))).discoveredJobId;
+  await expect(bob.client.mutation(api.discovery.approveForEvaluation, { id })).rejects.toThrow("Discovered job not found");
+  await expect(deployment.mutation(api.discovery.approveForEvaluation, { id })).rejects.toThrow("Authentication required");
+  expect(await alice.client.query(api.jobs.list, {})).toEqual([]);
+  await alice.client.mutation(api.discovery.approveForEvaluation, { id });
+  const [job] = await alice.client.query(api.jobs.list, {});
+  expect(job).toMatchObject({ company: "approval Discovery Company", title: "approval Discovery Engineer", location: "Not specified", source: "Greenhouse", status: "discovered" });
+  expect(await bob.client.query(api.jobs.list, {})).toEqual([]);
+  await alice.client.mutation(api.jobs.updateStatus, { id: job._id, status: "applied" });
+  await alice.client.mutation(api.resumeBundles.save, { jobId: job._id, sourceResume: "Fictional candidate: SQL reporting", description: "SQL reporting role", resume: "Fictional candidate: SQL reporting", reviewed: true, expectedRevision: null });
+  await alice.client.mutation(api.discovery.approveForEvaluation, { id });
+  expect(await alice.client.query(api.jobs.list, {})).toEqual([expect.objectContaining({ _id: job._id, status: "applied" })]);
+  expect(await alice.client.query(api.resumeBundles.get, { jobId: job._id })).toMatchObject({ revision: 1, resume: "Fictional candidate: SQL reporting" });
+  expect((await alice.client.query(api.discovery.history, { id })).statuses.filter(status => status.status === "approvedForEvaluation")).toHaveLength(1);
+  const second = discoveryProjection("manual-duplicate");
+  const manualId = await alice.client.mutation(api.jobs.create, { ...jobInput("manual-duplicate"), url: second.url });
+  await bob.client.mutation(api.jobs.create, { ...jobInput("same-url-other-owner"), url: second.url });
+  const secondId = (await alice.client.mutation(api.discovery.project, second)).discoveredJobId;
+  await alice.client.mutation(api.discovery.approveForEvaluation, { id: secondId });
+  expect(await alice.client.query(api.jobs.list, {})).toHaveLength(2);
+  expect((await alice.client.query(api.jobs.list, {})).find(item => item._id === manualId)?.source).toBe("Manual entry");
+});
