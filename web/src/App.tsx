@@ -19,6 +19,7 @@ import {
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { DiscoveredJob, DiscoveryDecisionOutcome, functions, Job, JobStatus } from "./convex";
 import { authClient } from "./auth-client";
+import { ResumeStudio } from "./ResumeStudio";
 import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
 
 const statusLabels: Record<JobStatus, string> = {
@@ -843,6 +844,7 @@ function PipelineDashboard({
         <nav aria-label="Primary navigation">
           <a aria-current="page" href="#pipeline"><ClipboardList size={18} />Pipeline</a>
           <a href="#review-queue"><Search size={18} />Discovery review</a>
+          <a href="#resume-studio"><ClipboardList size={18} />Resume Studio</a>
         </nav>
         <div className="sidebar-note">
           <span>Precision mode</span>
@@ -909,6 +911,7 @@ function PipelineDashboard({
           )}
         </section>
 
+        <ResumeStudio jobs={jobs || []} />
         <DiscoveryReviewQueue />
       </section>
 

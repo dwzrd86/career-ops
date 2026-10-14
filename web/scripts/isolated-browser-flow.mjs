@@ -88,6 +88,29 @@ async function main() {
     await page.getByRole("button", { name: "Save role" }).click();
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "created role");
 
+    const studio = page.locator("#resume-studio");
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    await studio.getByLabel("Job description", { exact: true }).fill("Python, SQL, AWS and leadership required. React experience preferred.");
+    await studio.getByLabel("Resume text", { exact: true }).fill("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS");
+    await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
+    assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
+    await studio.getByRole("checkbox").check();
+    const downloadReady = page.waitForEvent("download");
+    await studio.getByRole("button", { name: "Download text" }).click();
+    const download = await downloadReady;
+    assert.equal(download.suggestedFilename(), "example-company-security-regression-role.txt");
+    const stream = await download.createReadStream();
+    let downloaded = "";
+    for await (const chunk of stream) downloaded += chunk.toString();
+    assert.ok(downloaded.includes("Built Python automation with SQL on AWS."));
+    await page.emulateMedia({ media: "print" });
+    assert.equal(await page.locator(".resume-print").isVisible(), true);
+    assert.equal(await page.locator(".sidebar").isVisible(), false);
+    assert.equal(await page.locator(".topbar").isVisible(), false);
+    await page.emulateMedia({ media: "screen" });
+    await studio.getByLabel("Resume text", { exact: true }).fill("Updated draft");
+    assert.equal(await studio.getByRole("checkbox").isChecked(), false);
+
     const status = page.getByLabel("Update status for Security regression role");
     await status.selectOption("applied");
     await page.waitForFunction((select) => select instanceof HTMLSelectElement && select.value === "applied", await status.elementHandle());
@@ -98,6 +121,7 @@ async function main() {
     await page.getByLabel("Password", { exact: true }).fill("SecurityFlow123");
     await page.getByRole("button", { name: "Sign in" }).click();
     await expectVisible(page, page.locator("h1").filter({ hasText: "Pipeline" }), "signed-in dashboard");
+    assert.equal(await page.locator("#resume-studio").getByLabel("Resume text", { exact: true }).inputValue(), "");
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "persisted role");
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");
     console.log("Isolated browser flow passed");

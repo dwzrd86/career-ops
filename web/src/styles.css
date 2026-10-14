@@ -66,3 +66,33 @@ td span { color: #748077; font-size: 13px; }
 .access-screen { align-items: center; background: #e9eeea; color: #1d2821; display: flex; justify-content: center; min-height: 100vh; padding: 24px; }.access-panel { background: #fff; border: 1px solid #d3ddd2; border-radius: 8px; box-shadow: 0 20px 60px rgba(26, 40, 28, .12); max-width: 440px; padding: 34px; width: 100%; }.access-mark { align-items: center; background: #e1f0df; border-radius: 7px; color: #326f4f; display: flex; height: 44px; justify-content: center; margin-bottom: 26px; width: 44px; }.access-panel h1 { font-size: 29px; margin: 8px 0 10px; }.access-copy, .dialog-copy { color: #657269; line-height: 1.55; margin-bottom: 26px; }.access-panel form { display: grid; gap: 16px; }.access-panel label { color: #405047; display: grid; font-size: 13px; font-weight: 700; gap: 7px; }.access-panel input { border: 1px solid #cbd4ca; border-radius: 5px; color: #17221a; font-weight: 400; min-height: 40px; padding: 9px 10px; }.access-panel input:focus, .account-security-dialog input:focus { border-color: #4f8d61; outline: 2px solid #dcebdd; }.access-submit { margin-top: 4px; width: 100%; }.access-hint, .access-notice { color: #657269; font-size: 12px; line-height: 1.45; margin: 14px 0 0; }.access-notice { background: #edf6ed; border: 1px solid #cce0cb; border-radius: 5px; color: #315f3d; padding: 10px 12px; }.text-button { background: transparent; border: 0; color: #357650; display: block; font-size: 13px; font-weight: 700; margin-top: 16px; padding: 0; }.text-button:hover { color: #214d35; text-decoration: underline; }.account-security-dialog { max-width: 480px; }.account-security-dialog form { display: grid; gap: 16px; }.account-security-dialog label { color: #405047; display: grid; font-size: 13px; font-weight: 700; gap: 7px; }.account-security-dialog input { border: 1px solid #cbd4ca; border-radius: 5px; color: #17221a; font-weight: 400; min-height: 40px; padding: 9px 10px; }.account-security-actions { border-top: 1px solid #e2e8e1; margin-top: 22px; padding-top: 4px; }.privacy-panel { max-width: 540px; }.policy-links { color: #357650; display: grid; font-size: 14px; gap: 9px; line-height: 1.4; margin: 0 0 24px; padding-left: 20px; }.policy-links a, .account-policy-links a { color: #357650; font-weight: 700; }.acknowledgement-check { align-items: flex-start; background: #f0f6ef; border: 1px solid #d5e4d3; border-radius: 6px; display: flex !important; font-weight: 600 !important; gap: 10px !important; line-height: 1.45; padding: 12px; }.acknowledgement-check input { accent-color: #327154; flex: 0 0 auto; margin-top: 2px; min-height: auto; padding: 0; }.account-data-controls { border-top: 1px solid #e2e8e1; margin-top: 22px; padding-top: 22px; }.account-data-controls h3 { font-size: 15px; margin: 0 0 7px; }.account-data-controls p { color: #657269; font-size: 13px; line-height: 1.45; margin: 0 0 12px; }.account-data-controls > div { display: flex; flex-wrap: wrap; gap: 8px; }.account-data-controls .button { text-decoration: none; }.account-policy-links { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px !important; }.full-screen { min-height: 100vh; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .app-shell { display: block; }.sidebar { min-height: auto; padding: 16px 20px; }.brand { padding: 0 0 14px; }.sidebar-note { display: none; }nav { display: flex; }.workspace { padding: 26px 16px 42px; }.topbar { align-items: flex-start; gap: 18px; }.metric-grid, .discovery-details, .discovery-signals { grid-template-columns: 1fr; }.metric-grid { margin-top: 28px; }.panel-header { align-items: stretch; flex-direction: column; padding: 20px; }.search-field { width: 100%; }.form-grid { grid-template-columns: 1fr; }.discovery-list { padding: 16px; }.discovery-card-heading { flex-direction: column; }.discovery-actions .button { width: 100%; } }
+
+
+.resume-studio { margin-top: 28px; }
+.resume-studio-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 28px; padding: 24px; }
+.resume-studio label { display: grid; gap: 8px; font-size: 14px; font-weight: 650; }
+.resume-studio textarea, .resume-studio select { border: 1px solid #cdd5cc; border-radius: 6px; padding: 12px; width: 100%; color: #1c2420; background: #fff; }
+.resume-studio textarea { resize: vertical; line-height: 1.6; }
+.resume-studio textarea:focus-visible, .resume-studio select:focus-visible { outline: 2px solid #327154; outline-offset: 2px; }
+.resume-controls, .resume-draft { display: grid; align-content: start; gap: 18px; min-width: 0; }
+.resume-controls a { color: #285d44; font-size: 14px; }
+.resume-studio p { color: #526056; font-size: 13px; line-height: 1.6; margin: 0; }
+.resume-evidence { background: #f3f6f0; padding: 18px; border-radius: 6px; }
+.resume-evidence h3 { margin: 0 0 10px; font-size: 15px; }
+.resume-tags { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+.resume-tags span { border: 1px solid #a07835; border-radius: 4px; padding: 5px 8px; font-size: 12px; color: #775215; }
+.resume-tags .covered { border-color: #327154; color: #285d44; }
+.resume-studio .resume-review { display: flex; align-items: flex-start; line-height: 1.5; font-weight: 500; }
+.resume-review input { margin-top: 4px; }
+.resume-export { display: flex; gap: 10px; flex-wrap: wrap; }
+.resume-export button:disabled { cursor: not-allowed; }
+.resume-print { display: none; }
+@media (max-width: 850px) { .resume-studio-body { grid-template-columns: 1fr; padding: 18px; } }
+@media print {
+  @page { size: letter; margin: 0.65in; }
+  body, :root { background: white; }
+  .sidebar, .workspace > :not(.resume-studio), .resume-studio > :not(.resume-print) { display: none !important; }
+  .app-shell, .workspace, .resume-studio { display: block; padding: 0; margin: 0; border: 0; max-width: none; }
+  .resume-print { display: block; }
+  .resume-print pre { white-space: pre-wrap; overflow-wrap: anywhere; color: black; font: 11pt/1.45 Arial, sans-serif; margin: 0; }
+}
