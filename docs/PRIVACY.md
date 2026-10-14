@@ -56,8 +56,10 @@ remain separate from this hosted dataset.
 Resume Studio separately stores source resume text, user-pasted job descriptions,
 edited drafts, revision numbers, and factual-review timestamps only when the
 user selects Save bundle. Up to 50 bundles per account are supported, with
-40,000 characters per text field. No AI provider receives this content in the
-current implementation. Unsaved text clears on refresh or sign-out.
+40,000 characters per text field. The hosted frontend makes no AI provider requests. Opt-in local development
+generation sends the selected source resume and posting through OpenCode to
+Z.AI. Exported GLM briefs also contain this evidence. OpenCode history and
+downloaded files are outside dashboard account deletion. See [[RESUME_STUDIO]]. Unsaved text clears on refresh or sign-out.
 
 ## Data collected and why
 

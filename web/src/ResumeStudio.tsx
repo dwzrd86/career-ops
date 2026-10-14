@@ -19,6 +19,19 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const removeBundle = useMutation(functions.removeResumeBundle);
   const [reviewed, setReviewed] = useState(false);
   const [message, setMessage] = useState("");
+  const [localModel, setLocalModel] = useState<string | null>(null);
+  const [providerConsent, setProviderConsent] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const generationRequest = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const controller = new AbortController();
+    void fetch("/__career_ops/resume", { headers: { "X-Career-Ops-Local": "1" }, signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(status => { if (!controller.signal.aborted && status?.enabled && typeof status.model === "string") setLocalModel(status.model); })
+      .catch(() => {});
+    return () => { controller.abort(); generationRequest.current?.abort(); };
+  }, []);
   const job = jobs.find((item) => item._id === jobId);
   const loading = Boolean(jobId && (saved === undefined || loadedJob !== jobId));
 
@@ -120,6 +133,31 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const changes = useMemo(() => draftChanges(sourceResume, resume), [sourceResume, resume]);
   const newSkills = resumeTerms.filter(term => containsTerm(resume, term) && !containsTerm(sourceResume, term));
 
+  async function generateDraft() {
+    if (!job || !localModel || !providerConsent || busy || loading) return;
+    if (resume.trim() && !window.confirm("Replace the current draft with a new GLM draft?")) return;
+    const controller = new AbortController();
+    generationRequest.current = controller;
+    setBusy(true); setGenerating(true); setMessage("GLM is tailoring your evidence for this role. This can take up to three minutes…");
+    try {
+      const response = await fetch("/__career_ops/resume", { method: "POST",
+        headers: { "Content-Type": "application/json", "X-Career-Ops-Local": "1" },
+        signal: controller.signal,
+        body: JSON.stringify({ consent: true, brief: tailoringBrief(job, sourceResume, description) }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not generate a GLM draft.");
+      const draft = parseResumeDraft(result.draft);
+      if (controller.signal.aborted) return;
+      setResume(draft); setReviewed(false); setDirty(true);
+      setMessage("GLM draft ready. Review changed lines and facts, then save and export your resume.");
+    } catch (error) {
+      if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Could not generate a GLM draft. Your editor is unchanged.");
+    } finally {
+      if (!controller.signal.aborted) { setBusy(false); setGenerating(false); }
+      if (generationRequest.current === controller) generationRequest.current = null;
+    }
+  }
+
   async function importDraft(file: File) {
     const context = importContext.current;
     try {
@@ -149,13 +187,19 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
         <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <div className="resume-evidence">
           <h3>Tailor with GLM</h3>
-          <p>Download a brief, generate a draft with your local OpenCode Z.AI Coding Plan agent, then import the .txt file here to review and export it.</p>
+          {localModel ? <>
+            <p>Your local OpenCode agent is connected. Generate a tailored draft directly into this editor, then review the facts before exporting.</p>
+            <label><input type="checkbox" checked={providerConsent} onChange={event => setProviderConsent(event.target.checked)} />Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent.</label>
+            <button type="button" className="button primary" disabled={!job || loading || !sourceResume.trim() || !description.trim() || !providerConsent} onClick={generateDraft}>{generating ? "Generating GLM draft…" : "Generate GLM draft"}</button>
+            <p>Model: {localModel}. OpenCode keeps local session history. Signing out discards the returning draft; an already-started provider request may finish.</p>
+          </> : <p>Download a brief, generate a draft with your local OpenCode Z.AI Coding Plan agent, then import the .txt file here to review and export it.</p>}
           <details><summary>Generate with the local runner</summary>
             <p>Sign in through <code>opencode auth login</code> and select Z.AI Coding Plan. Choose its model ID using <code>/models</code> in OpenCode. From the career-ops folder, run:</p>
             <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>node web/scripts/tailor-resume.mjs --brief "path/to/downloaded-glm-brief.txt" --out "output/resume.txt" --model "zai-coding-plan/YOUR-MODEL-ID" --send-to-glm</pre>
             <p>Omit <code>--send-to-glm</code> to validate without an AI call. Use a new output filename for each draft. OpenCode retains local session history separately from your dashboard account.</p>
+            <p>For generation directly in this editor, start the web development server with <code>CAREER_OPS_GLM_MODEL=zai-coding-plan/YOUR-MODEL-ID npm run dev -- --host 127.0.0.1</code>. Open that local dashboard and acknowledge provider sharing above.</p>
           </details>
-          <p>The brief contains your source resume and posting. Sharing it with your agent sends that content to its AI provider. This dashboard makes no AI calls.</p>
+          <p>The brief contains your source resume and posting. Sharing it with your agent sends that content to its AI provider.</p>
           <button type="button" className="button secondary" disabled={!job || loading || !sourceResume.trim() || !description.trim()} onClick={() => {
             if (!job) return;
             downloadFile(tailoringBrief({ company: job.company, title: job.title }, sourceResume, description), `${filename}-glm-brief.txt`);
@@ -177,7 +221,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
           {newSkills.length > 0 && <p>Skills in the draft absent from source wording: {newSkills.join(", ")}. Verify supporting evidence or remove them.</p>}
           <ol style={{ overflowWrap: "anywhere" }}>{changes.map((line, index) => <li key={index}>{line}</li>)}</ol>
         </details>}
-        <p className="resume-session-note">Save stores your source resume, job description, draft, and review state in your private account. Unsaved edits are cleared on refresh or sign-out. The dashboard makes no AI calls. Exported briefs contain your evidence; share them only with a provider you choose.</p>
+        <p className="resume-session-note">Save stores your source resume, job description, draft, and review state in your private account. Unsaved edits are cleared on refresh or sign-out. GLM generation shares evidence with Z.AI only after you choose it. Exported briefs and OpenCode history remain outside dashboard account deletion.</p>
         <label className="resume-review"><input type="checkbox" checked={reviewed} disabled={!job || loading} onChange={(event) => { setReviewed(event.target.checked); setDirty(true); }} />I reviewed the facts, contact details, and relevance for this role.</label>
         <div className="resume-export"><button type="button" className="button primary" disabled={!job || loading || !sourceResume.trim() || !description.trim() || !resume.trim() || !dirty} onClick={save}>{busy ? "Saving…" : "Save bundle"}</button><button type="button" className="button secondary" disabled={revision === null || loading} onClick={remove}>Delete saved bundle</button></div>
         <p>{revision === null ? "No saved bundle for this role." : `Saved revision ${revision}.`}{dirty ? " Unsaved changes." : ""}</p>

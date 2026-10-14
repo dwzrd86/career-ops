@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { localResumePlugin } from "./scripts/local-resume-bridge.mjs";
 
 export default defineConfig({
   plugins: [
     react(),
+    localResumePlugin(),
     {
       name: "remove-convex-documentation-endpoint",
       transform(code, id) {

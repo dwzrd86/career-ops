@@ -40,6 +40,16 @@ async function main() {
       });
     });
 
+    let generationFailure = false;
+    await page.route("**/__career_ops/resume", async route => {
+      if (route.request().method() === "GET") return route.fulfill({ json: { enabled: true, model: "zai-coding-plan/test-model" } });
+      const data = route.request().postDataJSON();
+      assert.equal(data.consent, true);
+      assert.ok(data.brief.includes("Test Candidate: Built Python automation"));
+      assert.equal(route.request().headers()["x-career-ops-local"], "1");
+      return route.fulfill(generationFailure ? { status: 502, json: { error: "Test GLM failure. Editor retained." } } :
+        { json: { draft: "Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS" } });
+    });
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Create an account" }).click({ force: true });
     await page.getByLabel("Email").fill("security-flow@example.test");
@@ -97,6 +107,21 @@ async function main() {
     await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+    const generate = studio.getByRole("button", { name: "Generate GLM draft", exact: true });
+    await expectVisible(page, generate, "connected local GLM generator");
+    assert.equal(await generate.isEnabled(), false, "provider consent required");
+    await studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." }).check();
+    const acceptedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
+    await generate.click();
+    await acceptedGeneration;
+    await expectVisible(page, studio.getByText("GLM draft ready. Review changed lines and facts, then save and export your resume.", { exact: true }), "generated draft arrival");
+    assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+    generationFailure = true;
+    const failedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
+    await generate.click();
+    await failedGeneration;
+    await expectVisible(page, studio.getByText("Test GLM failure. Editor retained.", { exact: true }), "generation failure recovery");
+    assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
     const briefDownload = page.waitForEvent("download");
     await studio.getByRole("button", { name: "Download GLM brief" }).click();
     const brief = await briefDownload;
@@ -109,26 +134,26 @@ async function main() {
     await importInput.setInputFiles({ name: "draft.txt", mimeType: "text/plain", buffer: Buffer.from("invalid\0binary") });
     await expectVisible(page, studio.getByText("Choose a UTF-8 plain text draft, not a binary document.", { exact: true }), "binary draft rejection");
     assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
-    await studio.getByRole("checkbox").check();
+    await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).check();
     const cancelledImport = new Promise(resolve => page.once("dialog", async dialog => { await dialog.dismiss(); resolve(); }));
     await importInput.setInputFiles({ name: "draft.txt", mimeType: "text/plain", buffer: Buffer.from("Cancelled replacement") });
     await cancelledImport;
-    assert.equal(await studio.getByRole("checkbox").isChecked(), true);
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), true);
     const acceptedImport = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
     await importInput.setInputFiles({ name: "draft.txt", mimeType: "text/plain", buffer: Buffer.from("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS, React") });
     await acceptedImport;
     await expectVisible(page, studio.getByText("Draft imported. Review changed lines against your source resume before exporting.", { exact: true }), "imported draft confirmation");
-    assert.equal(await studio.getByRole("checkbox").isChecked(), false);
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     await studio.locator("summary").filter({ hasText: /^Review \d+ changed or added lines/ }).click();
     await expectVisible(page, studio.getByText(/Skills in the draft absent from source wording: React/), "unsupported skill warning");
-    await studio.getByRole("checkbox").check();
+    await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).check();
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
     await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
     await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
     await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
     assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
-    assert.equal(await studio.getByRole("checkbox").isChecked(), true);
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), true);
     const downloadReady = page.waitForEvent("download");
     await studio.getByRole("button", { name: "Download text" }).click();
     const download = await downloadReady;
@@ -154,7 +179,7 @@ async function main() {
     assert.equal(await page.locator(".topbar").isVisible(), false);
     await page.emulateMedia({ media: "screen" });
     await studio.getByLabel("Resume text", { exact: true }).fill("Updated draft");
-    assert.equal(await studio.getByRole("checkbox").isChecked(), false);
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
 
     // Switching away from an unsaved edit must ask before losing it.
@@ -178,7 +203,7 @@ async function main() {
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "persisted role");
     await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "Updated draft");
-    assert.equal(await studio.getByRole("checkbox").isChecked(), false);
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     page.once("dialog", dialog => dialog.accept());
     await studio.getByRole("button", { name: "Delete saved bundle" }).click();

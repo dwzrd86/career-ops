@@ -12,7 +12,7 @@ related:
 
 Resume Studio is available in the authenticated web dashboard. Choose a pipeline role, paste the original posting and resume text, edit the resume, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
 
-The PDF layout contains only resume text in one column, with selectable text and standard typography. This does not guarantee acceptance or ranking by a particular ATS. Common-skills coverage is a literal checklist, not a match score or an exhaustive requirements analysis. No experience or qualifications are generated.
+The PDF layout contains only resume text in one column, with selectable text and standard typography. This does not guarantee acceptance or ranking by a particular ATS. Common-skills coverage is a literal checklist, not a match score or an exhaustive requirements analysis. Generated drafts still require human review against the original evidence.
 
 Select a role to restore its saved bundle. The source resume is kept separately from the editable draft. Start draft from source copies that evidence into the editor; it does not generate qualifications. Save bundle stores source resume, pasted job description, draft, revision, and review timestamp in the signed-in owner's Convex account. Unsaved edits remain in memory and clear on refresh or sign-out. Switching roles with unsaved changes requires confirmation, and leaving the page raises the browser's unsaved-changes prompt.
 
@@ -178,3 +178,49 @@ still do not establish custom hosted-backend support. No credentials were
 read, provider requests made, or deployment performed. The next iteration
 should resolve a supported agent workflow and public release. Preserve the
 pre-existing discovery/Target Profile work and do not substitute paid API use.
+
+## Direct local generation (iteration 6)
+
+Resume Studio now connects directly to the existing OpenCode runner when the
+local Vite development server has `CAREER_OPS_GLM_MODEL` configured. From `web`:
+
+```bash
+CAREER_OPS_GLM_MODEL=zai-coding-plan/glm-4.7 npm run dev -- --host 127.0.0.1
+```
+
+Authenticate OpenCode with Z.AI Coding Plan first; select a currently available
+model using `opencode models zai-coding-plan`. The model above is an example,
+not a fallback. Open the local dashboard, choose a role, paste evidence, check
+the provider-sharing acknowledgement, and select **Generate GLM draft**. The
+result appears in the editor without downloading or importing intermediate
+files. Compare changed lines, verify facts, save, and export Word/PDF.
+
+The development middleware accepts only loopback connections with a matching
+local Host/port, same-origin POST, JSON content type, and a custom request
+header. Cross-origin requests, arbitrary providers, missing consent, invalid
+evidence, oversized requests, and concurrent generations are refused. It
+reuses the runner's factual prompt and restrictive OpenCode configuration.
+Transient brief/draft files use private directories under ignored
+`agent/.local/resume-runs` and are removed after success or failure. Errors
+do not reveal provider logs; generation failure leaves the editor unchanged.
+This is a trusted local development feature; it is absent from production
+frontend builds. Do not expose the development server on a public interface.
+
+Signing out/unmounting aborts the browser fetch and discards its result. An
+already-started provider request may still finish; OpenCode retains its own
+local history. Dashboard account deletion does not erase that history. No
+provider credentials are accessed by the browser or stored in Convex.
+
+Verification: app typecheck/build, six resume unit tests, five bridge/runner
+tests, and the isolated browser flow passed. Browser fixtures verify consent,
+success, retained edits after failure, and factual-review export gating. Bridge
+tests use a fake generator and real loopback HTTP requests to verify origin,
+Host/port, size, consent, concurrency, private transport, and cleanup.
+
+The live fictional-data check with `zai-coding-plan/glm-4.7` did **not**
+complete: OpenCode 1.15.10 exited successfully after only a `step_start` event.
+No draft was saved, no credentials were read, and no real career records were
+sent. The model listing succeeded. Next diagnose this provider/session setup
+without printing private provider logs, then verify an actual completed draft.
+The frontend remains unreleased; the current origin previously rejected pushes
+with 403. Preserve the pre-existing discovery/Target Profile changes.
