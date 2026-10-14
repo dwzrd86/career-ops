@@ -45,6 +45,29 @@ export const get = query({
   },
 });
 
+// Reuse canonical evidence, never a role-specific generated draft. The existing
+// bundle cap bounds both reads and the amount of source text returned.
+export const sources = query({
+  args: {},
+  returns: v.array(v.object({ jobId: v.id("jobs"), company: v.string(), title: v.string(), sourceResume: v.string(), updatedAt: v.number() })),
+  handler: async (ctx) => {
+    const ownerId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, ownerId);
+    const saved = await ctx.db.query("resumeBundles")
+      .withIndex("by_owner_job", q => q.eq("ownerId", ownerId)).take(MAX_RESUME_BUNDLES);
+    const seen = new Set<string>();
+    const result = [];
+    for (const item of saved.sort((a, b) => b.updatedAt - a.updatedAt)) {
+      if (seen.has(item.sourceResume)) continue;
+      const job = await ctx.db.get(item.jobId);
+      if (!job || job.ownerId !== ownerId) continue;
+      seen.add(item.sourceResume);
+      result.push({ jobId: item.jobId, company: job.company, title: job.title, sourceResume: item.sourceResume, updatedAt: item.updatedAt });
+    }
+    return result;
+  },
+});
+
 export const save = mutation({
   args: { jobId: v.id("jobs"), ...content, reviewed: v.boolean(), expectedRevision: v.union(v.number(), v.null()) },
   returns: v.number(),

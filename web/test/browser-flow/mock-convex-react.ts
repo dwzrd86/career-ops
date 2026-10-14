@@ -38,6 +38,15 @@ export function useQuery(reference: string, args?: Record<string, any> | "skip")
       requiresAcknowledgement: !state.privacyAcknowledged,
     };
   }
+  if (reference === "resumeBundles:sources") {
+    const seen = new Set<string>();
+    return Object.values(state.resumeBundles).sort((a, b) => b.updatedAt - a.updatedAt).flatMap(bundle => {
+      const job = state.jobs.find(item => item._id === bundle.jobId);
+      if (!job || seen.has(bundle.sourceResume)) return [];
+      seen.add(bundle.sourceResume);
+      return [{ jobId: job._id, company: job.company, title: job.title, sourceResume: bundle.sourceResume, updatedAt: bundle.updatedAt }];
+    });
+  }
   if (reference === "resumeBundles:get") return args && args !== "skip" ? state.resumeBundles[args.jobId] ?? null : undefined;
   if (reference === "jobs:list") return state.jobs;
   if (reference === "discovery:list") return state.discoveredJobs;

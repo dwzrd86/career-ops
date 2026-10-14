@@ -106,9 +106,13 @@ describe("discovery projection authorization boundary", () => {
     await expect(accountB.query(api.discovery.list, {})).resolves.toEqual([
       expect.objectContaining({ _id: jobB, company: "account-b Company" }),
     ]);
-    await expect(accountA.query(api.jobs.list, {})).resolves.toEqual([
+    const pipeline = await accountA.query(api.jobs.list, {});
+    expect(pipeline).toHaveLength(2);
+    expect(pipeline).toEqual(expect.arrayContaining([
       expect.objectContaining({ _id: manualJob, company: "Manual Company" }),
-    ]);
+      expect.objectContaining({ company: "account-a Company", title: "account-a Engineer", url: "https://jobs.example.test/account-a", status: "discovered" }),
+    ]));
+    expect(await accountB.query(api.jobs.list, {})).toEqual([]);
     await expect(accountA.query(api.discovery.history, { id: jobB })).rejects.toThrow("Discovered job not found");
     await expect(accountB.mutation(api.discovery.archive, { id: jobA })).rejects.toThrow("Discovered job not found");
     await expect(accountB.mutation(api.discovery.overrideDecision, { id: jobA, outcome: "rejected", reason: "Not mine" }))

@@ -254,6 +254,28 @@ describe("saved resume bundles", () => {
     expect((await a.client.query(api.account.exportData, {})).resumeBundles).toEqual([]);
   });
 
+  test("source library is private, deduplicates original evidence, and follows deletion", async () => {
+    const deployment = createIsolatedDeployment();
+    const a = await provisionDisposableAccount(deployment, "source-a");
+    const b = await provisionDisposableAccount(deployment, "source-b");
+    await expect(deployment.query(api.resumeBundles.sources, {})).rejects.toThrow("Authentication required");
+    const first = await a.client.mutation(api.jobs.create, jobInput("source-first"));
+    const second = await a.client.mutation(api.jobs.create, jobInput("source-second"));
+    const save = { sourceResume: "Original evidence", description: "Python", resume: "Generated text must not be reused", reviewed: true, expectedRevision: null };
+    await a.client.mutation(api.resumeBundles.save, { ...save, jobId: first });
+    await a.client.mutation(api.resumeBundles.save, { ...save, jobId: second });
+    await deployment.run(async ctx => {
+      const item = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", a.userId as any).eq("jobId", second)).unique();
+      await ctx.db.patch(item!._id, { updatedAt: Date.now() + 1000 });
+    });
+    expect(await a.client.query(api.resumeBundles.sources, {})).toEqual([{ jobId: second, company: "source-second Company", title: "source-second Engineer", sourceResume: "Original evidence", updatedAt: expect.any(Number) }]);
+    expect(await b.client.query(api.resumeBundles.sources, {})).toEqual([]);
+    await a.client.mutation(api.jobs.remove, { id: second });
+    expect(await a.client.query(api.resumeBundles.sources, {})).toEqual([expect.objectContaining({ jobId: first })]);
+    await a.client.mutation(api.resumeBundles.remove, { jobId: first, expectedRevision: 1 });
+    expect(await a.client.query(api.resumeBundles.sources, {})).toEqual([]);
+  });
+
   test("account deletion erases its bundles and preserves another account's evidence", async () => {
     const deployment = createIsolatedDeployment();
     const a = await provisionDisposableAccount(deployment, "resume-delete-a");

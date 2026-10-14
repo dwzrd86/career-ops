@@ -160,6 +160,17 @@ async function main() {
     await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
     assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), true);
+    const savedSource = await studio.getByLabel("Source resume", { exact: true }).inputValue();
+    const originalTarget = await studio.getByLabel("Resume target role", { exact: true }).inputValue();
+    await discoveredTarget.selectOption({ label: "Example Discovery Co. · Review target role" });
+    await studio.getByLabel("Reuse saved source resume", { exact: true }).selectOption(originalTarget);
+    assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), savedSource);
+    assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
+    assert.equal(await studio.getByLabel("Job description", { exact: true }).inputValue(), "");
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
+    assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+    page.once("dialog", dialog => dialog.accept());
+    await discoveredTarget.selectOption(originalTarget);
     const downloadReady = page.waitForEvent("download");
     await studio.getByRole("button", { name: "Download text" }).click();
     const download = await downloadReady;

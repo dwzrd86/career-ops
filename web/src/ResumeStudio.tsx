@@ -15,6 +15,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const [dirty, setDirty] = useState(false);
   const [loadedJob, setLoadedJob] = useState("");
   const saved = useQuery(functions.getResumeBundle, jobId ? { jobId } : "skip");
+  const sources = useQuery(functions.listResumeSources, {});
   const saveBundle = useMutation(functions.saveResumeBundle);
   const removeBundle = useMutation(functions.removeResumeBundle);
   const [reviewed, setReviewed] = useState(false);
@@ -183,6 +184,14 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
         {job && <a href={job.url} target="_blank" rel="noreferrer">Read the original posting ↗</a>}
         {!jobs.length && <p>Add a role to your pipeline to start preparing its resume.</p>}
         {loading && <p role="status">Loading saved bundle…</p>}
+        <label>Reuse saved source resume<select aria-label="Reuse saved source resume" value="" disabled={!job || loading || !sources?.length} onChange={event => {
+          const source = sources?.find(item => item.jobId === event.target.value);
+          if (!source) return;
+          if (sourceResume.trim() && sourceResume !== source.sourceResume && !window.confirm("Replace this role's source resume with the selected saved evidence? Your draft will remain for review.")) return;
+          setSourceResume(source.sourceResume); setReviewed(false); setDirty(true);
+          setMessage(`Source evidence reused from ${source.company} · ${source.title}. Review your draft against this source before exporting.`);
+        }}><option value="">{sources === undefined ? "Loading saved sources…" : sources.length ? "Choose original evidence from a saved bundle" : "Save a bundle once to reuse its source here"}</option>{sources?.map(item => <option key={item.jobId} value={item.jobId}>{item.company} · {item.title}</option>)}</select></label>
+        <p>Reuse your original resume across roles. Saved sources stay in your private account; choosing one resets this role’s factual review.</p>
         <label>Source resume<textarea aria-label="Source resume" rows={6} maxLength={40000} disabled={!job || loading} placeholder="Paste your factual, original resume as evidence." value={sourceResume} onChange={(event) => { setSourceResume(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <button type="button" className="button secondary" disabled={!sourceResume.trim() || loading} onClick={() => { if (resume.trim() && !window.confirm("Replace the current draft with the source resume?")) return; setResume(sourceResume); setReviewed(false); setDirty(true); }}>Start draft from source</button>
         <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
