@@ -75,14 +75,38 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const canExport = Boolean(job && resume.trim() && reviewed && !loading && !busy);
   const filename = `${job?.company || "company"}-${job?.title || "resume"}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 
-  function downloadFile(text: string, name: string) {
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  function downloadBlob(blob: Blob, name: string) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = name;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadFile(text: string, name: string) {
+    downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), name);
+  }
+
+  const exportContext = useRef<{ jobId: string; resume: string; reviewed: boolean } | null>(null);
+  exportContext.current = { jobId, resume, reviewed };
+  useEffect(() => () => { exportContext.current = null; }, []);
+
+  async function downloadWord() {
+    if (!canExport) return;
+    const snapshot = { jobId, resume };
+    setBusy(true); setMessage("Preparing Word document…");
+    try {
+      // Load the document packer only when requested, keeping dashboard startup light.
+      const { resumeDocument } = await import("./resumeDocument");
+      const blob = await resumeDocument(snapshot.resume);
+      const current = exportContext.current;
+      if (!current || current.jobId !== snapshot.jobId || current.resume !== snapshot.resume || !current.reviewed) return;
+      downloadBlob(blob, `${filename}.docx`);
+      setMessage("Word document downloaded. Use the file format requested by the employer.");
+    } catch {
+      if (exportContext.current) setMessage("Could not create the Word document. Your draft is still here; try again or download text.");
+    } finally { if (exportContext.current) setBusy(false); }
   }
 
   function download() {
@@ -152,7 +176,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
         <label className="resume-review"><input type="checkbox" checked={reviewed} disabled={!job || loading} onChange={(event) => { setReviewed(event.target.checked); setDirty(true); }} />I reviewed the facts, contact details, and relevance for this role.</label>
         <div className="resume-export"><button type="button" className="button primary" disabled={!job || loading || !sourceResume.trim() || !description.trim() || !resume.trim() || !dirty} onClick={save}>{busy ? "Saving…" : "Save bundle"}</button><button type="button" className="button secondary" disabled={revision === null || loading} onClick={remove}>Delete saved bundle</button></div>
         <p>{revision === null ? "No saved bundle for this role." : `Saved revision ${revision}.`}{dirty ? " Unsaved changes." : ""}</p>
-        <div className="resume-export"><button type="button" className="button primary" disabled={!canExport} onClick={download}><Download size={16} />Download text</button><button type="button" className="button secondary" disabled={!canExport} onClick={() => window.print()}><Printer size={16} />Print / Save PDF</button></div>
+        <div className="resume-export"><button type="button" className="button primary" disabled={!canExport} onClick={downloadWord}><Download size={16} />Download Word</button><button type="button" className="button secondary" disabled={!canExport} onClick={download}><Download size={16} />Download text</button><button type="button" className="button secondary" disabled={!canExport} onClick={() => window.print()}><Printer size={16} />Print / Save PDF</button></div>
         <p role="status">{message || "PDF export uses your browser’s print dialog. Choose Save as PDF and turn off headers and footers."}</p>
       </div>
     </div>

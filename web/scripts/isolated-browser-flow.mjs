@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { createServer } from "vite";
+import JSZip from "jszip";
 
 const scriptDirectory = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const viteConfig = resolve(scriptDirectory, "browser-flow.vite.config.mjs");
@@ -95,6 +96,7 @@ async function main() {
     await studio.getByLabel("Resume text", { exact: true }).fill("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS");
     await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
+    assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
     const briefDownload = page.waitForEvent("download");
     await studio.getByRole("button", { name: "Download GLM brief" }).click();
     const brief = await briefDownload;
@@ -135,6 +137,17 @@ async function main() {
     let downloaded = "";
     for await (const chunk of stream) downloaded += chunk.toString();
     assert.ok(downloaded.includes("Built Python automation with SQL on AWS."));
+    const wordReady = page.waitForEvent("download");
+    await studio.getByRole("button", { name: "Download Word" }).click();
+    const word = await wordReady;
+    assert.equal(word.suggestedFilename(), "example-company-security-regression-role.docx");
+    const wordChunks = [];
+    for await (const chunk of await word.createReadStream()) wordChunks.push(chunk);
+    const wordZip = await JSZip.loadAsync(Buffer.concat(wordChunks));
+    const wordXml = await wordZip.file("word/document.xml").async("string");
+    assert.ok(wordXml.includes("Built Python automation with SQL on AWS."));
+    assert.ok(!wordXml.includes("<w:tbl"));
+    await expectVisible(page, studio.getByText("Word document downloaded. Use the file format requested by the employer.", { exact: true }), "Word export confirmation");
     await page.emulateMedia({ media: "print" });
     assert.equal(await page.locator(".resume-print").isVisible(), true);
     assert.equal(await page.locator(".sidebar").isVisible(), false);
@@ -142,6 +155,7 @@ async function main() {
     await page.emulateMedia({ media: "screen" });
     await studio.getByLabel("Resume text", { exact: true }).fill("Updated draft");
     assert.equal(await studio.getByRole("checkbox").isChecked(), false);
+    assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
 
     // Switching away from an unsaved edit must ask before losing it.
     page.once("dialog", dialog => dialog.dismiss());

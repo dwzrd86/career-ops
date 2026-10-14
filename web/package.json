@@ -28,7 +28,8 @@
     "lucide-react": "^0.468.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "vite": "^6.3.6"
+    "vite": "^6.3.6",
+    "docx": "^9.11.0"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
@@ -38,6 +39,7 @@
     "convex-test": "^0.0.54",
     "playwright": "^1.58.1",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "jszip": "^3.10.2"
   }
 }

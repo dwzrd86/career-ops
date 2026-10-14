@@ -1,3 +1,3 @@
 import { defineConfig } from "vitest/config";
 
-export default defineConfig({ test: { environment: "node", include: ["test/resumeTailoring.test.ts"] } });
+export default defineConfig({ test: { environment: "node", include: ["test/resumeTailoring.test.ts", "test/resumeDocument.test.ts"] } });

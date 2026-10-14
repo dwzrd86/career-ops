@@ -118,6 +118,11 @@ bodies, account IDs, or full URLs. Set the matching non-secret
 
 ## Saved resume bundles
 
+Reviewed drafts can be downloaded directly as Word (.docx) documents, as plain
+text, or printed to PDF. Word export preserves the draft's text in a single
+column of ordinary paragraphs and generates the file locally in the browser.
+Use the employer's requested format; these exports do not guarantee ATS ranking.
+
 Resume Studio saves one private bundle per pipeline role: source resume text,
 pasted posting, edited resume, factual-review state, and revision. Start draft
 from source copies the original evidence into the editor. Save explicitly;

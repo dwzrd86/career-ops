@@ -10,7 +10,7 @@ related:
   - '[[PRIVACY]]'
 ---
 
-Resume Studio is available in the authenticated web dashboard. Choose a pipeline role, paste the original posting and resume text, edit the resume, acknowledge factual review, and download plain text or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
+Resume Studio is available in the authenticated web dashboard. Choose a pipeline role, paste the original posting and resume text, edit the resume, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
 
 The PDF layout contains only resume text in one column, with selectable text and standard typography. This does not guarantee acceptance or ranking by a particular ATS. Common-skills coverage is a literal checklist, not a match score or an exhaustive requirements analysis. No experience or qualifications are generated.
 
@@ -93,3 +93,33 @@ No deployment or provider request was made. The actual nested repo branch is
 The origin push again failed with 403 for `kascadeceo`. Next deliver a supported
 agent integration and verify a public frontend release, rather than treating
 this manual handoff as completion of automatic tailoring.
+
+## Iteration 4 handoff
+
+**Download Word** creates an actual DOCX in the browser after factual review.
+It preserves the reviewed text and line order, including Unicode, in ordinary
+paragraphs with Arial typography and US Letter margins. It adds no tables,
+text boxes, graphics, external links, job-description text, or generated claims.
+Document packing loads on demand. The export requires review again after any
+content edit; signing out while an export is preparing cancels its download.
+Choose the file format requested by each employer. A simple document format
+does not guarantee acceptance or ranking by any ATS.
+
+Implemented in `web/src/resumeDocument.ts` and `web/src/ResumeStudio.tsx`.
+The new DOCX tests extract `word/document.xml` to check Unicode evidence and
+reading order, invalid-input rejection, and retention of long drafts. The
+isolated browser flow verifies the downloaded archive and review gating.
+Verification passed: app TypeScript/build, six resume unit tests, five backend
+authorization tests, and the complete isolated browser flow. A clean-install
+dry run also validated the staged dependency manifests independently of the
+pre-existing uncommitted dependency changes.
+
+Z.ai's [OpenCode integration](https://docs.z.ai/devpack/tool/opencode) documents
+the separate **Z.AI Coding Plan** provider. OpenCode is installed locally;
+OpenClaw and Hermes executables were not found. The
+[supported-tool scope](https://docs.z.ai/devpack/tool/others) and
+[usage policy](https://docs.z.ai/devpack/usage-policy), checked 2026-10-14,
+still do not establish custom hosted-backend support. No credentials were
+read, provider requests made, or deployment performed. The next iteration
+should resolve a supported agent workflow and public release. Preserve the
+pre-existing discovery/Target Profile work and do not substitute paid API use.
