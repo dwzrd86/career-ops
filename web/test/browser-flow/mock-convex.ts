@@ -51,6 +51,9 @@ export type DiscoveredJob = {
 };
 
 export const functions = {
+  getResumeBundle: "resumeBundles:get",
+  saveResumeBundle: "resumeBundles:save",
+  removeResumeBundle: "resumeBundles:remove",
   acknowledgePrivacy: "privacy:acknowledge",
   reportClientError: "errorReporting:reportClient",
   listJobs: "jobs:list",

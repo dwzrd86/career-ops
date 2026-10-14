@@ -162,6 +162,8 @@ export const authComponent: ReturnType<typeof createClient<DataModel>> = createC
             .withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", user._id))
             .collect(),
         ]);
+        const resumeBundles = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", user._id)).take(50);
+        for (const bundle of resumeBundles) await ctx.db.delete(bundle._id);
         for (const job of jobs) await ctx.db.delete(job._id);
         for (const decision of matchDecisions) await ctx.db.delete(decision._id);
         for (const override of reviewerOverrides) await ctx.db.delete(override._id);

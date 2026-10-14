@@ -1,4 +1,5 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireVerifiedUser } from "./auth";
 import { requireCurrentPrivacyAcknowledgement } from "./privacy";
@@ -126,8 +127,9 @@ export const updateStatus = mutationGeneric({
   },
 });
 
-export const remove = mutationGeneric({
+export const remove = mutation({
   args: { id: v.id("jobs") },
+  returns: v.null(),
   handler: async (ctx, { id }) => {
     try {
       const userId = await requireVerifiedUser(ctx);
@@ -136,7 +138,11 @@ export const remove = mutationGeneric({
       if (job === null || job.ownerId !== userId) {
         throw new Error("Job not found");
       }
+      const bundle = await ctx.db.query("resumeBundles")
+        .withIndex("by_owner_job", (q) => q.eq("ownerId", userId).eq("jobId", id)).unique();
+      if (bundle) await ctx.db.delete(bundle._id);
       await ctx.db.delete(id);
+      return null;
     } catch (error) {
       reportBackendError("jobs.remove");
       throw error;

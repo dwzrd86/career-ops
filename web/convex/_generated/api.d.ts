@@ -18,6 +18,7 @@ import type * as errorReporting from "../errorReporting.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
 import type * as privacy from "../privacy.js";
+import type * as resumeBundles from "../resumeBundles.js";
 
 import type {
   ApiFromModules,
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   jobs: typeof jobs;
   privacy: typeof privacy;
+  resumeBundles: typeof resumeBundles;
 }>;
 
 /**

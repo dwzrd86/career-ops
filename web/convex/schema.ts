@@ -84,6 +84,16 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_created_at", ["createdAt"])
     .index("by_owner_created_at", ["ownerId", "createdAt"]),
+  resumeBundles: defineTable({
+    ownerId: v.id("users"),
+    jobId: v.id("jobs"),
+    sourceResume: v.string(),
+    description: v.string(),
+    resume: v.string(),
+    revision: v.number(),
+    reviewedAt: v.union(v.number(), v.null()),
+    updatedAt: v.number(),
+  }).index("by_owner_job", ["ownerId", "jobId"]),
   // Local discovery records remain canonical. This is a deliberately narrow,
   // owner-scoped projection for the private review UI: no resume/JD content,
   // browser data, local paths, or component-auth records are stored here.

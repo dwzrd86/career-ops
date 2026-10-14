@@ -1,3 +1,4 @@
+import type { ResumeBundle } from "../../src/convex";
 import type { DiscoveredJob, DiscoveryDecisionOutcome, DiscoveryReviewStatus, Job, JobStatus } from "./mock-convex";
 
 type BrowserFlowState = {
@@ -9,6 +10,7 @@ type BrowserFlowState = {
   password: string | null;
   pendingAccount: { email: string; password: string } | null;
   privacyAcknowledged: boolean;
+  resumeBundles: Record<string, ResumeBundle>;
 };
 
 const initialState = (): BrowserFlowState => ({
@@ -53,6 +55,7 @@ const initialState = (): BrowserFlowState => ({
   password: null,
   pendingAccount: null,
   privacyAcknowledged: false,
+  resumeBundles: {},
 });
 
 let state = initialState();
@@ -133,4 +136,20 @@ export function overrideBrowserFlowDiscoveryDecision(id: string, outcome: Discov
     override: { outcome, overriddenAt: Date.now(), reason },
     updatedAt: Date.now(),
   } : job) });
+}
+
+export function saveBrowserFlowBundle(args: any) {
+  const revision = (state.resumeBundles[args.jobId]?.revision ?? 0) + 1;
+  publish({ resumeBundles: { ...state.resumeBundles, [args.jobId]: {
+    jobId: args.jobId, sourceResume: args.sourceResume, description: args.description,
+    resume: args.resume, revision, reviewedAt: args.reviewed ? Date.now() : null, updatedAt: Date.now(),
+  } } });
+  return revision;
+}
+
+export function removeBrowserFlowBundle(jobId: string) {
+  const next = { ...state.resumeBundles };
+  delete next[jobId];
+  publish({ resumeBundles: next });
+  return null;
 }

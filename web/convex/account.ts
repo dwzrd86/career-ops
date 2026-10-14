@@ -46,14 +46,16 @@ export const exportData = queryGeneric({
         .order("desc")
         .collect(),
     ]);
+    const resumeBundles = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", userId)).take(50);
     const decisionsByJob = groupByDiscoveredJob(matchDecisions);
     const overridesByJob = groupByDiscoveredJob(reviewerOverrides);
     const statusesByJob = groupByDiscoveredJob(statusHistory);
     const user = await ctx.db.get(userId);
     return {
       exportedAt: new Date().toISOString(),
-      format: "jobbie-account-export-v2",
+      format: "jobbie-account-export-v4",
       jobs: jobs.map(withoutOwnership),
+      resumeBundles: resumeBundles.map(withoutOwnership),
       discovery: discoveredJobs.map((job) => ({
         ...withoutOwnership(job),
         matchDecisions: (decisionsByJob.get(job._id) ?? []).map(withoutOwnership),

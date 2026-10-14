@@ -6,6 +6,8 @@ import {
   createBrowserFlowJob,
   overrideBrowserFlowDiscoveryDecision,
   subscribeBrowserFlow,
+  saveBrowserFlowBundle,
+  removeBrowserFlowBundle,
   updateBrowserFlowDiscoveryStatus,
   updateBrowserFlowJobStatus,
 } from "./browser-state";
@@ -26,7 +28,7 @@ export function Unauthenticated({ children }: PropsWithChildren) {
   return useBrowserFlowState().authenticated ? null : children;
 }
 
-export function useQuery(reference: string) {
+export function useQuery(reference: string, args?: Record<string, any> | "skip") {
   const state = useBrowserFlowState();
   if (reference === "enrollment:status") return { enrolled: state.enrolled };
   if (reference === "privacy:status") {
@@ -36,6 +38,7 @@ export function useQuery(reference: string) {
       requiresAcknowledgement: !state.privacyAcknowledged,
     };
   }
+  if (reference === "resumeBundles:get") return args && args !== "skip" ? state.resumeBundles[args.jobId] ?? null : undefined;
   if (reference === "jobs:list") return state.jobs;
   if (reference === "discovery:list") return state.discoveredJobs;
   return undefined;
@@ -43,6 +46,8 @@ export function useQuery(reference: string) {
 
 export function useMutation(reference: string) {
   return async (args: Record<string, string> = {}) => {
+    if (reference === "resumeBundles:save") return saveBrowserFlowBundle(args);
+    if (reference === "resumeBundles:remove") return removeBrowserFlowBundle(args.jobId);
     if (reference === "privacy:acknowledge") return acknowledgeBrowserFlowPrivacy();
     if (reference === "jobs:create") return createBrowserFlowJob(args as Parameters<typeof createBrowserFlowJob>[0]);
     if (reference === "jobs:updateStatus") return updateBrowserFlowJobStatus(args.id, args.status as import("./mock-convex").JobStatus);

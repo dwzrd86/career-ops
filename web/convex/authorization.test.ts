@@ -183,7 +183,7 @@ describe("isolated Convex authorization boundary", () => {
     expect(exportA.jobs).toEqual([
       expect.objectContaining({ id: jobA, company: "export-delete-a Company" }),
     ]);
-    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v2" }));
+    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v4" }));
     expect(exportA.discovery).toEqual([
       expect.objectContaining({
         id: discoveredJobA,
@@ -218,6 +218,55 @@ describe("isolated Convex authorization boundary", () => {
           expect.objectContaining({ action: "exportRequested" }),
           expect.objectContaining({ action: "accountDeleted" }),
         ]));
+    });
+  });
+});
+
+
+describe("saved resume bundles", () => {
+  test("bundles are private, conflict-safe, validated, and follow job deletion", async () => {
+    const deployment = createIsolatedDeployment();
+    const a = await provisionDisposableAccount(deployment, "resume-a");
+    const b = await provisionDisposableAccount(deployment, "resume-b");
+    const jobId = await a.client.mutation(api.jobs.create, jobInput("resume-a"));
+    const input = { jobId, sourceResume: "Original factual evidence", description: "Python required",
+      resume: "Factual tailored draft", reviewed: true, expectedRevision: null };
+    await expect(deployment.query(api.resumeBundles.get, { jobId })).rejects.toThrow("Authentication required");
+    expect(await b.client.query(api.resumeBundles.get, { jobId })).toBeNull();
+    await expect(b.client.mutation(api.resumeBundles.save, input)).rejects.toThrow("Job not found");
+    await expect(a.client.mutation(api.resumeBundles.save, { ...input, sourceResume: " " })).rejects.toThrow("sourceResume");
+    await expect(a.client.mutation(api.resumeBundles.save, { ...input, resume: "x".repeat(40001) })).rejects.toThrow("resume");
+    expect(await a.client.mutation(api.resumeBundles.save, input)).toBe(1);
+    const saved = await a.client.query(api.resumeBundles.get, { jobId });
+    expect(saved).toEqual(expect.objectContaining({ sourceResume: input.sourceResume, resume: input.resume, revision: 1, reviewedAt: expect.any(Number) }));
+    await expect(a.client.mutation(api.resumeBundles.save, input)).rejects.toThrow("another tab");
+    await expect(b.client.mutation(api.resumeBundles.remove, { jobId, expectedRevision: 1 })).rejects.toThrow("Job not found");
+    expect(await a.client.mutation(api.resumeBundles.save, { ...input, resume: "Edited draft", reviewed: false, expectedRevision: 1 })).toBe(2);
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toEqual(expect.objectContaining({ revision: 2, reviewedAt: null }));
+    await expect(a.client.mutation(api.resumeBundles.remove, { jobId, expectedRevision: 1 })).rejects.toThrow("another tab");
+    const exported = await a.client.query(api.account.exportData, {});
+    expect(exported.resumeBundles).toEqual([expect.objectContaining({ jobId, sourceResume: input.sourceResume, resume: "Edited draft" })]);
+    expect((await b.client.query(api.account.exportData, {})).resumeBundles).toEqual([]);
+    await a.client.mutation(api.resumeBundles.remove, { jobId, expectedRevision: 2 });
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toBeNull();
+    await a.client.mutation(api.resumeBundles.save, input);
+    await a.client.mutation(api.jobs.remove, { id: jobId });
+    expect((await a.client.query(api.account.exportData, {})).resumeBundles).toEqual([]);
+  });
+
+  test("account deletion erases its bundles and preserves another account's evidence", async () => {
+    const deployment = createIsolatedDeployment();
+    const a = await provisionDisposableAccount(deployment, "resume-delete-a");
+    const b = await provisionDisposableAccount(deployment, "resume-delete-b");
+    for (const [account, label] of [[a, "a"], [b, "b"]] as const) {
+      const jobId = await account.client.mutation(api.jobs.create, jobInput(label));
+      await account.client.mutation(api.resumeBundles.save, { jobId, sourceResume: label,
+        description: "Role requirements", resume: label, reviewed: false, expectedRevision: null });
+    }
+    await deployment.mutation(internal.auth.onDelete, { doc: a.authUser, model: "user" });
+    await deployment.run(async (ctx) => {
+      expect(await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", a.userId as any)).take(50)).toEqual([]);
+      expect(await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", b.userId as any)).take(50)).toHaveLength(1);
     });
   });
 });

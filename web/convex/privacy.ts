@@ -6,7 +6,7 @@ import { requireEnrolledUser } from "./enrollment";
 
 // This identifies the published notice bundle. Policy content remains in the
 // source-controlled documents; accounts retain only the version and time.
-export const PRIVACY_POLICY_VERSION = "2026-08-01";
+export const PRIVACY_POLICY_VERSION = "2026-10-14-resume-bundles";
 
 export async function requireCurrentPrivacyAcknowledgement(
   ctx: QueryCtx | MutationCtx,

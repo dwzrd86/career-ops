@@ -114,3 +114,19 @@ files, application answers, tokens, passwords, email
 bodies, account IDs, or full URLs. Set the matching non-secret
 `VITE_APP_DEPLOYMENT_VERSION` (Netlify build) and `APP_DEPLOYMENT_VERSION`
 (Convex) release labels before deployment so reports can be tied to a release.
+
+
+## Saved resume bundles
+
+Resume Studio saves one private bundle per pipeline role: source resume text,
+pasted posting, edited resume, factual-review state, and revision. Start draft
+from source copies the original evidence into the editor. Save explicitly;
+unsaved changes clear on refresh or sign-out. Content edits clear approval,
+and downloading text or printing PDF requires factual review. Saved bundles
+restore on role selection. Conflicting saves from other tabs are rejected.
+Delete a bundle in Studio, remove its role, or delete the account to erase it.
+Account exports include saved bundle text. Limits: 50 bundles per account and
+40,000 characters per text field. No AI processing is implemented yet.
+
+See [Resume Studio](../docs/RESUME_STUDIO.md) and the updated
+[privacy notice](../docs/PRIVACY.md) before using real career content.

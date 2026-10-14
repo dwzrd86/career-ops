@@ -73,6 +73,16 @@ export type DiscoveredJob = {
   } | null;
 };
 
+export type ResumeBundle = {
+  jobId: string;
+  sourceResume: string;
+  description: string;
+  resume: string;
+  revision: number;
+  reviewedAt: number | null;
+  updatedAt: number;
+};
+
 export type PrivacyStatus = {
   acknowledgedAt: number | null;
   currentVersion: string;
@@ -101,6 +111,7 @@ export type AccountExport = {
     updatedAt: number;
     url: string;
   }>;
+  resumeBundles?: Array<ResumeBundle & { id: string }>;
   exportedAt: string;
   format: string;
   jobs: Array<Omit<Job, "_id" | "_creationTime"> & { id: string }>;
@@ -108,6 +119,12 @@ export type AccountExport = {
 };
 
 export const functions = {
+  getResumeBundle: makeFunctionReference<"query", { jobId: string }, ResumeBundle | null>("resumeBundles:get"),
+  saveResumeBundle: makeFunctionReference<"mutation", {
+    jobId: string; sourceResume: string; description: string; resume: string;
+    reviewed: boolean; expectedRevision: number | null;
+  }, number>("resumeBundles:save"),
+  removeResumeBundle: makeFunctionReference<"mutation", { jobId: string; expectedRevision: number }, null>("resumeBundles:remove"),
   acknowledgePrivacy: makeFunctionReference<"mutation", Record<string, never>, null>("privacy:acknowledge"),
   exportAccountData: makeFunctionReference<"query", Record<string, never>, AccountExport>("account:exportData"),
   recordAccountExport: makeFunctionReference<"mutation", Record<string, never>, null>("account:recordExportRequest"),

@@ -90,11 +90,18 @@ async function main() {
 
     const studio = page.locator("#resume-studio");
     await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    await studio.getByLabel("Source resume", { exact: true }).fill("Test Candidate: Built Python automation with SQL on AWS.");
     await studio.getByLabel("Job description", { exact: true }).fill("Python, SQL, AWS and leadership required. React experience preferred.");
     await studio.getByLabel("Resume text", { exact: true }).fill("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS");
     await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     await studio.getByRole("checkbox").check();
+    await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
+    await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
+    assert.equal(await studio.getByRole("checkbox").isChecked(), true);
     const downloadReady = page.waitForEvent("download");
     await studio.getByRole("button", { name: "Download text" }).click();
     const download = await downloadReady;
@@ -111,6 +118,13 @@ async function main() {
     await studio.getByLabel("Resume text", { exact: true }).fill("Updated draft");
     assert.equal(await studio.getByRole("checkbox").isChecked(), false);
 
+    // Switching away from an unsaved edit must ask before losing it.
+    page.once("dialog", dialog => dialog.dismiss());
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
+    assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "Updated draft");
+    await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
+    await expectVisible(page, studio.getByText("Saved revision 2.", { exact: true }), "updated unreviewed bundle");
+
     const status = page.getByLabel("Update status for Security regression role");
     await status.selectOption("applied");
     await page.waitForFunction((select) => select instanceof HTMLSelectElement && select.value === "applied", await status.elementHandle());
@@ -123,6 +137,17 @@ async function main() {
     await expectVisible(page, page.locator("h1").filter({ hasText: "Pipeline" }), "signed-in dashboard");
     assert.equal(await page.locator("#resume-studio").getByLabel("Resume text", { exact: true }).inputValue(), "");
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "persisted role");
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "Updated draft");
+    assert.equal(await studio.getByRole("checkbox").isChecked(), false);
+    assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
+    page.once("dialog", dialog => dialog.accept());
+    await studio.getByRole("button", { name: "Delete saved bundle" }).click();
+    await expectVisible(page, studio.getByText("Saved bundle deleted. Editor text remains unsaved."), "deleted saved bundle");
+    page.once("dialog", dialog => dialog.accept());
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
+    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");
     console.log("Isolated browser flow passed");
   } finally {
