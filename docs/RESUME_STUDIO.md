@@ -81,10 +81,22 @@ reuses the UI's draft validation, and pins the `zai-coding-plan` provider with
 no general API fallback. A custom primary agent denies all tools; plugins and
 public session sharing are disabled. Briefs are attached from a private
 temporary directory under ignored `agent/.local/resume-runs`, rather than
-placed in command arguments. Temporary attachments are removed after the run.
+placed in command arguments. The runner passes the private workspace explicitly
+and disables project configuration discovery. Temporary attachments are removed after the run.
 Output uses exclusive creation and owner-only permissions. Provider logs are
 not printed; failed, incomplete, oversized, tool-using, or fenced responses
-do not create a draft. The default timeout is three minutes.
+do not create a draft. The default timeout is three minutes, including recovery.
+
+OpenCode 1.15.10 can lose final CLI events during teardown even when its local
+session contains a completed response ([upstream issue](https://github.com/anomalyco/opencode/issues/26855)).
+If the stream is incomplete and identifies exactly one session, the runner uses
+`opencode export` to retrieve that session without another model request.
+Recovery requires the exact session ID and workspace, exactly one user and
+assistant turn, the selected Coding Plan model and resume agent, a completion
+timestamp, and both message and step finish reasons of `stop`. Tool actions,
+provider errors, partial responses, mismatched sessions, oversized exports,
+and invalid drafts remain rejected. The bounded export goes to an owner-only
+temporary file to avoid stdout pipe truncation and is removed with the workspace.
 
 OpenCode still uses its own credential store and local session history, and
 loads its normal configuration. Run with a trusted OpenCode setup; these
@@ -100,8 +112,8 @@ limits subscription use to supported tools (checked 2026-10-14). OpenCode's
 [CLI](https://opencode.ai/docs/cli/),
 [configuration](https://opencode.ai/docs/config/), and
 [permissions](https://opencode.ai/docs/permissions/) document the runner's
-flags and provider/tool restrictions. No live provider request or credential
-inspection was performed in this iteration.
+flags and provider/tool restrictions. See the latest verification below for
+live fictional-data checks.
 
 Verification includes a fake OpenCode executable exercising subprocess
 arguments, private attachment transport, restricted configuration, Unicode,
@@ -252,3 +264,27 @@ explicitly available Coding Plan model; avoid general API fallback.
 The frontend remains unreleased. Preserve all pre-existing discovery/Target
 Profile edits on `feat/autodiscovery-target-profile`. See [[RESUME_STUDIO]] for
 the working local launch command and export workflow.
+
+## 2026-10-14 — completed live GLM generation
+
+Diagnosed missing CLI events against OpenCode's tagged 1.15.10 source and
+upstream reports. A minimal fictional probe emitted only `step_start`, while
+its local exported session contained the text and a completed `stop` response.
+Added strict same-session recovery, with no extra model request or paid API fallback.
+
+A live `zai-coding-plan/glm-4.7` run through the updated runner saved a complete
+149-character fictional resume: source name, employer, dates, SQL/Excel skills,
+and reporting work were preserved; an unsupported stakeholder requirement
+from the posting was omitted. This verifies one completed synthetic generation,
+not production availability or arbitrary factual accuracy. No real career
+records were sent. An isolated global-config probe returned 401; the successful
+run used the existing trusted global Coding Plan configuration, whose credential
+values were never printed or copied. OpenCode still retains its local history.
+
+Verification: eight runner/bridge tests, eight resume/export tests,
+TypeScript/Vite build, and the isolated browser workflow passed. Recovery tests
+cover provider errors, wrong session/workspace/model, extra turns, unfinished
+responses, tools, output limits, a large flushed export, cleanup, and unchanged
+failed-output behavior. GitHub account remains `dwzrd86` with origin
+`https://github.com/dwzrd86/career-ops`. Hosted release and live discovery-to-export
+verification remain outstanding; preserve the existing discovery/auth changes.

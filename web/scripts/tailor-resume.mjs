@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { ResumeGenerationError, providerFailure } from "./resume-generation-errors.mjs";
-import { access, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, open, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -52,6 +52,67 @@ export function draftFromEvents(stdout) {
   return draft;
 }
 
+export function sessionFromEvents(stdout) {
+  const ids = new Set(stdout.split(/\r?\n/).filter(line => line.trim()).map(line => JSON.parse(line).sessionID));
+  if (ids.size !== 1 || !/^ses_[a-zA-Z0-9]+$/.test([...ids][0] ?? "")) {
+    throw new ResumeGenerationError("incomplete");
+  }
+  return [...ids][0];
+}
+
+export function draftFromSession(session, { sessionID, model, workspace }) {
+  const invalid = () => { throw new ResumeGenerationError("incomplete"); };
+  if (session?.info?.id !== sessionID || session.info.directory !== workspace ||
+      !Array.isArray(session.messages) || session.messages.length !== 2) invalid();
+  const [user, assistant] = session.messages;
+  const info = assistant?.info;
+  if (user?.info?.role !== "user" || info?.role !== "assistant" || info.sessionID !== sessionID ||
+      info.agent !== "resume-tailor" || `${info.providerID}/${info.modelID}` !== model) invalid();
+  if (info.error) throw providerFailure(info.error);
+  if (info.finish !== "stop" || !Number.isFinite(info.time?.completed) || !Array.isArray(assistant.parts)) invalid();
+  if (assistant.parts.some(part => part.sessionID !== sessionID || part.messageID !== info.id)) invalid();
+  if (assistant.parts.some(part => part.type === "tool")) {
+    throw new Error("The agent attempted a tool action; no draft saved.");
+  }
+  // Reuse the same strict validation as the event stream. An export is not a retry.
+  return draftFromEvents(assistant.parts.map(part => JSON.stringify({
+    type: part.type === "step-finish" ? "step_finish" : part.type, part,
+  })).join("\n"));
+}
+
+async function recoverDraft({ events, executable, workspace, model, env, timeoutMs }) {
+  const sessionID = sessionFromEvents(events);
+  const file = join(workspace, "session.json");
+  const handle = await open(file, "wx", 0o600);
+  try {
+    await new Promise((accept, reject) => {
+      // A regular file avoids OpenCode's stdout pipe truncation during teardown.
+      const child = spawn(executable, ["export", sessionID, "--pure"],
+        { cwd: workspace, env, stdio: ["ignore", handle.fd, "ignore"] });
+      let failure;
+      const timer = setTimeout(() => { failure = new ResumeGenerationError("timeout"); child.kill("SIGKILL"); }, timeoutMs);
+      const limit = setInterval(async () => {
+        try {
+          if ((await handle.stat()).size > 1000000) {
+            failure = new ResumeGenerationError("incomplete"); child.kill("SIGKILL");
+          }
+        } catch { /* close handler owns cleanup */ }
+      }, 50);
+      child.on("error", () => { clearTimeout(timer); clearInterval(limit); reject(new ResumeGenerationError("unavailable")); });
+      child.on("close", code => {
+        clearTimeout(timer); clearInterval(limit);
+        if (failure || code !== 0) reject(failure || new ResumeGenerationError("incomplete"));
+        else accept();
+      });
+    });
+    if ((await handle.stat()).size > 1000000) throw new ResumeGenerationError("incomplete");
+    let session;
+    try { session = JSON.parse(await readFile(file, "utf8")); }
+    catch { throw new ResumeGenerationError("incomplete"); }
+    return draftFromSession(session, { sessionID, model, workspace });
+  } finally { await handle.close(); }
+}
+
 export async function runTailoring({ brief, out, model, send = false }, {
   executable = "opencode", timeoutMs = 180000, env = process.env,
 } = {}) {
@@ -85,9 +146,11 @@ export async function runTailoring({ brief, out, model, send = false }, {
     };
     const childEnv = { ...env, OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
       OPENCODE_PERMISSION: JSON.stringify({ "*": "deny" }), OPENCODE_AUTO_SHARE: "false",
-      OPENCODE_DISABLE_AUTOUPDATE: "true", OPENCODE_DISABLE_CLAUDE_CODE: "true" };
+      OPENCODE_DISABLE_AUTOUPDATE: "true", OPENCODE_DISABLE_CLAUDE_CODE: "true",
+      OPENCODE_DISABLE_PROJECT_CONFIG: "true" };
+    const started = Date.now();
     const events = await new Promise((accept, reject) => {
-      const child = spawn(executable, ["run", "--pure", "--format", "json", "--model", model,
+      const child = spawn(executable, ["run", "--pure", "--dir", workspace, "--format", "json", "--model", model,
         "--agent", "resume-tailor", "--file", attachment, "--", "Tailor the attached factual resume brief."],
       { cwd: workspace, env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "", size = 0, failure;
@@ -107,7 +170,14 @@ export async function runTailoring({ brief, out, model, send = false }, {
         else accept(stdout);
       });
     });
-    const draft = draftFromEvents(events);
+    let draft;
+    try { draft = draftFromEvents(events); }
+    catch (error) {
+      if (!(error instanceof ResumeGenerationError) || error.code !== "incomplete") throw error;
+      const remaining = timeoutMs - (Date.now() - started);
+      if (remaining <= 0) throw new ResumeGenerationError("timeout");
+      draft = await recoverDraft({ events, executable, workspace, model, env: childEnv, timeoutMs: remaining });
+    }
     await writeFile(output, draft + "\n", { flag: "wx", mode: 0o600 });
     return "Draft saved. Import it in Resume Studio, compare against source evidence, and review before exporting.";
   } finally { await rm(workspace, { recursive: true, force: true }); }
