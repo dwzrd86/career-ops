@@ -149,7 +149,12 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
         <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <div className="resume-evidence">
           <h3>Tailor with GLM</h3>
-          <p>Download a brief, open it in a GLM-configured supported agent such as OpenClaw, and save its result as a .txt file. Import the draft here to review and export it.</p>
+          <p>Download a brief, generate a draft with your local OpenCode Z.AI Coding Plan agent, then import the .txt file here to review and export it.</p>
+          <details><summary>Generate with the local runner</summary>
+            <p>Sign in through <code>opencode auth login</code> and select Z.AI Coding Plan. Choose its model ID using <code>/models</code> in OpenCode. From the career-ops folder, run:</p>
+            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>node web/scripts/tailor-resume.mjs --brief "path/to/downloaded-glm-brief.txt" --out "output/resume.txt" --model "zai-coding-plan/YOUR-MODEL-ID" --send-to-glm</pre>
+            <p>Omit <code>--send-to-glm</code> to validate without an AI call. Use a new output filename for each draft. OpenCode retains local session history separately from your dashboard account.</p>
+          </details>
           <p>The brief contains your source resume and posting. Sharing it with your agent sends that content to its AI provider. This dashboard makes no AI calls.</p>
           <button type="button" className="button secondary" disabled={!job || loading || !sourceResume.trim() || !description.trim()} onClick={() => {
             if (!job) return;
@@ -160,7 +165,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
             const file = event.target.files?.[0]; event.target.value = "";
             if (file) void importDraft(file);
           }} /></label>
-          <a href="https://docs.z.ai/devpack/tool/others" target="_blank" rel="noreferrer">Supported GLM tools ↗</a>
+          <a href="https://docs.z.ai/devpack/tool/opencode" target="_blank" rel="noreferrer">OpenCode Coding Plan setup ↗</a>
         </div>
         <div className="resume-evidence" aria-live="polite"><h3>Keyword evidence</h3>{!description.trim() ? <p>Paste a job description to check common skills.</p> : !requested.length ? <p>No terms from the common-skills checklist found. Review this role’s requirements manually.</p> : <><p>{covered.length} of {requested.length} common skills appear in your resume. This is a literal text check, not an ATS score.</p><div className="resume-tags">{covered.map((term) => <span className="covered" key={term}>✓ {term}</span>)}{missing.map((term) => <span key={term}>Review: {term}</span>)}</div><p>Only add a missing skill when your experience supports it.</p></>}</div>
       </div>

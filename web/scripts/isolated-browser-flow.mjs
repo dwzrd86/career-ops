@@ -120,7 +120,7 @@ async function main() {
     await expectVisible(page, studio.getByText("Draft imported. Review changed lines against your source resume before exporting.", { exact: true }), "imported draft confirmation");
     assert.equal(await studio.getByRole("checkbox").isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
-    await studio.locator("summary").click();
+    await studio.locator("summary").filter({ hasText: /^Review \d+ changed or added lines/ }).click();
     await expectVisible(page, studio.getByText(/Skills in the draft absent from source wording: React/), "unsupported skill warning");
     await studio.getByRole("checkbox").check();
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();

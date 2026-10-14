@@ -58,6 +58,61 @@ Target Profile changes remain pre-existing work in the working tree.
 
 The development backend can be verified independently of the public web release. Do not describe local or development checks as a production release. GitHub pushes currently fail with a permission error for the configured origin.
 
+## Local OpenCode generation (iteration 5)
+
+`web/scripts/tailor-resume.mjs` automates the brief-to-draft step through
+OpenCode. Requires Node 22.18+ for the shared TypeScript validators, and an
+installed OpenCode version supporting `run --pure --format json --file`.
+Authenticate using `opencode auth login`, selecting **Z.AI Coding Plan**.
+Use `/models` in OpenCode to find the desired model ID. From `career-ops`:
+
+```bash
+node web/scripts/tailor-resume.mjs --brief "path/to/downloaded-glm-brief.txt" --out "output/resume.txt" --model "zai-coding-plan/YOUR-MODEL-ID"
+```
+
+This validates locally without calling a provider. Add `--send-to-glm` to
+send the source resume and posting through OpenCode and generate the draft.
+The output directory must exist inside career-ops; choose a new filename for
+each result. Import that file using **Import tailored draft**, compare it
+against the source, review the facts, and export the Word document or PDF.
+
+The runner rebuilds the canonical factual instructions from the brief's JSON,
+reuses the UI's draft validation, and pins the `zai-coding-plan` provider with
+no general API fallback. A custom primary agent denies all tools; plugins and
+public session sharing are disabled. Briefs are attached from a private
+temporary directory under ignored `agent/.local/resume-runs`, rather than
+placed in command arguments. Temporary attachments are removed after the run.
+Output uses exclusive creation and owner-only permissions. Provider logs are
+not printed; failed, incomplete, oversized, tool-using, or fenced responses
+do not create a draft. The default timeout is three minutes.
+
+OpenCode still uses its own credential store and local session history, and
+loads its normal configuration. Run with a trusted OpenCode setup; these
+permission settings are not an OS sandbox. Dashboard account deletion does
+not delete downloads, generated files, or OpenCode history. The user must
+still review every generated claim; format validation cannot establish truth.
+
+This is an explicit local agent workflow, not a custom hosted Coding Plan
+API or one-click dashboard backend. Z.ai's
+[OpenCode guide](https://docs.z.ai/devpack/tool/opencode) documents the
+Coding Plan provider and its [usage policy](https://docs.z.ai/devpack/usage-policy)
+limits subscription use to supported tools (checked 2026-10-14). OpenCode's
+[CLI](https://opencode.ai/docs/cli/),
+[configuration](https://opencode.ai/docs/config/), and
+[permissions](https://opencode.ai/docs/permissions/) document the runner's
+flags and provider/tool restrictions. No live provider request or credential
+inspection was performed in this iteration.
+
+Verification includes a fake OpenCode executable exercising subprocess
+arguments, private attachment transport, restricted configuration, Unicode,
+timeouts, failures, cleanup, and non-overwrite behavior:
+`node --test web/scripts/tailor-resume.test.mjs`. Build, resume tests,
+authorization tests, and the isolated browser flow also passed.
+
+Next verify generation with the user's configured Coding Plan agent, reduce
+the remaining manual dashboard handoff, and deliver a verified frontend
+release. Preserve pre-existing uncommitted discovery/Target Profile changes.
+
 ## Verification
 
 `npm run build:app` checks TypeScript and builds the UI. `npm run test:browser-flow` exercises selection, keyword evidence, factual review gating, exact text download, print layout, review reset after editing, sign-out draft clearing, and mobile overflow alongside the existing account and discovery flow. The expanded browser flow also checks save, role switching, restore after sign-in, review invalidation, and deletion. `npm run test:authorization` checks cross-account isolation, optimistic conflicts, input limits, bundle exports, and cascaded job/account deletion. These are isolated checks with fictional career data.
