@@ -18,9 +18,43 @@ Select a role to restore its saved bundle. The source resume is kept separately 
 
 Every content edit clears factual approval. Review status persists with a save. Conflicting saves or deletes from another tab are rejected using the expected revision. Export or otherwise preserve unsaved edits before reloading after a conflict. Each account can retain 50 bundles, one per pipeline role, with 40,000 characters per text field. Delete saved bundle removes the server copy while leaving editor text unsaved; removing the pipeline job and deleting the account also remove saved bundles. The account JSON export includes bundle evidence and drafts. [[PRIVACY]] documents this changed boundary and the in-app notice requires acknowledgement of its new version before saving.
 
+## GLM handoff (iteration 3)
+
+Resume Studio now provides **Download GLM brief** after selecting a role and
+supplying a source resume and job description. The downloaded text contains
+factual tailoring instructions and JSON-encoded evidence. The instructions
+reuse the established `modes/pdf.md` approach: prioritize relevant proof points,
+rewrite concisely, and never invent qualifications or metrics.
+
+Open the brief in your own GLM-configured supported agent, save the returned
+resume as a UTF-8 `.txt` file, then use **Import tailored draft**. This is a
+manual handoff, not an automated backend. The dashboard does not access a
+provider key or make model requests. Sharing the brief with an external agent
+shares its resume and posting content with that agent's provider. The downloaded
+file is not covered by private account deletion; handle it as personal data.
+
+The import rejects empty, binary, corrupt, and oversized files; replacing a
+draft requires confirmation. Importing clears factual approval. Expand the
+changed-lines comparison to inspect claims against the source; new literal
+skills are highlighted. These checks do not establish truth or guarantee that
+a model obeyed the prompt. Existing manual edits, per-role saves, and export
+review gating still apply.
+
+[Z.ai's supported-tool list](https://docs.z.ai/devpack/tool/others), checked
+2026-10-14, now includes general-purpose agents such as OpenClaw and Hermes.
+It explicitly limits subscription use to its supported tools and scenarios.
+A custom Convex backend remains outside the documented supported scope. No
+paid API fallback was added and no real resume was sent to an AI provider.
+
 ## Next iteration
 
 Implement GLM tailoring with existing career-ops factual verification/tailoring utilities. Z.ai's [current Coding Plan policy](https://docs.z.ai/devpack/usage-policy), checked 2026-10-14, limits subscription use to supported tools. A custom hosted backend is not confirmed supported. Verify a supported integration before using the Coding Plan; do not silently substitute a paid general API or send resume content to a provider. This iteration adds no AI calls and requires no provider credential.
+
+Next automate the handoff through an actual supported general-purpose agent
+with an explicit local integration, after confirming its setup and data-sharing
+boundary. A prompt export alone does not meet the requested automatic tailoring
+experience. The public frontend still needs a verified release; discovery and
+Target Profile changes remain pre-existing work in the working tree.
 
 The development backend can be verified independently of the public web release. Do not describe local or development checks as a production release. GitHub pushes currently fail with a permission error for the configured origin.
 
@@ -44,3 +78,18 @@ the complete web experience available for tonight's job search. Do not mistake
 manual editing and saved drafts for automated, ATS-ready generation. Confirm
 Coding Plan support for the chosen integration using current provider docs;
 no provider keys were read or printed and no AI request was made here.
+
+## Iteration 3 handoff
+
+GLM brief download, UTF-8 draft import, changed-line comparison, and new literal
+skill warnings are implemented in `web/src/ResumeStudio.tsx` and
+`web/src/resumeTailoring.ts`. Verification: app typecheck/build, four tailoring
+unit tests (`npx vitest run --config vitest.resume.config.ts`), five authorization
+tests, and the expanded isolated browser flow. The browser confirmation test
+now waits for each dialog to finish before attaching the next handler.
+
+No deployment or provider request was made. The actual nested repo branch is
+`feat/autodiscovery-target-profile`; preserve the pre-existing uncommitted work.
+The origin push again failed with 403 for `kascadeceo`. Next deliver a supported
+agent integration and verify a public frontend release, rather than treating
+this manual handoff as completion of automatic tailoring.

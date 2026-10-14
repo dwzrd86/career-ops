@@ -1,14 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Printer } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { functions, type Job } from "./convex";
 
-// Conservative literal evidence check, not a prediction of an ATS score.
-const terms = ["Python", "TypeScript", "JavaScript", "React", "Node.js", "SQL", "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Linux", "CI/CD", "Git", "REST", "GraphQL", "security", "leadership", "stakeholder", "automation", "machine learning", "data analysis", "project management", "customer success", "Salesforce", "Excel", "communication"];
-function containsTerm(text: string, term: string) {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "i").test(text);
-}
+import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges } from "./resumeTailoring";
 
 export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const [jobId, setJobId] = useState("");
@@ -74,21 +69,46 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  const requested = useMemo(() => terms.filter((term) => containsTerm(description, term)), [description]);
+  const requested = useMemo(() => resumeTerms.filter((term) => containsTerm(description, term)), [description]);
   const covered = requested.filter((term) => containsTerm(resume, term));
   const missing = requested.filter((term) => !containsTerm(resume, term));
   const canExport = Boolean(job && resume.trim() && reviewed && !loading && !busy);
   const filename = `${job?.company || "company"}-${job?.title || "resume"}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 
-  function download() {
-    const blob = new Blob([resume.trim() + "\n"], { type: "text/plain;charset=utf-8" });
+  function downloadFile(text: string, name: string) {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${filename}.txt`;
+    link.download = name;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function download() {
+    downloadFile(resume.trim() + "\n", `${filename}.txt`);
     setMessage("Resume downloaded. Use PDF if the employer does not accept text files.");
+  }
+
+  const importContext = useRef<object | null>(null);
+  importContext.current = { jobId, sourceResume, description, resume };
+  useEffect(() => () => { importContext.current = null; }, []);
+  const changes = useMemo(() => draftChanges(sourceResume, resume), [sourceResume, resume]);
+  const newSkills = resumeTerms.filter(term => containsTerm(resume, term) && !containsTerm(sourceResume, term));
+
+  async function importDraft(file: File) {
+    const context = importContext.current;
+    try {
+      if (!/\.txt$/i.test(file.name)) throw new Error("Choose a .txt draft saved as UTF-8 plain text.");
+      if (file.size > 160000) throw new Error("Draft files must be smaller than 160 KB.");
+      const draft = parseResumeDraft(await file.text());
+      if (context !== importContext.current) return;
+      if (resume.trim() && !window.confirm("Replace the current draft with the imported draft?")) return;
+      setResume(draft); setReviewed(false); setDirty(true);
+      setMessage("Draft imported. Review changed lines against your source resume before exporting.");
+    } catch (error) {
+      if (context === importContext.current) setMessage(error instanceof Error ? error.message : "Could not read the draft file.");
+    }
   }
 
   return <section className="pipeline-panel resume-studio" id="resume-studio" aria-labelledby="resume-studio-title">
@@ -103,11 +123,32 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
         <label>Source resume<textarea aria-label="Source resume" rows={6} maxLength={40000} disabled={!job || loading} placeholder="Paste your factual, original resume as evidence." value={sourceResume} onChange={(event) => { setSourceResume(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <button type="button" className="button secondary" disabled={!sourceResume.trim() || loading} onClick={() => { if (resume.trim() && !window.confirm("Replace the current draft with the source resume?")) return; setResume(sourceResume); setReviewed(false); setDirty(true); }}>Start draft from source</button>
         <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
+        <div className="resume-evidence">
+          <h3>Tailor with GLM</h3>
+          <p>Download a brief, open it in a GLM-configured supported agent such as OpenClaw, and save its result as a .txt file. Import the draft here to review and export it.</p>
+          <p>The brief contains your source resume and posting. Sharing it with your agent sends that content to its AI provider. This dashboard makes no AI calls.</p>
+          <button type="button" className="button secondary" disabled={!job || loading || !sourceResume.trim() || !description.trim()} onClick={() => {
+            if (!job) return;
+            downloadFile(tailoringBrief({ company: job.company, title: job.title }, sourceResume, description), `${filename}-glm-brief.txt`);
+            setMessage("Tailoring brief downloaded. Open it in your GLM agent; then import its plain text resume draft.");
+          }}>Download GLM brief</button>
+          <label>Import tailored draft<input type="file" accept=".txt,text/plain" style={{ maxWidth: "100%" }} aria-label="Import tailored draft" disabled={!job || loading || !sourceResume.trim() || !description.trim()} onChange={event => {
+            const file = event.target.files?.[0]; event.target.value = "";
+            if (file) void importDraft(file);
+          }} /></label>
+          <a href="https://docs.z.ai/devpack/tool/others" target="_blank" rel="noreferrer">Supported GLM tools ↗</a>
+        </div>
         <div className="resume-evidence" aria-live="polite"><h3>Keyword evidence</h3>{!description.trim() ? <p>Paste a job description to check common skills.</p> : !requested.length ? <p>No terms from the common-skills checklist found. Review this role’s requirements manually.</p> : <><p>{covered.length} of {requested.length} common skills appear in your resume. This is a literal text check, not an ATS score.</p><div className="resume-tags">{covered.map((term) => <span className="covered" key={term}>✓ {term}</span>)}{missing.map((term) => <span key={term}>Review: {term}</span>)}</div><p>Only add a missing skill when your experience supports it.</p></>}</div>
       </div>
       <div className="resume-draft">
         <label>Resume text<textarea aria-label="Resume text" disabled={!job || loading} rows={20} maxLength={40000} placeholder={"YOUR NAME\nEmail · Phone · Location\n\nSUMMARY\n\nEXPERIENCE\n\nEDUCATION\n\nSKILLS"} value={resume} onChange={(event) => { setResume(event.target.value); setReviewed(false); setDirty(true); setMessage(""); }} /></label>
-        <p className="resume-session-note">Save stores your source resume, job description, draft, and review state in your private account. Unsaved edits are cleared on refresh or sign-out. No AI provider receives this content.</p>
+        {sourceResume.trim() && resume.trim() && <details className="resume-evidence">
+          <summary>Review {changes.length} changed or added lines against source</summary>
+          <p>Check changed claims, dates, metrics, employers, and contact details against your original evidence. Wording changes can be valid; this comparison does not verify facts.</p>
+          {newSkills.length > 0 && <p>Skills in the draft absent from source wording: {newSkills.join(", ")}. Verify supporting evidence or remove them.</p>}
+          <ol style={{ overflowWrap: "anywhere" }}>{changes.map((line, index) => <li key={index}>{line}</li>)}</ol>
+        </details>}
+        <p className="resume-session-note">Save stores your source resume, job description, draft, and review state in your private account. Unsaved edits are cleared on refresh or sign-out. The dashboard makes no AI calls. Exported briefs contain your evidence; share them only with a provider you choose.</p>
         <label className="resume-review"><input type="checkbox" checked={reviewed} disabled={!job || loading} onChange={(event) => { setReviewed(event.target.checked); setDirty(true); }} />I reviewed the facts, contact details, and relevance for this role.</label>
         <div className="resume-export"><button type="button" className="button primary" disabled={!job || loading || !sourceResume.trim() || !description.trim() || !resume.trim() || !dirty} onClick={save}>{busy ? "Saving…" : "Save bundle"}</button><button type="button" className="button secondary" disabled={revision === null || loading} onClick={remove}>Delete saved bundle</button></div>
         <p>{revision === null ? "No saved bundle for this role." : `Saved revision ${revision}.`}{dirty ? " Unsaved changes." : ""}</p>
