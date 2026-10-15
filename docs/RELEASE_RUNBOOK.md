@@ -88,7 +88,11 @@ a failed release: stop and roll back.
 Run the release smoke test before marking the deploy ready. It validates the
 anonymous SPA shell, enforced security headers, entry-document and immutable
 asset caching, the single bundled Convex endpoint, an anonymous browser route,
-and both isolated browser workflows. The compiled fixture runs with the actual
+and both isolated browser workflows. The live CSP must match the reviewed
+policy in `netlify.toml` (directive/source order and whitespace may differ),
+and that policy must allow the expected production Convex HTTPS, WebSocket,
+and HTTP-action origins. Missing, additional, stale, or duplicate directives
+fail the gate. The compiled fixture runs with the actual
 enforced CSP from `netlify.toml` and proves that unauthorized connections are
 blocked. Account persistence and Turnstile responses in these workflows are
 mocked; verify real hosted sign-in and discovery separately.

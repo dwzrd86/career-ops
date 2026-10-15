@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { assertReleasePolicy } from "./security-policy.mjs";
 
 const requiredHeaders = {
   "cache-control": "no-cache, no-store, must-revalidate",
@@ -47,7 +48,7 @@ export function bundleUrls(html, siteUrl) {
   return bundles;
 }
 
-function assertHeaders(response, label) {
+function assertHeaders(response, label, expectedConvexOrigin) {
   for (const [name, expected] of Object.entries(requiredHeaders)) {
     assert.equal(header(response, name), expected, `${label} must send ${name}: ${expected}`);
   }
@@ -55,6 +56,7 @@ function assertHeaders(response, label) {
   const csp = header(response, "content-security-policy");
   assert.ok(csp, `${label} must send an enforced Content-Security-Policy`);
   assert.equal(header(response, "content-security-policy-report-only"), "", `${label} must not retain a report-only CSP after enforcement`);
+  assertReleasePolicy(csp, expectedConvexOrigin, label);
 }
 
 export async function verifyLiveRelease({ site, expectedConvexUrl, fetchImpl = fetch }) {
@@ -62,13 +64,13 @@ export async function verifyLiveRelease({ site, expectedConvexUrl, fetchImpl = f
   const expectedConvexOrigin = normalizeConvexUrl(expectedConvexUrl);
   const homeResponse = await fetchImpl(siteUrl, { redirect: "error" });
   assert.equal(homeResponse.status, 200, "anonymous entry route must return HTTP 200");
-  assertHeaders(homeResponse, "/");
+  assertHeaders(homeResponse, "/", expectedConvexOrigin);
   const html = await homeResponse.text();
   assert.match(html, /<div\s+id=["']root["']><\/div>/i, "anonymous entry route must serve the SPA shell, not protected pipeline data");
 
   const indexResponse = await fetchImpl(new URL("/index.html", siteUrl), { redirect: "error" });
   assert.equal(indexResponse.status, 200, "/index.html must return HTTP 200");
-  assertHeaders(indexResponse, "/index.html");
+  assertHeaders(indexResponse, "/index.html", expectedConvexOrigin);
 
   for (const bundleUrl of bundleUrls(html, siteUrl)) {
     const bundleResponse = await fetchImpl(bundleUrl, { redirect: "error" });

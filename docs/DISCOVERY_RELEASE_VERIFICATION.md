@@ -96,3 +96,43 @@ an older cache policy. It is reachable but does not pass the release gate.
 No deployment was performed. The security gate builds `web/dist` with a
 synthetic Convex URL; do not publish that output. Rebuild for the intended
 production deployment using [[RELEASE_RUNBOOK]] before publishing.
+
+
+## Release CI and live-policy verification (2026-10-14, iteration 5)
+
+Fixed the `Web Release Safety` PR workflow: its prior guarded build had no
+`VITE_TURNSTILE_SITE_KEY`, which the guard requires. The workflow now installs
+Chromium with its Linux dependencies and runs the existing nine-check security
+regression, which supplies synthetic deployment URLs and a public Turnstile
+fixture key without requiring provider credentials. This also brings account,
+authorization, and compiled-CSP browser checks into PR verification.
+
+The live smoke test now compares the hosted CSP against the actual reviewed
+policy in `netlify.toml`, using the same policy reader as the compiled browser
+fixture. Equivalent whitespace and directive/source order pass; missing or
+extra permissions, stale backend origins, inline-script permissions, and
+duplicate directives fail. The configured policy must explicitly allow the
+expected production deployment's HTTPS, WebSocket, and HTTP-action origins.
+Previously any nonempty enforced policy could pass, even if it blocked the app.
+
+Verification passed under Node 24.19.0: all nine security regression checks,
+including 25 backend tests, guarded TypeScript/Vite build, both isolated browser
+flows, and five smoke regression tests. The source secret-pattern scan and
+`git diff --check` also passed. These checks use fictional accounts and do not
+prove real production sign-in or discovery.
+
+Read-only Netlify status confirms the linked site is `dmd-career-ops` at
+`https://dmd-career-ops.netlify.app`, using the repository's root `netlify.toml`.
+A fresh live smoke probe failed at the entry-document cache policy:
+`public,max-age=0,must-revalidate` instead of the required
+`no-cache, no-store, must-revalidate`. No deployment was attempted. Local Convex
+configuration selects `dev:third-wolverine-369`; no `CONVEX_DEPLOY_KEY` is present
+in the shell. This does not establish whether Netlify's secret store is set up.
+
+Next prepare the concrete production release for `beaming-bass-637` and the
+linked Netlify site using [[RELEASE_RUNBOOK]], verify the provider environment
+and budget settings, and then perform real-account discovery-to-export checks.
+Production deployment consent is still required by the deployment guard; this
+iteration did not deploy or change production data. The security suite replaced
+`web/dist` with its synthetic-endpoint bundle: never publish that output.
+GLM generation remains available through the verified local development bridge.

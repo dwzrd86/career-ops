@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { build, createServer, preview } from "vite";
 import JSZip from "jszip";
+import { configuredSecurityPolicy } from "./security-policy.mjs";
 
 const scriptDirectory = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const viteConfig = resolve(scriptDirectory, "browser-flow.vite.config.mjs");
@@ -23,9 +24,7 @@ async function main() {
   let outputDirectory;
   let server;
   if (productionCsp) {
-    const config = await readFile(new URL("../../netlify.toml", import.meta.url), "utf8");
-    const policy = config.match(/Content-Security-Policy\s*=\s*"([^"]+)"/)?.[1];
-    assert.ok(policy, "An enforced production policy is required");
+    const policy = configuredSecurityPolicy();
     // Compile the existing mocked account fixture, without replacing release dist/.
     const localDirectory = resolve(scriptDirectory, "../../agent/.local");
     await mkdir(localDirectory, { recursive: true });
