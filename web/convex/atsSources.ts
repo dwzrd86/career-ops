@@ -1,19 +1,22 @@
+import { Parser } from "htmlparser2";
+import { decodeHTML } from "entities";
+
 export type Provider = "greenhouse" | "ashby" | "lever";
 
 export const ATS_SOURCES: ReadonlyArray<{ company: string; industry: string; provider: Provider; url: string }> = [
-  { company: "Wiz", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/wizinc/jobs" },
-  { company: "Netskope", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/netskope/jobs" },
-  { company: "Rubrik", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/rubrik/jobs" },
-  { company: "Zscaler", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/zscaler/jobs" },
-  { company: "Axonius", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/axonius/jobs" },
-  { company: "Tines", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/tines/jobs" },
+  { company: "Wiz", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/wizinc/jobs?content=true" },
+  { company: "Netskope", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/netskope/jobs?content=true" },
+  { company: "Rubrik", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/rubrik/jobs?content=true" },
+  { company: "Zscaler", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/zscaler/jobs?content=true" },
+  { company: "Axonius", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/axonius/jobs?content=true" },
+  { company: "Tines", industry: "cybersecurity", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/tines/jobs?content=true" },
   { company: "Vanta", industry: "cybersecurity", provider: "ashby", url: "https://api.ashbyhq.com/posting-api/job-board/vanta?includeCompensation=true" },
-  { company: "Cloudflare", industry: "cloud", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs" },
-  { company: "GitLab", industry: "cloud", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/gitlab/jobs" },
-  { company: "Anthropic", industry: "technology", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs" },
-  { company: "SeatGeek", industry: "entertainment", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/seatgeek/jobs" },
-  { company: "FanDuel", industry: "sports", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/fanduel/jobs" },
-  { company: "AXS", industry: "entertainment", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/axs/jobs" },
+  { company: "Cloudflare", industry: "cloud", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/cloudflare/jobs?content=true" },
+  { company: "GitLab", industry: "cloud", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/gitlab/jobs?content=true" },
+  { company: "Anthropic", industry: "technology", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs?content=true" },
+  { company: "SeatGeek", industry: "entertainment", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/seatgeek/jobs?content=true" },
+  { company: "FanDuel", industry: "sports", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/fanduel/jobs?content=true" },
+  { company: "AXS", industry: "entertainment", provider: "greenhouse", url: "https://boards-api.greenhouse.io/v1/boards/axs/jobs?content=true" },
 ];
 
 type Profile = {
@@ -79,6 +82,31 @@ function compensation(value: any) {
   return { ...(Number.isFinite(minimum) ? { minimum } : {}), ...(Number.isFinite(maximum) ? { maximum } : {}), currency: "USD" };
 }
 
+// Greenhouse wraps editor HTML in an entity-encoded string. Decode that
+// envelope once, then parse inertly: never render HTML or follow embedded URLs.
+function greenhouseDescription(value: unknown): string {
+  const input = text(value);
+  if (!input) return "";
+  const blocks = new Set(["p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "section", "table", "tr", "blockquote", "br", "hr"]);
+  const hidden = new Set(["script", "style", "iframe", "template", "noscript"]);
+  const parts: string[] = [];
+  let hiddenDepth = 0;
+  const parser = new Parser({
+    onopentag(name) {
+      if (hidden.has(name)) hiddenDepth++;
+      if (!hiddenDepth && blocks.has(name)) parts.push("\n");
+    },
+    ontext(value) { if (!hiddenDepth) parts.push(value); },
+    onclosetag(name) {
+      if (hidden.has(name)) hiddenDepth = Math.max(0, hiddenDepth - 1);
+      if (!hiddenDepth && blocks.has(name)) parts.push("\n");
+    },
+  });
+  // Raw HTML also occurs in feeds. Preserve its text entities for the parser.
+  parser.end(/<\/?[a-z][\w:-]*\b|<!--/i.test(input) ? input : decodeHTML(input));
+  return parts.join("").replace(/[^\S\n]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 30_000);
+}
+
 export function parseFeed(source: (typeof ATS_SOURCES)[number], payload: unknown): Candidate[] {
   const jobs = source.provider === "lever" ? payload : (payload as any)?.jobs;
   if (!Array.isArray(jobs)) throw new Error("INVALID_FEED");
@@ -92,6 +120,7 @@ export function parseFeed(source: (typeof ATS_SOURCES)[number], payload: unknown
     if (parsed.protocol !== "https:" || parsed.username || parsed.password) continue;
     const location = text(source.provider === "greenhouse" ? row?.location?.name : source.provider === "lever" ? row?.categories?.location : row?.location);
     const published = source.provider === "ashby" ? Date.parse(text(row?.publishedAt)) : NaN;
+    const description = source.provider === "greenhouse" ? greenhouseDescription(row?.content) : source.provider === "ashby" ? text(row?.descriptionPlain).slice(0, 30_000) : "";
     output.push({
       company: source.company,
       title,
@@ -104,7 +133,7 @@ export function parseFeed(source: (typeof ATS_SOURCES)[number], payload: unknown
       ...(Number.isFinite(published) ? { postedAt: published } : {}),
       remote: row?.isRemote === true || /\bremote\b/i.test(location),
       ...(source.provider === "ashby" && compensation(row?.compensation) ? { salary: compensation(row?.compensation) } : {}),
-      ...(source.provider === "ashby" && text(row?.descriptionPlain) ? { description: text(row.descriptionPlain).slice(0, 30_000) } : {}),
+      ...(description ? { description } : {}),
     });
   }
   return output;

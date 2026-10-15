@@ -103,6 +103,9 @@ manual and daily or weekday discovery scans, a private review queue, scan
 history, isolated job pipelines, manual role creation, role search, and status
 tracking. The web worker requests only the approved public Greenhouse and
 Ashby feeds in `convex/atsSources.ts`; it never controls a signed-in browser.
+Greenhouse descriptions are requested in the same feed call and converted from
+HTML to plain text; both providers can prefill Resume Studio after approval.
+Captured text is capped at 30,000 characters and never replaces a saved bundle.
 To start, open Target Profile, enter target roles and search settings (or import
 an existing local YAML profile), select sources, enable discovery, and save.
 Use Run now for an immediate scan; otherwise the Convex cron checks due

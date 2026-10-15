@@ -95,7 +95,7 @@ describe("web auto discovery", () => {
     expect((await alice.query(api.autoDiscovery.listRuns, {}))[0].status).toBe("succeeded");
   });
 
-  test("captured posting survives approval, stays owner-scoped, and never replaces a saved bundle", async () => {
+  test.each(["ashby", "greenhouse"] as const)("%s posting survives approval, stays owner-scoped, and never replaces a saved bundle", async (provider) => {
     const deployment = createDeployment();
     const alice = await account(deployment, "posting-owner");
     const bob = await account(deployment, "posting-other");
@@ -104,8 +104,10 @@ describe("web auto discovery", () => {
     await alice.mutation(api.targetProfile.save, { profile });
     const runId = await alice.mutation(api.autoDiscovery.requestScan, {});
     await deployment.mutation(internal.autoDiscovery.claimRun, { runId });
-    const [candidate] = parseFeed({ company: "Example", industry: "cloud", provider: "ashby", url: "https://api.ashbyhq.com/posting-api/job-board/example" }, { jobs: [{
+    const [candidate] = parseFeed({ company: "Example", industry: "cloud", provider, url: "https://feeds.example.test/jobs" }, { jobs: [{
       id: "posting-one", title: "Security Architect", jobUrl: "https://jobs.example.test/posting-one",
+      absolute_url: "https://jobs.example.test/posting-one",
+      content: "&lt;p&gt;SQL and AWS required.&lt;/p&gt;&lt;p&gt;Build reliable reporting.&lt;/p&gt;",
       location: "Remote - United States", descriptionPlain: "SQL and AWS required.\nBuild reliable reporting.",
     }] });
     const item = { localJobId: "posting-one", company: candidate.company, title: candidate.title,
@@ -198,6 +200,28 @@ describe("web auto discovery", () => {
 });
 
 describe("approved feed matching", () => {
+  test("Greenhouse requests content and converts encoded or raw HTML to inert bounded text", () => {
+    const sources = ATS_SOURCES.filter(source => source.provider === "greenhouse");
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) expect(new URL(source.url).searchParams.get("content")).toBe("true");
+    const parse = (content: unknown) => parseFeed(sources[0], { jobs: [{
+      id: 123, title: "Security Architect", absolute_url: "https://jobs.example.test/123",
+      location: { name: "Remote - United States" }, content,
+    }] })[0];
+    for (const content of [
+      "<h2>R&amp;D</h2><p>AWS &lt; 5 years</p><ul><li>NIST</li><li>Travel up to 75%</li></ul><script>secret()</script><style>secret{}</style><!-- secret --><iframe src='https://bad.test'>secret</iframe>",
+      "&lt;h2&gt;R&amp;amp;D&lt;/h2&gt;&lt;p&gt;AWS &amp;lt; 5 years&lt;/p&gt;&lt;ul&gt;&lt;li&gt;NIST&lt;/li&gt;&lt;li&gt;Travel up to 75%&lt;/li&gt;&lt;/ul&gt;&lt;script&gt;secret()&lt;/script&gt;",
+    ]) {
+      const candidate = parse(content);
+      expect(candidate.description).toBe("R&D\n\nAWS < 5 years\n\nNIST\n\nTravel up to 75%");
+      expect(evaluateCandidate(profile, candidate).hardFilters).toContainEqual({ ruleId: "TRAVEL", outcome: "fail", reasonCode: "TRAVEL_EXCEEDS_LIMIT" });
+    }
+    expect(parse("<p>" + "x".repeat(31_000) + "</p>").description).toHaveLength(30_000);
+    for (const content of [undefined, null, 123, "", "<p> </p>"]) expect(parse(content).description).toBeUndefined();
+    expect(parse("<div>Use &lt;em&gt; literally</div>").description).toBe("Use <em> literally");
+    expect(parse("Plain R&amp;D").description).toBe("Plain R&D");
+  });
+
   test("parses public Ashby salaries and rejects known hard mismatches", () => {
     const source = ATS_SOURCES.find((entry) => entry.company === "Vanta")!;
     const jobs = parseFeed(source, { jobs: [{

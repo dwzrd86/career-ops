@@ -90,8 +90,8 @@ and provider, canonical HTTPS URL, freshness, and review status. Its companion
 tables hold only match-decision codes/scores, reviewer reasons, and timestamps.
 The projection must never include browser credentials or state, local paths,
 resumes or raw local captured source content. Only the internal ATS worker may
-write bounded public posting text (currently Ashby); approval copies it only to
-new pipeline roles. Existing roles and saved bundles are never overwritten.
+write bounded public posting text (Ashby and converted Greenhouse HTML);
+approval copies it only to new pipeline roles. Existing roles and saved bundles are never overwritten.
 Posting text is rendered as text, never HTML. Account export and deletion
 cover both copies. The public local-projection API remains metadata-only.
 

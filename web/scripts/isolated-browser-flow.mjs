@@ -382,6 +382,9 @@ async function main() {
     await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved corrected discovery posting");
     await prepareResume.click();
     await prepareDiscoveryResume.click();
+    // Selection clears the editor until the saved-bundle effect finishes.
+    await page.waitForFunction(element => element instanceof HTMLTextAreaElement && !element.disabled,
+      await studio.getByLabel("Job description", { exact: true }).elementHandle());
     assert.equal(await studio.getByLabel("Job description", { exact: true }).inputValue(), "My corrected posting requirements", "saved description takes priority over captured posting");
     await prepareResume.click();
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");

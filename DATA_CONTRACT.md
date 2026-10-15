@@ -100,8 +100,8 @@ the local discovery workspace or its backups.
 
 The internal hosted ATS worker is separate from the local projection bridge.
 It may retain up to 30,000 characters of available public plain-text posting
-content (currently Ashby) in owner-scoped discovery records, and copy that
-snapshot into newly approved pipeline roles. This does not permit the public
+content (Ashby and converted Greenhouse HTML) in owner-scoped discovery records,
+and copy that snapshot into newly approved pipeline roles. This does not permit the public
 projection API to upload local job-detail snapshots. Existing roles and saved
 resume bundles retain their evidence; account export/deletion covers the
 hosted copies. See [[PRIVACY]] and [[RESUME_STUDIO]].
