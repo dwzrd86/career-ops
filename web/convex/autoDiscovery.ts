@@ -17,6 +17,7 @@ const jobMetadata = v.object({
   url: v.string(),
   source: v.object({ label: v.string(), provider: v.union(v.literal("greenhouse"), v.literal("ashby"), v.literal("lever")) }),
   postedAt: v.optional(v.number()),
+  postingText: v.optional(v.string()),
   decision: v.object({
     outcome: v.union(v.literal("ranked"), v.literal("needsReview")),
     score: v.number(),
@@ -152,6 +153,7 @@ export const ingestBatch = internalMutation({
     if (!profile?.enabled || profile.profileVersion !== profileVersion) throw new Error("Target Profile changed during scan");
     await requireEnrolledUser(ctx, run.ownerId);
     await requireCurrentPrivacyAcknowledgement(ctx, run.ownerId);
+    if (jobs.some(item => item.postingText !== undefined && item.postingText.length > 30_000)) throw new Error("Posting exceeds 30000 characters");
     let added = 0;
     for (const item of jobs) {
       if (item.company.length > 160 || item.title.length > 200 || item.url.length > 2048 || item.localJobId.length > 128) continue;
@@ -164,6 +166,8 @@ export const ingestBatch = internalMutation({
         location: item.location,
         url: item.url,
         source: item.source,
+        // Omitted text in a later feed must not erase previously captured evidence.
+        ...(item.postingText?.trim() ? { postingText: item.postingText.trim() } : {}),
         freshness: { checkedAt: now, postedAt: item.postedAt, status: "fresh" as const },
         updatedAt: now,
       };

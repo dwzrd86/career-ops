@@ -17,6 +17,7 @@ export type Job = {
   location: string;
   url: string;
   source: string;
+  postingText?: string;
   status: JobStatus;
   score?: number;
   notes?: string;
@@ -69,6 +70,7 @@ export type DiscoveryScanRun = {
 export type MaterialReviewState = "draftAwaitingReview" | "approved" | "changesRequested" | "rejected";
 
 export type DiscoveredJob = {
+  postingText?: string;
   _id: string;
   _creationTime: number;
   company: string;
@@ -133,6 +135,7 @@ export type EnrollmentStatus = {
 
 export type AccountExport = {
   discovery: Array<{
+    postingText?: string;
     id: string;
     company: string;
     discoveredAt: number;

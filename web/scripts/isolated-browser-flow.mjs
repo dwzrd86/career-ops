@@ -138,6 +138,7 @@ async function main() {
     const discoveredTarget = page.locator("#resume-studio").getByLabel("Resume target role", { exact: true });
     await discoveredTarget.selectOption({ label: "Example Discovery Co. · Review target role" });
     assert.equal(await page.locator("#resume-studio").getByLabel("Source resume", { exact: true }).isEnabled(), true);
+    assert.equal(await page.locator("#resume-studio").getByLabel("Job description", { exact: true }).inputValue(), "SQL and AWS required.\nBuild reliable reporting.", "discovery posting prefills a new bundle");
     await discoveredTarget.selectOption("");
     await page.getByRole("button", { name: "Approve for evaluation" }).click();
     assert.equal(await discoveredTarget.locator("option").filter({ hasText: "Example Discovery Co. · Review target role" }).count(), 1, "repeat approval does not duplicate target");
@@ -307,7 +308,7 @@ async function main() {
     await studio.getByLabel("Reuse saved source resume", { exact: true }).selectOption(originalTarget);
     assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), savedSource);
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
-    assert.equal(await studio.getByLabel("Job description", { exact: true }).inputValue(), "");
+    assert.equal(await studio.getByLabel("Job description", { exact: true }).inputValue(), "SQL and AWS required.\nBuild reliable reporting.");
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
     page.once("dialog", dialog => dialog.accept());
@@ -374,6 +375,14 @@ async function main() {
     page.once("dialog", dialog => dialog.accept());
     await prepareDiscoveryResume.click();
     assert.equal(await targetRole.locator("option:checked").textContent(), "Example Discovery Co. · Review target role", "confirmed navigation switches roles");
+    await studio.getByLabel("Source resume", { exact: true }).fill("Factual SQL source");
+    await studio.getByLabel("Job description", { exact: true }).fill("My corrected posting requirements");
+    await studio.getByLabel("Resume text", { exact: true }).fill("SQL experience");
+    await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
+    await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved corrected discovery posting");
+    await prepareResume.click();
+    await prepareDiscoveryResume.click();
+    assert.equal(await studio.getByLabel("Job description", { exact: true }).inputValue(), "My corrected posting requirements", "saved description takes priority over captured posting");
     await prepareResume.click();
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");

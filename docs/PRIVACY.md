@@ -16,7 +16,7 @@ related:
 # Jobbie alpha privacy notice
 
 **Effective date:** 2026-10-14
-**Version:** 2026-10-14-resume-bundles
+**Version:** 2026-10-14-discovery-postings
 **Applies to:** the hosted Jobbie/Career-Ops web alpha in `web/`. This notice
 does not change how the separately installed, local Career-Ops CLI handles
 files on a user's computer.
@@ -46,12 +46,14 @@ The hosted alpha provides verified email/password accounts, a private manual
 job pipeline, saved per-role resume bundles, a saved Target Profile, and an owner-scoped discovery review queue.
 When discovery is enabled, a scheduled server worker requests public Greenhouse
 and Ashby job-board feeds, compares listings with the saved profile, and stores
-only review metadata for viable roles. Users can also request a scan. Imported
+review metadata and available public posting text for viable roles. Users can also request a scan. Imported
 local Target Profile YAML is read in the browser; only selected search settings
-are saved when the user submits the form. Public ATS job descriptions may be
-processed transiently in worker memory to check explicit requirements, but are
-not persisted by discovery. Resume Studio separately stores source resume text,
-user-pasted job descriptions, edited drafts, revision numbers, and factual-review
+are saved when the user submits the form. The internal worker also retains up to 30,000 characters of available public
+ATS plain-text posting content (currently Ashby) in each owner’s discovery record.
+Approving a new pipeline role copies that snapshot into the role for Resume Studio;
+repeat approval leaves existing roles and saved bundles unchanged. The public
+local-projection API still rejects posting content. Resume Studio separately stores source resume text,
+user-pasted or discovery-prefilled job descriptions, edited drafts, revision numbers, and factual-review
 timestamps only when the user selects Save bundle. Up to 50 bundles per account
 are supported, with each text field limited to 40,000 characters. The hosted frontend makes no AI provider requests. Opt-in local development
 generation sends the selected source resume and posting through OpenCode to
@@ -70,11 +72,11 @@ The local Career-Ops tools remain separate from this hosted dataset.
 | Email address, account ID, verified-email state, password credential material, session and verification/reset records | Create, secure, verify, recover, and sign in to an account | Better Auth in the configured Convex deployment. The application does not expose authentication-component records to other users. |
 | Verification and reset link email | Send single-use address-verification or password-reset links | Resend processes the destination address and message needed to deliver it. Links expire after 15 minutes. |
 | Signup bot-protection token and validation result | Reduce automated account creation | Cloudflare Turnstile validates the token during signup. The application does not store the token in its own tables. |
-| Job-pipeline entries: company, role title, location, job URL, source, status, optional notes, created/updated timestamps, and owning account ID | Display and manage the user's private pipeline | The `jobs` table in the configured Convex deployment. Each entry is scoped to its authenticated, verified owner. |
-| Saved resume bundle: owning account and job IDs, original source resume text, pasted job description, edited resume text, revision, review timestamp, and last update time | Resume Studio saves and restores one private bundle per pipeline role | The owner-scoped `resumeBundles` table in Convex. Content is stored only on an explicit save; no external AI processing is implemented. |
+| Job-pipeline entries: company, role title, location, job URL, source, status, optional notes and public posting snapshot, created/updated timestamps, and owning account ID | Display and manage the user's private pipeline | The `jobs` table in the configured Convex deployment. Each entry is scoped to its authenticated, verified owner. |
+| Saved resume bundle: owning account and job IDs, original source resume text, pasted or prefilled job description, edited resume text, revision, review timestamp, and last update time | Resume Studio saves and restores one private bundle per pipeline role | The owner-scoped `resumeBundles` table in Convex. Content is stored only on an explicit save; opt-in local generation shares selected evidence with Z.AI through OpenCode. |
 | Target Profile search settings: target roles, locations, work policy, salary floor, authorization and clearance preferences, exclusions, expertise, selected feed providers, and scan schedule | Filter and rank public job-board listings for the signed-in user | The owner-scoped `targetProfiles` table in Convex. The profile does not contain a resume file or local path. |
 | Scan run metadata: trigger, timing, status, feed success/failure counts, and match counts | Show scan history and troubleshoot failures | The owner-scoped `discoveryScanRuns` table in Convex. At most 30 recent runs are retained per user. |
-| Discovered-role projection: company, title, optional location, canonical HTTPS role URL, safe local record identifier, source label/provider, discovery and freshness timestamps/status, and review status | Show the private discovery review queue without copying the local discovery record | The owner-scoped `discoveredJobs` table in the configured Convex deployment. The identifier is validated as a path-free record key; no local path or raw posting content is accepted. |
+| Discovered-role projection: company, title, optional location, canonical HTTPS role URL, safe local record identifier, source label/provider, discovery and freshness timestamps/status, and review status | Show the private discovery review queue without copying the local discovery record | The owner-scoped `discoveredJobs` table in the configured Convex deployment. The identifier is validated as a path-free record key; no local path or raw local posting content is accepted by the projection API. The internal public-feed worker may separately retain bounded plain-text posting content, copied to new pipeline roles on approval. |
 | Match and review metadata: profile version, score, decision outcome, hard-filter and explanation codes, reviewer override outcome/reason, and decision/review timestamps | Explain a projected match and record the user's review decisions | Owner-scoped `discoveryMatchDecisions`, `discoveryReviewerOverrides`, and `discoveryStatusHistory` tables in the configured Convex deployment. These tables contain metadata and reviewer-entered reasons only; they do not contain resumes, job-description contents, browser state, or captured page data. |
 | HMAC-derived email rate-limit key, action type, attempt count, and rate-limit-window start time | Rate-limit signup, reset, and verification resend attempts | The `authAbuseLimits` table in the configured Convex deployment. It deliberately stores an HMAC-derived key instead of the email address. |
 | Alpha-invite HMAC digest, issuance/expiry/claim timestamps, a claimed account ID, and limited event category/timestamp records | Limit this early alpha to invited users and investigate invitation lifecycle failures | The `alphaInvites` and `enrollmentAuditEvents` tables in the configured Convex deployment. The application does not store a raw invite token, invitee email, IP address, or career content in its enrollment audit records. |

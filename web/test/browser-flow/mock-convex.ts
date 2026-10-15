@@ -8,6 +8,7 @@ export type Job = {
   location: string;
   url: string;
   source: string;
+  postingText?: string;
   status: JobStatus;
   score?: number;
   notes?: string;
@@ -20,6 +21,7 @@ export type DiscoveryReviewStatus = "discovered" | "shortlisted" | "archived" | 
 export type MaterialReviewState = "draftAwaitingReview" | "approved" | "changesRequested" | "rejected";
 
 export type DiscoveredJob = {
+  postingText?: string;
   _id: string;
   _creationTime: number;
   company: string;

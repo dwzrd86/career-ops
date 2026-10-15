@@ -98,6 +98,7 @@ export default defineSchema({
     location: v.string(),
     url: v.string(),
     source: v.string(),
+    postingText: v.optional(v.string()),
     status: jobStatus,
     score: v.optional(v.number()),
     notes: v.optional(v.string()),
@@ -119,11 +120,13 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_owner_job", ["ownerId", "jobId"]),
   // Local discovery records remain canonical. This is a deliberately narrow,
-  // owner-scoped projection for the private review UI: no resume/JD content,
+  // owner-scoped projection for the private review UI: no resume content,
   // browser data, local paths, or component-auth records are stored here.
   discoveredJobs: defineTable({
     ownerId: v.id("users"),
     localJobId: v.string(),
+    // Public ATS plain text only, supplied by the internal feed worker.
+    postingText: v.optional(v.string()),
     company: v.string(),
     title: v.string(),
     location: v.optional(v.string()),

@@ -95,6 +95,48 @@ describe("web auto discovery", () => {
     expect((await alice.query(api.autoDiscovery.listRuns, {}))[0].status).toBe("succeeded");
   });
 
+  test("captured posting survives approval, stays owner-scoped, and never replaces a saved bundle", async () => {
+    const deployment = createDeployment();
+    const alice = await account(deployment, "posting-owner");
+    const bob = await account(deployment, "posting-other");
+    await bob.mutation(api.privacy.acknowledge, {});
+    await alice.mutation(api.privacy.acknowledge, {});
+    await alice.mutation(api.targetProfile.save, { profile });
+    const runId = await alice.mutation(api.autoDiscovery.requestScan, {});
+    await deployment.mutation(internal.autoDiscovery.claimRun, { runId });
+    const [candidate] = parseFeed({ company: "Example", industry: "cloud", provider: "ashby", url: "https://api.ashbyhq.com/posting-api/job-board/example" }, { jobs: [{
+      id: "posting-one", title: "Security Architect", jobUrl: "https://jobs.example.test/posting-one",
+      location: "Remote - United States", descriptionPlain: "SQL and AWS required.\nBuild reliable reporting.",
+    }] });
+    const item = { localJobId: "posting-one", company: candidate.company, title: candidate.title,
+      url: candidate.url, source: { label: candidate.sourceLabel, provider: candidate.provider },
+      postingText: candidate.description,
+      decision: { outcome: "needsReview" as const, score: 70, hardFilters: [], explanationCodes: ["ROLE_MATCH"] } };
+    await expect(deployment.mutation(internal.autoDiscovery.ingestBatch, {
+      runId, profileVersion: 1, jobs: [{ ...item, postingText: "x".repeat(30001) }],
+    })).rejects.toThrow("Posting exceeds");
+    await deployment.mutation(internal.autoDiscovery.ingestBatch, { runId, profileVersion: 1, jobs: [item] });
+    const [discovered] = await alice.query(api.discovery.list, {});
+    expect(discovered.postingText).toBe(candidate.description);
+    expect(await bob.query(api.discovery.list, {})).toEqual([]);
+    await expect(bob.mutation(api.discovery.approveForEvaluation, { id: discovered._id })).rejects.toThrow("Discovered job not found");
+    await alice.mutation(api.discovery.approveForEvaluation, { id: discovered._id });
+    const [job] = await alice.query(api.jobs.list, {});
+    expect(job.postingText).toBe(candidate.description);
+    expect(await bob.query(api.jobs.list, {})).toEqual([]);
+    await alice.mutation(api.resumeBundles.save, { jobId: job._id, sourceResume: "Factual source", description: "My corrected posting", resume: "Reviewed draft", reviewed: true, expectedRevision: null });
+    await deployment.mutation(internal.autoDiscovery.ingestBatch, { runId, profileVersion: 1, jobs: [{ ...item, postingText: "Updated feed posting" }] });
+    await alice.mutation(api.discovery.approveForEvaluation, { id: discovered._id });
+    expect(await alice.query(api.jobs.list, {})).toHaveLength(1);
+    expect((await alice.query(api.jobs.list, {}))[0].postingText).toBe(candidate.description);
+    expect(await alice.query(api.resumeBundles.get, { jobId: job._id })).toMatchObject({ description: "My corrected posting", reviewedAt: expect.any(Number) });
+    await deployment.mutation(internal.autoDiscovery.ingestBatch, { runId, profileVersion: 1, jobs: [{ ...item, postingText: undefined }] });
+    expect((await alice.query(api.discovery.list, {}))[0].postingText).toBe("Updated feed posting");
+    const exported = await alice.query(api.account.exportData, {});
+    expect(exported.jobs[0].postingText).toBe(candidate.description);
+    expect(exported.discovery[0].postingText).toBe("Updated feed posting");
+  });
+
   test("a duplicate worker leaves the winning scan and its counters alone", async () => {
     const deployment = createDeployment();
     const alice = await account(deployment, "duplicate-worker");

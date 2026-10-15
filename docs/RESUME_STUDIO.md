@@ -12,6 +12,15 @@ related:
 
 Resume Studio is available in the authenticated web dashboard. Click **Prepare resume** on a pipeline row to select that role and move keyboard focus into Resume Studio, or choose a role inside the studio. Paste the original posting, import or paste your source resume, edit the draft, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
 
+Discovery now keeps available public Ashby posting text (up to 30,000 characters).
+Approving a newly discovered role copies that snapshot into its pipeline record.
+Resume Studio prefills the posting when no saved bundle exists, reducing copy and
+paste. Saved descriptions take priority. Feed refreshes and repeat approval never replace an existing role’s
+snapshot or saved bundle. Check the original posting for changes; Greenhouse
+and manual roles without captured text still require a paste. Prefill sends
+nothing to GLM; the existing sharing and factual-review steps still apply.
+Public text is included in account export and removed with its owning records.
+
 **Import source resume** reads a UTF-8 `.txt` or `.md` file locally in the browser.
 It accepts up to 40,000 characters and rejects files larger than 160 KB, empty
 files, binary content, and invalid UTF-8. For PDF or Word, copy the document's
@@ -386,3 +395,26 @@ guarantee, verified hosted authentication, live discovery, or a public release.
 The normal isolated browser workflow, eight runner/bridge tests, eight resume
 tests, and app TypeScript/Vite build also passed. The substantial pre-existing
 discovery/auth changes still need release preparation.
+
+## Iteration 12 handoff — discovery posting handoff
+
+Available Ashby plain-text descriptions now travel from the existing public-feed
+parser through the internal worker and bounded ingestion into `discoveredJobs`.
+Approval copies the snapshot only when creating a new pipeline role. Studio
+prefills it only for a role without a saved bundle; feed refreshes, repeat
+approval, and saved descriptions retain their existing boundaries. The public
+local-projection API still accepts metadata only. The privacy notice/version,
+security policy, and data contract document the retained public text.
+
+Verified: 27 backend tests, nine resume/export tests, app TypeScript/Vite build,
+all ten security regression checks, and `convex dev --once` against development
+`third-wolverine-369`. The new backend test covers parser-to-ingestion-to-approval,
+size rejection, cross-account denial, retained text, repeat approval preserving
+a reviewed bundle, and account export. Browser coverage verifies prefill and
+saved-description precedence. Secret-pattern scan and diff checks pass.
+
+Production remains untouched. Next prioritize a real-account discovery → local
+GLM → Word/PDF export check and launch prerequisites in [[RELEASE_RUNBOOK]].
+Greenhouse feeds currently supply no description, so those roles still need a
+paste. Hosted AI generation remains unavailable. Rebuild a guarded production
+dist before any publication; the local app-build output uses the dev endpoint.

@@ -23,6 +23,7 @@ const initialState = (): BrowserFlowState => ({
     _creationTime: 1,
     _id: "discovered-job-1",
     company: "Example Discovery Co.",
+    postingText: "SQL and AWS required.\nBuild reliable reporting.",
     decision: {
       decidedAt: 1,
       explanationCodes: ["ROLE_MATCH"],
@@ -148,7 +149,7 @@ export function updateBrowserFlowDiscoveryStatus(id: string, reviewStatus: Disco
     if (!discovered) throw new Error("Discovered job not found");
     if (!state.jobs.some(job => job.url === discovered.url)) {
       createBrowserFlowJob({ company: discovered.company, title: discovered.title,
-        location: discovered.location || "Not specified", url: discovered.url, source: discovered.source.label });
+        location: discovered.location || "Not specified", url: discovered.url, source: discovered.source.label, postingText: discovered.postingText });
     }
   }
   publish({ discoveredJobs: state.discoveredJobs.map((job) => job._id === id ? { ...job, reviewStatus, updatedAt: Date.now() } : job) });

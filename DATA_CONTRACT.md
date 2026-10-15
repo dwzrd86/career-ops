@@ -97,3 +97,11 @@ content, raw job-description content, local paths, Target Profile form values,
 browser state, application answers, or generated draft material. A hosted
 account export/deletion affects only hosted alpha records and does not alter
 the local discovery workspace or its backups.
+
+The internal hosted ATS worker is separate from the local projection bridge.
+It may retain up to 30,000 characters of available public plain-text posting
+content (currently Ashby) in owner-scoped discovery records, and copy that
+snapshot into newly approved pipeline roles. This does not permit the public
+projection API to upload local job-detail snapshots. Existing roles and saved
+resume bundles retain their evidence; account export/deletion covers the
+hosted copies. See [[PRIVACY]] and [[RESUME_STUDIO]].

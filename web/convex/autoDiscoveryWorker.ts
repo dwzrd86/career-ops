@@ -45,6 +45,7 @@ export const runForOwner = internalAction({
             url: candidate.url,
             source: { label: candidate.sourceLabel, provider: candidate.provider },
             postedAt: candidate.postedAt,
+            postingText: candidate.description,
             decision: { ...decision, outcome: decision.outcome },
           });
         }

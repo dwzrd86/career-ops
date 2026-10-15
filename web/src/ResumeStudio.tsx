@@ -50,15 +50,15 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   const loading = Boolean(jobId && (saved === undefined || loadedJob !== jobId));
 
   useEffect(() => {
-    if (!jobId || saved === undefined || loadedJob === jobId) return;
+    if (!jobId || !job || saved === undefined || loadedJob === jobId) return;
     setLoadedJob(jobId);
     setSourceResume(saved?.sourceResume ?? "");
-    setDescription(saved?.description ?? "");
+    setDescription(saved?.description ?? job.postingText ?? "");
     setResume(saved?.resume ?? "");
     setRevision(saved?.revision ?? null);
     setReviewed(saved?.reviewedAt != null);
     setDirty(false);
-  }, [jobId, saved, loadedJob]);
+  }, [jobId, saved, loadedJob, job]);
 
   function selectJob(next: string) {
     if (busy) return false;
@@ -262,6 +262,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
         <p>Choose a UTF-8 text or Markdown resume (up to 40,000 characters). Files are read in your browser. For PDF or Word, copy and paste the document’s text below.</p>
         <label>Source resume<textarea aria-label="Source resume" rows={6} maxLength={40000} disabled={!job || loading} placeholder="Paste your factual, original resume as evidence." value={sourceResume} onChange={(event) => { setSourceResume(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <button type="button" className="button secondary" disabled={!sourceResume.trim() || loading} onClick={() => { if (resume.trim() && !window.confirm("Replace the current draft with the source resume?")) return; setResume(sourceResume); setReviewed(false); setDirty(true); }}>Start draft from source</button>
+        {job?.postingText && <p>Discovery captured this posting’s text. Check the original for updates before generating or applying. Saved edits take priority.</p>}
         <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <div className="resume-evidence">
           <h3>Tailor with GLM</h3>

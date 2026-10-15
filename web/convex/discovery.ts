@@ -368,6 +368,7 @@ export const approveForEvaluation = mutation({
           location: normalizeOptionalText(discovered.location, "location") ?? "Not specified",
           url,
           source: normalizeText(discovered.source.label, "sourceLabel"),
+          postingText: discovered.postingText,
           status: "discovered",
           createdAt: now,
           updatedAt: now,

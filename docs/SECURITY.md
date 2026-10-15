@@ -21,7 +21,7 @@ Career-Ops contains a local job-search workspace alongside a hosted alpha. Keep 
 | --- | --- | --- |
 | Public source | Application code, generated Convex bindings, tests, deployment configuration, non-personal documentation | May be reviewed and committed after the secret scan. |
 | Private career records | `cv.md`, `article-digest.md`, `data/`, `reports/`, `config/profile.yml`, `config/target-profile.yml`, `portals.yml`, writing samples | Keep local and ignored. Never paste into an issue, commit, demo, or test fixture. |
-| Private search settings and review metadata | Owner-scoped Target Profile search preferences, scan-run counts and status, and discovered-role metadata: company, title, location, canonical URL, safe record identifier, source/freshness fields, scores, decision codes, review status/history, reviewer reasons, and material review state | Store only in owner-scoped Convex tables. Never add resumes, job-description text, application answers, browser credentials/state, local paths, or raw captured source content. |
+| Private search settings and review metadata | Owner-scoped Target Profile search preferences, scan-run counts and status, and discovered-role metadata: company, title, location, canonical URL, safe record identifier, source/freshness fields, scores, decision codes, review status/history, reviewer reasons, and material review state | Store only in owner-scoped Convex tables. Never add resumes, application answers, browser credentials/state, local paths, or raw local source snapshots. The internal ATS worker may retain up to 30,000 characters of public plain-text posting content; the public projection API cannot accept it. |
 | Saved resume content | Source resume text, pasted job descriptions, edited drafts, review timestamps and revisions | Store only on explicit save in owner-scoped `resumeBundles`. Enforce job ownership, current privacy acknowledgement, 40,000-character field limits, a 50-bundle account cap, revision checks, account export and cascaded deletion. Never emit content to logs. Opt-in local development generation sends selected evidence through OpenCode to Z.AI after explicit sharing acknowledgement; production builds contain no generation endpoint. See [[RESUME_STUDIO]]. |
 | Secrets and access material | `.env*`, Netlify and Convex tokens/deploy keys, generated `.convex-home/` credentials, browser profiles | Keep outside Git and logs. Use provider secret stores and rotate if exposed. |
 | Test identities | Production test accounts, real email inboxes, job-board credentials | Do not create or commit them. Use isolated, disposable test identities only when necessary. |
@@ -84,12 +84,16 @@ send Target Profile values to feed providers. Scheduled runs use an internal
 Convex action and can only start for enabled profiles whose owners remain
 enrolled and have acknowledged the current privacy notice. `targetProfiles`
 stores search preferences; `discoveryScanRuns` stores bounded run history.
-The hosted discovery queue is deliberately metadata-only. `discoveredJobs` may
+The hosted discovery queue contains review metadata and optional public posting text. `discoveredJobs` may
 hold an owner-scoped safe local record identifier, role metadata, source label
 and provider, canonical HTTPS URL, freshness, and review status. Its companion
 tables hold only match-decision codes/scores, reviewer reasons, and timestamps.
 The projection must never include browser credentials or state, local paths,
-resumes, job-description contents, or raw captured source content.
+resumes or raw local captured source content. Only the internal ATS worker may
+write bounded public posting text (currently Ashby); approval copies it only to
+new pipeline roles. Existing roles and saved bundles are never overwritten.
+Posting text is rendered as text, never HTML. Account export and deletion
+cover both copies. The public local-projection API remains metadata-only.
 
 Signup requires a Cloudflare Turnstile token, an opaque single-use alpha invite, and an HMAC-keyed rate-limit check. The invite is reserved against an opaque keyed email value before Better Auth creates the account, then claimed by the component's transactional user trigger. Raw invite tokens and email addresses are not persisted in enrollment records.
 
@@ -152,7 +156,7 @@ The Better Auth component has been deployed and browser-validated only on the de
 | `jobs:list`, `jobs:create`, `jobs:updateStatus`, `jobs:remove` | Require a verified user. Reads are constrained by `ownerId`; updates and deletes use a non-enumerating owner comparison. New jobs require current privacy acknowledgement. |
 | `discovery:list`, `discovery:history`, `discovery:project`, `discovery:shortlist`, `discovery:archive`, `discovery:approveForEvaluation`, `discovery:overrideDecision` | Require a verified, enrolled owner; mutations also require current privacy acknowledgement. Every read and mutation is constrained by the matching `ownerId`. Projected data is limited to the documented metadata fields, and returned records omit owner identifiers. |
 | `targetProfile:get`, `targetProfile:save`, `autoDiscovery:requestScan`, `autoDiscovery:listRuns` | Require a verified, enrolled owner; writes require current privacy acknowledgement. Reads are owner-scoped. A manual scan requires a saved, enabled profile. |
-| `autoDiscovery:queueDueRuns`, `autoDiscoveryWorker:runForOwner`, scan ingestion functions | Internal only. The daily cron queues due owners; the action fetches fixed public ATS feeds and stores metadata-only viable matches. |
+| `autoDiscovery:queueDueRuns`, `autoDiscoveryWorker:runForOwner`, scan ingestion functions | Internal only. The daily cron queues due owners; the action fetches fixed public ATS feeds and stores viable matches and available bounded public posting text. |
 | `account:exportData`, `account:recordExportRequest`; Better Auth account deletion trigger | The export and export-event record require a verified owner. The portable export contains that owner's manual jobs, Target Profile, scan history, privacy acknowledgement, and discovery metadata projection/history. The deletion trigger removes all corresponding owner-scoped records before deleting the application-owned user mapping; it retains only the privacy-safe deletion audit event. |
 | `privacy:status`, `privacy:acknowledge`; `enrollment:status` | Require a verified, enrolled user and operate only on that user's app record. |
 | `enrollment:issueInvite` | Operator action protected by `ENROLLMENT_ADMIN_KEY`; returns the raw invite once and stores only an HMAC digest. |
