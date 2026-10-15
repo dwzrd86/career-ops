@@ -12,6 +12,25 @@ related:
 
 Resume Studio is available in the authenticated web dashboard. Click **Prepare resume** on a pipeline row to select that role and move keyboard focus into Resume Studio, or choose a role inside the studio. Paste the original posting, import or paste your source resume, edit the draft, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
 
+**Prepare this application** shows a per-role checklist for source evidence,
+posting, draft, factual review, and saved bundle. Its navigation button scrolls
+and moves keyboard focus to the first incomplete step, then to Word export when
+everything is reviewed and saved. These buttons only navigate: use the existing
+generation, review, save, and download controls to perform each action. Review
+navigation focuses the draft so you can inspect claims before checking review.
+Editing evidence or draft resets the review step; any unsaved change makes the
+saved-bundle step pending. Loading a different role restores that role’s state.
+The checklist is hidden in PDF output with the rest of the editor controls.
+It does not verify qualifications, posting availability, or ATS acceptance.
+
+Iteration 15 verification: all ten security-regression checks passed on Node
+24.19.0, including the guarded TypeScript/Vite build and browser workflows.
+Both browser workflows exercise preparation navigation, keyboard focus,
+review/save/export progression, and review reset after editing. The tracked
+secret-pattern scan and diff checks passed. Hosted release prerequisites and
+the real-account discovery → local GLM → export journey remain outstanding;
+see [[RELEASE_RUNBOOK]] and [[DISCOVERY_RELEASE_VERIFICATION]].
+
 Discovery now keeps available public Ashby posting text (up to 30,000 characters).
 Approving a newly discovered role copies that snapshot into its pipeline record.
 Resume Studio prefills the posting when no saved bundle exists, reducing copy and

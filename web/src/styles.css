@@ -93,6 +93,12 @@ td span { color: #748077; font-size: 13px; }
 .resume-export { display: flex; gap: 10px; flex-wrap: wrap; }
 .resume-export button:disabled { cursor: not-allowed; }
 .resume-print { display: none; }
+.resume-preparation { display: grid; gap: 12px; padding: 24px; border-bottom: 1px solid #cdd5cc; background: #f3f6f0; }
+.resume-preparation h3 { margin: 0; font-size: 16px; }
+.resume-preparation ol { display: flex; flex-wrap: wrap; gap: 12px 24px; list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.resume-preparation li[aria-current="step"] { color: #285d44; font-weight: 700; }
+.resume-preparation button { justify-self: start; }
+.resume-evidence:focus-visible { outline: 2px solid #327154; outline-offset: 2px; }
 @media (max-width: 850px) { .resume-studio-body { grid-template-columns: 1fr; padding: 18px; } }
 @media print {
   @page { size: letter; margin: 0.65in; }

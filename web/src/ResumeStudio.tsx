@@ -9,6 +9,12 @@ export type ResumeStudioHandle = { openJob: (jobId: string) => void };
 
 export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudioHandle> }) {
   const targetSelect = useRef<HTMLSelectElement>(null);
+  const sourceEditor = useRef<HTMLTextAreaElement>(null);
+  const postingEditor = useRef<HTMLTextAreaElement>(null);
+  const draftEditor = useRef<HTMLTextAreaElement>(null);
+  const tailoringPanel = useRef<HTMLDivElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
+  const wordButton = useRef<HTMLButtonElement>(null);
   const [jobId, setJobId] = useState("");
   const [resume, setResume] = useState("");
   const [description, setDescription] = useState("");
@@ -112,6 +118,14 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   const covered = requested.filter((term) => containsTerm(resume, term));
   const missing = requested.filter((term) => !containsTerm(resume, term));
   const canExport = Boolean(job && resume.trim() && reviewed && !loading && !busy);
+  const preparationSteps = [
+    { label: "Source evidence", complete: Boolean(sourceResume.trim()), action: "Add source resume", target: sourceEditor },
+    { label: "Job posting", complete: Boolean(description.trim()), action: "Add job description", target: postingEditor },
+    { label: "Tailored draft", complete: Boolean(resume.trim()), action: "Prepare tailored draft", target: tailoringPanel },
+    { label: "Factual review", complete: reviewed, action: "Review resume facts", target: draftEditor },
+    { label: "Saved bundle", complete: revision !== null && !dirty, action: "Save reviewed bundle", target: saveButton },
+  ];
+  const nextStep = preparationSteps.find(step => !step.complete);
   const filename = `${job?.company || "company"}-${job?.title || "resume"}`.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 
   function downloadBlob(blob: Blob, name: string) {
@@ -225,6 +239,19 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   return <section className="pipeline-panel resume-studio" id="resume-studio" aria-labelledby="resume-studio-title">
     <header className="panel-header"><div><p className="eyebrow">Application desk</p><h2 id="resume-studio-title">Resume Studio</h2><p>Prepare a clear, single-column resume for one specific role.</p></div><FileText size={24} aria-hidden="true" /></header>
     <fieldset disabled={busy} className="resume-fieldset">
+    <section className="resume-preparation" aria-labelledby="resume-preparation-title">
+      <h3 id="resume-preparation-title">Prepare this application</h3>
+      <p role="status">{!job ? "Choose a pipeline role to start." : loading ? "Loading this role’s preparation…" : busy ? "Finishing the current operation…" : nextStep ? `Next: ${nextStep.action}.` : "Reviewed and saved. Your resume is ready to export."}</p>
+      {job && !loading && <ol aria-label="Resume preparation checklist">{preparationSteps.map(step => <li key={step.label} aria-current={step === nextStep ? "step" : undefined}>
+        <span aria-hidden="true">{step.complete ? "✓" : "○"}</span> {step.label}<span className="sr-only">: {step.complete ? "Complete" : "Pending"}</span>
+      </li>)}</ol>}
+      <button type="button" className="button secondary" disabled={loading} onClick={() => {
+        const element = !job ? targetSelect.current : nextStep ? nextStep.target.current : wordButton.current;
+        element?.scrollIntoView({ block: "center" });
+        element?.focus({ preventScroll: true });
+      }}>{!job ? "Choose target role" : nextStep?.action ?? "Export reviewed resume"}</button>
+      {job && !loading && <p>Review changed claims against your source before checking factual review. Save your bundle to keep it in the resume queue. Navigation never sends evidence to GLM.</p>}
+    </section>
     <section className="resume-shelf" aria-labelledby="resume-shelf-title">
       <h3 id="resume-shelf-title">Your resume queue</h3>
       <p>Saved resumes for roles you haven’t applied to yet. Ready means you reviewed the saved facts; check that the posting is still open before applying.</p>
@@ -260,11 +287,11 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
           if (file) void importSource(file);
         }} /></label>
         <p>Choose a UTF-8 text or Markdown resume (up to 40,000 characters). Files are read in your browser. For PDF or Word, copy and paste the document’s text below.</p>
-        <label>Source resume<textarea aria-label="Source resume" rows={6} maxLength={40000} disabled={!job || loading} placeholder="Paste your factual, original resume as evidence." value={sourceResume} onChange={(event) => { setSourceResume(event.target.value); setReviewed(false); setDirty(true); }} /></label>
+        <label>Source resume<textarea ref={sourceEditor} aria-label="Source resume" rows={6} maxLength={40000} disabled={!job || loading} placeholder="Paste your factual, original resume as evidence." value={sourceResume} onChange={(event) => { setSourceResume(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <button type="button" className="button secondary" disabled={!sourceResume.trim() || loading} onClick={() => { if (resume.trim() && !window.confirm("Replace the current draft with the source resume?")) return; setResume(sourceResume); setReviewed(false); setDirty(true); }}>Start draft from source</button>
         {job?.postingText && <p>Discovery captured this posting’s text. Check the original for updates before generating or applying. Saved edits take priority.</p>}
-        <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
-        <div className="resume-evidence">
+        <label>Job description<textarea ref={postingEditor} aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
+        <div ref={tailoringPanel} tabIndex={-1} className="resume-evidence">
           <h3>Tailor with GLM</h3>
           {localModel ? <>
             <p>Your local OpenCode agent is connected. Generate a tailored draft directly into this editor, then review the facts before exporting.</p>
@@ -294,7 +321,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
         <div className="resume-evidence" aria-live="polite"><h3>Keyword evidence</h3>{!description.trim() ? <p>Paste a job description to check common skills.</p> : !requested.length ? <p>No terms from the common-skills checklist found. Review this role’s requirements manually.</p> : <><p>{covered.length} of {requested.length} common skills appear in your resume. This is a literal text check, not an ATS score.</p><div className="resume-tags">{covered.map((term) => <span className="covered" key={term}>✓ {term}</span>)}{missing.map((term) => <span key={term}>Review: {term}</span>)}</div><p>Only add a missing skill when your experience supports it.</p></>}</div>
       </div>
       <div className="resume-draft">
-        <label>Resume text<textarea aria-label="Resume text" disabled={!job || loading} rows={20} maxLength={40000} placeholder={"YOUR NAME\nEmail · Phone · Location\n\nSUMMARY\n\nEXPERIENCE\n\nEDUCATION\n\nSKILLS"} value={resume} onChange={(event) => { setResume(event.target.value); setReviewed(false); setDirty(true); setMessage(""); }} /></label>
+        <label>Resume text<textarea ref={draftEditor} aria-label="Resume text" disabled={!job || loading} rows={20} maxLength={40000} placeholder={"YOUR NAME\nEmail · Phone · Location\n\nSUMMARY\n\nEXPERIENCE\n\nEDUCATION\n\nSKILLS"} value={resume} onChange={(event) => { setResume(event.target.value); setReviewed(false); setDirty(true); setMessage(""); }} /></label>
         {sourceResume.trim() && resume.trim() && (details.figures.length > 0 || details.contacts.length > 0) && <div className="resume-evidence" role="status">
           <h3>Check details absent from your source</h3>
           {details.figures.length > 0 && <p>Numbers, dates, or metrics: {details.figures.join(", ")}</p>}
@@ -309,9 +336,9 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
         </details>}
         <p className="resume-session-note">Save stores your source resume, job description, draft, and review state in your private account. Unsaved edits are cleared on refresh or sign-out. GLM generation shares evidence with Z.AI only after you choose it. Exported briefs and OpenCode history remain outside dashboard account deletion.</p>
         <label className="resume-review"><input type="checkbox" checked={reviewed} disabled={!job || loading} onChange={(event) => { setReviewed(event.target.checked); setDirty(true); }} />I reviewed the facts, contact details, and relevance for this role.</label>
-        <div className="resume-export"><button type="button" className="button primary" disabled={!job || loading || !sourceResume.trim() || !description.trim() || !resume.trim() || !dirty} onClick={save}>{busy ? "Saving…" : "Save bundle"}</button><button type="button" className="button secondary" disabled={revision === null || loading} onClick={remove}>Delete saved bundle</button></div>
+        <div className="resume-export"><button type="button" className="button primary" ref={saveButton} disabled={!job || loading || !sourceResume.trim() || !description.trim() || !resume.trim() || !dirty} onClick={save}>{busy ? "Saving…" : "Save bundle"}</button><button type="button" className="button secondary" disabled={revision === null || loading} onClick={remove}>Delete saved bundle</button></div>
         <p>{revision === null ? "No saved bundle for this role." : `Saved revision ${revision}.`}{dirty ? " Unsaved changes." : ""}</p>
-        <div className="resume-export"><button type="button" className="button primary" disabled={!canExport} onClick={downloadWord}><Download size={16} />Download Word</button><button type="button" className="button secondary" disabled={!canExport} onClick={download}><Download size={16} />Download text</button><button type="button" className="button secondary" disabled={!canExport} onClick={() => window.print()}><Printer size={16} />Print / Save PDF</button></div>
+        <div className="resume-export"><button type="button" className="button primary" ref={wordButton} disabled={!canExport} onClick={downloadWord}><Download size={16} />Download Word</button><button type="button" className="button secondary" disabled={!canExport} onClick={download}><Download size={16} />Download text</button><button type="button" className="button secondary" disabled={!canExport} onClick={() => window.print()}><Printer size={16} />Print / Save PDF</button></div>
         <p role="status">{message || "PDF export uses your browser’s print dialog. Choose Save as PDF and turn off headers and footers."}</p>
       </div>
     </div>

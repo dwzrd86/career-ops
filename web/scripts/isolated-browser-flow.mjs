@@ -162,12 +162,19 @@ async function main() {
     const targetRole = studio.getByLabel("Resume target role", { exact: true });
     assert.equal(await targetRole.locator("option:checked").textContent(), "Example Company · Security regression role", "pipeline action selects its own role");
     assert.equal(await targetRole.evaluate(element => document.activeElement === element), true, "pipeline action moves keyboard focus into Resume Studio");
+    const preparation = studio.getByRole("region", { name: "Prepare this application", exact: true });
+    await expectVisible(page, preparation.getByText("Next: Add source resume.", { exact: true }), "first preparation step");
+    await preparation.getByRole("button", { name: "Add source resume", exact: true }).click();
+    assert.equal(await studio.getByLabel("Source resume", { exact: true }).evaluate(element => document.activeElement === element), true, "next step focuses source evidence");
+    assert.equal(await preparation.getByRole("listitem").count(), 5);
     const sourceInput = studio.getByLabel("Import source resume", { exact: true });
     const sourceText = "Test Candidate: Built Python automation with SQL on AWS.";
     await page.waitForFunction(() => document.querySelector('[aria-label="Import source resume"]').disabled === false);
     await sourceInput.setInputFiles({ name: "resume.TXT", mimeType: "text/plain", buffer: Buffer.from(`\uFEFF${sourceText}\r\n`) });
     await expectVisible(page, studio.getByText(/Source resume imported locally\./), "source import confirmation");
     assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText);
+    await preparation.getByRole("button", { name: "Add job description", exact: true }).click();
+    assert.equal(await studio.getByLabel("Job description", { exact: true }).evaluate(element => document.activeElement === element), true, "next step focuses the missing posting");
     for (const [name, contents, message] of [
       ["resume.pdf", "%PDF", "Choose a .txt or .md source resume saved as UTF-8 plain text."],
       ["resume.txt", "invalid\0binary", "Choose a UTF-8 plain text source resume, not a binary document."],
@@ -181,6 +188,8 @@ async function main() {
       assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText, "invalid source preserves evidence");
     }
     await studio.getByLabel("Job description", { exact: true }).fill("Python, SQL, AWS and leadership required. React experience preferred.");
+    await preparation.getByRole("button", { name: "Prepare tailored draft", exact: true }).click();
+    assert.equal(await studio.locator('[tabindex="-1"]').evaluate(element => document.activeElement === element), true, "draft navigation focuses the tailoring panel without invoking GLM");
     await studio.getByLabel("Resume text", { exact: true }).fill("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS");
     const reviewFacts = studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." });
     await reviewFacts.check();
@@ -225,6 +234,9 @@ async function main() {
     assert.match(await page.locator(".resume-print").innerText(), /review its resume facts/);
     await page.emulateMedia({ media: "screen" });
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+    await preparation.getByRole("button", { name: "Review resume facts", exact: true }).click();
+    assert.equal(await studio.getByLabel("Resume text", { exact: true }).evaluate(element => document.activeElement === element), true, "review navigation focuses the draft rather than approving facts");
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     const generate = studio.getByRole("button", { name: "Generate GLM draft", exact: true });
     const sharingConsent = studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." });
     if (productionCsp) {
@@ -291,8 +303,13 @@ async function main() {
     await studio.locator("summary").filter({ hasText: /^Review \d+ changed or added lines/ }).click();
     await expectVisible(page, studio.getByText(/Skills in the draft absent from source wording: React/), "unsupported skill warning");
     await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).check();
+    await preparation.getByRole("button", { name: "Save reviewed bundle", exact: true }).click();
+    assert.equal(await studio.getByRole("button", { name: "Save bundle", exact: true }).evaluate(element => document.activeElement === element), true, "save navigation focuses the existing save control");
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
     await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
+    await expectVisible(page, preparation.getByText("Reviewed and saved. Your resume is ready to export.", { exact: true }), "preparation complete");
+    await preparation.getByRole("button", { name: "Export reviewed resume", exact: true }).click();
+    assert.equal(await studio.getByRole("button", { name: "Download Word", exact: true }).evaluate(element => document.activeElement === element), true, "export navigation focuses Word without downloading");
     await expectVisible(page, studio.getByRole("button", { name: "Ready to export (1)", exact: true }), "reviewed resume appears in queue");
     await prepareDiscoveryResume.click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Source resume"]').disabled === false);
@@ -352,6 +369,7 @@ async function main() {
     assert.equal(await page.locator(".resume-print pre").count(), 0, "editing invalidates browser Print as well as download buttons");
     assert.ok(!(await page.locator(".resume-print").innerText()).includes("Updated draft"));
     await page.emulateMedia({ media: "screen" });
+    await expectVisible(page, preparation.getByText("Next: Review resume facts.", { exact: true }), "editing resets the preparation checklist");
 
     // Switching away from an unsaved edit must ask before losing it.
     page.once("dialog", dialog => dialog.dismiss());
