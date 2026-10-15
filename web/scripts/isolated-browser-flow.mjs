@@ -158,9 +158,52 @@ async function main() {
     const targetRole = studio.getByLabel("Resume target role", { exact: true });
     assert.equal(await targetRole.locator("option:checked").textContent(), "Example Company · Security regression role", "pipeline action selects its own role");
     assert.equal(await targetRole.evaluate(element => document.activeElement === element), true, "pipeline action moves keyboard focus into Resume Studio");
-    await studio.getByLabel("Source resume", { exact: true }).fill("Test Candidate: Built Python automation with SQL on AWS.");
+    const sourceInput = studio.getByLabel("Import source resume", { exact: true });
+    const sourceText = "Test Candidate: Built Python automation with SQL on AWS.";
+    await page.waitForFunction(() => document.querySelector('[aria-label="Import source resume"]').disabled === false);
+    await sourceInput.setInputFiles({ name: "resume.TXT", mimeType: "text/plain", buffer: Buffer.from(`\uFEFF${sourceText}\r\n`) });
+    await expectVisible(page, studio.getByText(/Source resume imported locally\./), "source import confirmation");
+    assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText);
+    for (const [name, contents, message] of [
+      ["resume.pdf", "%PDF", "Choose a .txt or .md source resume saved as UTF-8 plain text."],
+      ["resume.txt", "invalid\0binary", "Choose a UTF-8 plain text source resume, not a binary document."],
+      ["resume.txt", "\uFFFD", "Save the source resume with UTF-8 encoding before importing."],
+      ["resume.md", " ", "The source resume file is empty."],
+      ["resume.txt", "x".repeat(40001), "Source resumes must contain at most 40,000 characters."],
+      ["resume.txt", "x".repeat(160001), "Source resume files must be smaller than 160 KB."],
+    ]) {
+      await sourceInput.setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(contents) });
+      await expectVisible(page, studio.getByText(message, { exact: name !== "resume.pdf" }), "invalid source rejection");
+      assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText, "invalid source preserves evidence");
+    }
     await studio.getByLabel("Job description", { exact: true }).fill("Python, SQL, AWS and leadership required. React experience preferred.");
     await studio.getByLabel("Resume text", { exact: true }).fill("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS");
+    const reviewFacts = studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." });
+    await reviewFacts.check();
+    const rejectSource = new Promise(resolve => page.once("dialog", async dialog => { await dialog.dismiss(); resolve(); }));
+    await sourceInput.setInputFiles({ name: "resume.md", mimeType: "text/markdown", buffer: Buffer.from("Cancelled replacement") });
+    await rejectSource;
+    assert.equal(await reviewFacts.isChecked(), true, "cancelled source import preserves review");
+    assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText);
+    const acceptSource = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
+    await sourceInput.setInputFiles({ name: "resume.md", mimeType: "text/markdown", buffer: Buffer.from(sourceText + "\nSKILLS\nPython, SQL, AWS") });
+    await acceptSource;
+    await expectVisible(page, studio.getByText(/Source resume imported locally\./), "Markdown source imported");
+    assert.equal(await reviewFacts.isChecked(), false, "source import resets factual review");
+    assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"), "source import preserves existing draft");
+    assert.ok((await studio.getByLabel("Job description", { exact: true }).inputValue()).includes("leadership"), "source import preserves posting");
+    await page.evaluate(() => {
+      const original = File.prototype.text;
+      File.prototype.text = function () {
+        if (this.name !== "delayed-source.txt") return original.call(this);
+        return new Promise(resolve => { window.__releaseSourceRead = () => resolve("Stale imported evidence"); });
+      };
+    });
+    await sourceInput.setInputFiles({ name: "delayed-source.txt", mimeType: "text/plain", buffer: Buffer.from("Stale imported evidence") });
+    await studio.getByLabel("Source resume", { exact: true }).fill(sourceText);
+    await page.evaluate(() => window.__releaseSourceRead());
+    await page.waitForTimeout(50);
+    assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText, "late file read cannot overwrite newer edits");
     let switchPrompts = 0;
     const rejectSwitch = async dialog => { switchPrompts++; await dialog.dismiss(); };
     page.on("dialog", rejectSwitch);

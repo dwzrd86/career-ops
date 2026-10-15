@@ -21,12 +21,12 @@ ${JSON.stringify({ targetRole: role, sourceResume, jobDescription: description }
 `;
 }
 
-export function parseResumeDraft(text: string) {
+export function parseResumeDraft(text: string, kind: "draft" | "source resume" = "draft") {
   const clean = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").trim();
-  if (!clean) throw new Error("The draft file is empty.");
-  if (clean.length > 40000) throw new Error("Drafts must contain at most 40,000 characters.");
-  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(clean)) throw new Error("Choose a UTF-8 plain text draft, not a binary document.");
-  if (clean.includes("\uFFFD")) throw new Error("Save the draft with UTF-8 encoding before importing.");
+  if (!clean) throw new Error(`The ${kind} file is empty.`);
+  if (clean.length > 40000) throw new Error(`${kind === "draft" ? "Drafts" : "Source resumes"} must contain at most 40,000 characters.`);
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(clean)) throw new Error(`Choose a UTF-8 plain text ${kind}, not a binary document.`);
+  if (clean.includes("\uFFFD")) throw new Error(`Save the ${kind} with UTF-8 encoding before importing.`);
   return clean;
 }
 

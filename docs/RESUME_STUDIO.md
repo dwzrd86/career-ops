@@ -10,7 +10,21 @@ related:
   - '[[PRIVACY]]'
 ---
 
-Resume Studio is available in the authenticated web dashboard. Click **Prepare resume** on a pipeline row to select that role and move keyboard focus into Resume Studio, or choose a role inside the studio. Paste the original posting and resume text, edit the resume, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
+Resume Studio is available in the authenticated web dashboard. Click **Prepare resume** on a pipeline row to select that role and move keyboard focus into Resume Studio, or choose a role inside the studio. Paste the original posting, import or paste your source resume, edit the draft, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
+
+**Import source resume** reads a UTF-8 `.txt` or `.md` file locally in the browser.
+It accepts up to 40,000 characters and rejects files larger than 160 KB, empty
+files, binary content, and invalid UTF-8. For PDF or Word, copy the document's
+text into Source resume. Importing requires a selected role; replacing different
+existing evidence requires confirmation. Accepted imports reset factual review
+and mark the bundle unsaved while preserving its draft and job description.
+Late file reads cannot overwrite a changed editor or a different role. Importing
+does not send the file to an AI provider or save it automatically; **Save bundle**
+stores its text in the private account, and GLM generation uses the existing
+explicit provider consent. Saved evidence can also be reused via
+[[RESUME_SOURCE_LIBRARY]]. Browser regression coverage checks valid text and
+Markdown, invalid files, replacement cancellation, review reset, preserved draft
+and posting, and a delayed read after a newer edit.
 
 The PDF layout contains only resume text in one column, with selectable text and standard typography. This does not guarantee acceptance or ranking by a particular ATS. Common-skills coverage is a literal checklist, not a match score or an exhaustive requirements analysis. Generated drafts still require human review against the original evidence.
 

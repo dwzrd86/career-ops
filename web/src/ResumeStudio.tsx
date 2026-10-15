@@ -152,7 +152,9 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   }
 
   const importContext = useRef<object | null>(null);
-  importContext.current = { jobId, sourceResume, description, resume };
+  const editorSnapshot = useMemo(() => ({ jobId, sourceResume, description, resume, busy, loading, reviewed, revision }),
+    [jobId, sourceResume, description, resume, busy, loading, reviewed, revision]);
+  importContext.current = editorSnapshot;
   useEffect(() => () => { importContext.current = null; }, []);
   const changes = useMemo(() => draftChanges(sourceResume, resume), [sourceResume, resume]);
   const details = useMemo(() => unsupportedDetails(sourceResume, resume), [sourceResume, resume]);
@@ -198,6 +200,26 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
     }
   }
 
+  const sourceImportRequest = useRef<object | null>(null);
+  async function importSource(file: File) {
+    if (!job || loading || busy) return;
+    const context = importContext.current;
+    const request = {};
+    sourceImportRequest.current = request;
+    const isCurrent = () => context === importContext.current && request === sourceImportRequest.current;
+    try {
+      if (!/\.(txt|md)$/i.test(file.name)) throw new Error("Choose a .txt or .md source resume saved as UTF-8 plain text. For PDF or Word, copy its text into Source resume.");
+      if (file.size > 160000) throw new Error("Source resume files must be smaller than 160 KB.");
+      const text = parseResumeDraft(await file.text(), "source resume");
+      if (!isCurrent()) return;
+      if (sourceResume.trim() && sourceResume !== text && !window.confirm("Replace this role's source resume with the imported evidence? Your draft will remain for review.")) return;
+      setSourceResume(text); setReviewed(false); setDirty(true);
+      setMessage("Source resume imported locally. Check the text, then prepare your draft. Save bundle to store it in your private account.");
+    } catch (error) {
+      if (isCurrent()) setMessage(error instanceof Error ? error.message : "Could not read the source resume. Your editor is unchanged.");
+    }
+  }
+
   return <section className="pipeline-panel resume-studio" id="resume-studio" aria-labelledby="resume-studio-title">
     <header className="panel-header"><div><p className="eyebrow">Application desk</p><h2 id="resume-studio-title">Resume Studio</h2><p>Prepare a clear, single-column resume for one specific role.</p></div><FileText size={24} aria-hidden="true" /></header>
     <fieldset disabled={busy} className="resume-fieldset">
@@ -230,6 +252,12 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
           setMessage(`Source evidence reused from ${source.company} · ${source.title}. Review your draft against this source before exporting.`);
         }}><option value="">{sources === undefined ? "Loading saved sources…" : sources.length ? "Choose original evidence from a saved bundle" : "Save a bundle once to reuse its source here"}</option>{sources?.map(item => <option key={item.jobId} value={item.jobId}>{item.company} · {item.title}</option>)}</select></label>
         <p>Reuse your original resume across roles. Saved sources stay in your private account; choosing one resets this role’s factual review.</p>
+        <label>Import source resume<input aria-label="Import source resume" type="file" accept=".txt,.md,text/plain,text/markdown" disabled={!job || loading} onChange={event => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void importSource(file);
+        }} /></label>
+        <p>Choose a UTF-8 text or Markdown resume (up to 40,000 characters). Files are read in your browser. For PDF or Word, copy and paste the document’s text below.</p>
         <label>Source resume<textarea aria-label="Source resume" rows={6} maxLength={40000} disabled={!job || loading} placeholder="Paste your factual, original resume as evidence." value={sourceResume} onChange={(event) => { setSourceResume(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <button type="button" className="button secondary" disabled={!sourceResume.trim() || loading} onClick={() => { if (resume.trim() && !window.confirm("Replace the current draft with the source resume?")) return; setResume(sourceResume); setReviewed(false); setDirty(true); }}>Start draft from source</button>
         <label>Job description<textarea aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
