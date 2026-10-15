@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { targetProfileFields } from "./targetProfileModel";
 
 const jobStatus = v.union(
   v.literal("discovered"),
@@ -68,6 +69,28 @@ export default defineSchema({
     privacyAcknowledgedAt: v.optional(v.number()),
     privacyPolicyVersion: v.optional(v.string()),
   }).index("by_auth_id", ["authId"]),
+  targetProfiles: defineTable({
+    ownerId: v.id("users"),
+    ...targetProfileFields,
+    profileVersion: v.number(),
+    updatedAt: v.number(),
+    lastScanAt: v.optional(v.number()),
+  }).index("by_owner", ["ownerId"])
+    .index("by_enabled", ["enabled"]),
+  discoveryScanRuns: defineTable({
+    ownerId: v.id("users"),
+    profileVersion: v.number(),
+    trigger: v.union(v.literal("manual"), v.literal("scheduled")),
+    status: v.union(v.literal("queued"), v.literal("running"), v.literal("succeeded"), v.literal("partial"), v.literal("failed")),
+    queuedAt: v.number(),
+    finishedAt: v.optional(v.number()),
+    feedsSucceeded: v.number(),
+    feedsFailed: v.number(),
+    discovered: v.number(),
+    reviewable: v.number(),
+    rejected: v.number(),
+    errorCode: v.optional(v.string()),
+  }).index("by_owner_queued_at", ["ownerId", "queuedAt"]),
   jobs: defineTable({
     ownerId: v.id("users"),
     company: v.string(),
@@ -131,6 +154,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_owner_local_job", ["ownerId", "localJobId"])
+    .index("by_owner_url", ["ownerId", "url"])
     .index("by_owner_discovered_at", ["ownerId", "discoveredAt"])
     .index("by_owner_review_status", ["ownerId", "reviewStatus"]),
   discoveryMatchDecisions: defineTable({

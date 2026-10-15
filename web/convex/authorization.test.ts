@@ -178,12 +178,20 @@ describe("isolated Convex authorization boundary", () => {
       outcome: "ranked",
       reason: "Relevant portfolio evidence supports this role.",
     });
+    await accountA.client.mutation(api.targetProfile.save, { profile: {
+      targetRoles: [{ title: "Security Architect", aliases: [], seniority: ["Senior"] }],
+      home: "Nashville", workplaceModes: ["remote"], allowedRegions: ["United States"],
+      preferredRegions: [], dreamRegions: [], dreamIndustries: [], excludedCompanies: [], excludedIndustries: [],
+      frameworks: [], cloudPlatforms: [], currency: "USD", workAuthorization: ["US citizen"], clearanceLevels: [],
+      sources: ["greenhouse"], schedule: "manual", enabled: true,
+    } });
+    await accountA.client.mutation(api.autoDiscovery.requestScan, {});
 
     const exportA = await accountA.client.query(api.account.exportData, {});
     expect(exportA.jobs).toEqual([
       expect.objectContaining({ id: jobA, company: "export-delete-a Company" }),
     ]);
-    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v4" }));
+    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v4", targetProfile: expect.objectContaining({ targetRoles: [expect.objectContaining({ title: "Security Architect" })] }), discoveryScanRuns: [expect.objectContaining({ trigger: "manual" })] }));
     expect(exportA.discovery).toEqual([
       expect.objectContaining({
         id: discoveredJobA,
@@ -213,6 +221,8 @@ describe("isolated Convex authorization boundary", () => {
       expect(await ctx.db.query("discoveryMatchDecisions").withIndex("by_owner_job_decided_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
       expect(await ctx.db.query("discoveryReviewerOverrides").withIndex("by_owner_job_overridden_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
       expect(await ctx.db.query("discoveryStatusHistory").withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
+      expect(await ctx.db.query("targetProfiles").withIndex("by_owner", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
+      expect(await ctx.db.query("discoveryScanRuns").withIndex("by_owner_queued_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
       expect(await ctx.db.query("accountPrivacyEvents").withIndex("by_user", (query) => query.eq("userId", accountA.userId as any)).collect())
         .toEqual(expect.arrayContaining([
           expect.objectContaining({ action: "exportRequested" }),

@@ -140,7 +140,7 @@ export const authComponent: ReturnType<typeof createClient<DataModel>> = createC
           .withIndex("by_auth_id", (query) => query.eq("authId", authUser._id))
           .unique();
         if (user === null) return;
-        const [jobs, discoveredJobs, matchDecisions, reviewerOverrides, statusHistory] = await Promise.all([
+        const [jobs, discoveredJobs, matchDecisions, reviewerOverrides, statusHistory, targetProfile, scanRuns, resumeBundles] = await Promise.all([
           ctx.db
             .query("jobs")
             .withIndex("by_owner_created_at", (query) => query.eq("ownerId", user._id))
@@ -161,14 +161,18 @@ export const authComponent: ReturnType<typeof createClient<DataModel>> = createC
             .query("discoveryStatusHistory")
             .withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", user._id))
             .collect(),
+          ctx.db.query("targetProfiles").withIndex("by_owner", (query) => query.eq("ownerId", user._id)).unique(),
+          ctx.db.query("discoveryScanRuns").withIndex("by_owner_queued_at", (query) => query.eq("ownerId", user._id)).take(31),
+          ctx.db.query("resumeBundles").withIndex("by_owner_job", (q) => q.eq("ownerId", user._id)).take(50),
         ]);
-        const resumeBundles = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", user._id)).take(50);
-        for (const bundle of resumeBundles) await ctx.db.delete(bundle._id);
         for (const job of jobs) await ctx.db.delete(job._id);
         for (const decision of matchDecisions) await ctx.db.delete(decision._id);
         for (const override of reviewerOverrides) await ctx.db.delete(override._id);
         for (const status of statusHistory) await ctx.db.delete(status._id);
         for (const job of discoveredJobs) await ctx.db.delete(job._id);
+        for (const bundle of resumeBundles) await ctx.db.delete(bundle._id);
+        for (const run of scanRuns) await ctx.db.delete(run._id);
+        if (targetProfile) await ctx.db.delete(targetProfile._id);
         const invite = await ctx.db
           .query("alphaInvites")
           .withIndex("by_claimed_by", (query) => query.eq("claimedBy", user._id))

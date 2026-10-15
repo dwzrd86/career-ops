@@ -43,23 +43,25 @@ credentials. See [[SECURITY]] and `DATA_CONTRACT.md` for the local boundary.
 ## What the alpha does
 
 The hosted alpha provides verified email/password accounts, a private manual
-job-pipeline workspace, and a private review queue for an owner-scoped,
-metadata-only projection of locally discovered roles. A user can add a manual
-role, review projected matches, change review or pipeline status, archive a
-projected role, or remove a manual role. The hosted alpha does **not** receive
-or store browser credentials or local file paths,
-raw captured source content, application answers, or application forms. It does
-not scan job boards itself, generate or upload resumes, fill application forms,
-or automatically submit applications to an employer. The local Career-Ops tools
-remain separate from this hosted dataset.
-
-Resume Studio separately stores source resume text, user-pasted job descriptions,
-edited drafts, revision numbers, and factual-review timestamps only when the
-user selects Save bundle. Up to 50 bundles per account are supported, with
-40,000 characters per text field. The hosted frontend makes no AI provider requests. Opt-in local development
+job pipeline, saved per-role resume bundles, a saved Target Profile, and an owner-scoped discovery review queue.
+When discovery is enabled, a scheduled server worker requests public Greenhouse
+and Ashby job-board feeds, compares listings with the saved profile, and stores
+only review metadata for viable roles. Users can also request a scan. Imported
+local Target Profile YAML is read in the browser; only selected search settings
+are saved when the user submits the form. Public ATS job descriptions may be
+processed transiently in worker memory to check explicit requirements, but are
+not persisted by discovery. Resume Studio separately stores source resume text,
+user-pasted job descriptions, edited drafts, revision numbers, and factual-review
+timestamps only when the user selects Save bundle. Up to 50 bundles per account
+are supported, with each text field limited to 40,000 characters. The hosted frontend makes no AI provider requests. Opt-in local development
 generation sends the selected source resume and posting through OpenCode to
 Z.AI. Exported GLM briefs also contain this evidence. OpenCode history and
-downloaded files are outside dashboard account deletion. See [[RESUME_STUDIO]]. Unsaved text clears on refresh or sign-out.
+downloaded files are outside dashboard account deletion. See [[RESUME_STUDIO]]. Unsaved editor text is
+cleared on refresh or sign-out. The hosted alpha does **not** store browser
+credentials, local file paths, raw captured source content,
+application answers, or application forms. It does
+not fill application forms or automatically submit applications to employers.
+The local Career-Ops tools remain separate from this hosted dataset.
 
 ## Data collected and why
 
@@ -70,12 +72,16 @@ downloaded files are outside dashboard account deletion. See [[RESUME_STUDIO]]. 
 | Signup bot-protection token and validation result | Reduce automated account creation | Cloudflare Turnstile validates the token during signup. The application does not store the token in its own tables. |
 | Job-pipeline entries: company, role title, location, job URL, source, status, optional notes, created/updated timestamps, and owning account ID | Display and manage the user's private pipeline | The `jobs` table in the configured Convex deployment. Each entry is scoped to its authenticated, verified owner. |
 | Saved resume bundle: owning account and job IDs, original source resume text, pasted job description, edited resume text, revision, review timestamp, and last update time | Resume Studio saves and restores one private bundle per pipeline role | The owner-scoped `resumeBundles` table in Convex. Content is stored only on an explicit save; no external AI processing is implemented. |
+| Target Profile search settings: target roles, locations, work policy, salary floor, authorization and clearance preferences, exclusions, expertise, selected feed providers, and scan schedule | Filter and rank public job-board listings for the signed-in user | The owner-scoped `targetProfiles` table in Convex. The profile does not contain a resume file or local path. |
+| Scan run metadata: trigger, timing, status, feed success/failure counts, and match counts | Show scan history and troubleshoot failures | The owner-scoped `discoveryScanRuns` table in Convex. At most 30 recent runs are retained per user. |
 | Discovered-role projection: company, title, optional location, canonical HTTPS role URL, safe local record identifier, source label/provider, discovery and freshness timestamps/status, and review status | Show the private discovery review queue without copying the local discovery record | The owner-scoped `discoveredJobs` table in the configured Convex deployment. The identifier is validated as a path-free record key; no local path or raw posting content is accepted. |
 | Match and review metadata: profile version, score, decision outcome, hard-filter and explanation codes, reviewer override outcome/reason, and decision/review timestamps | Explain a projected match and record the user's review decisions | Owner-scoped `discoveryMatchDecisions`, `discoveryReviewerOverrides`, and `discoveryStatusHistory` tables in the configured Convex deployment. These tables contain metadata and reviewer-entered reasons only; they do not contain resumes, job-description contents, browser state, or captured page data. |
 | HMAC-derived email rate-limit key, action type, attempt count, and rate-limit-window start time | Rate-limit signup, reset, and verification resend attempts | The `authAbuseLimits` table in the configured Convex deployment. It deliberately stores an HMAC-derived key instead of the email address. |
 | Alpha-invite HMAC digest, issuance/expiry/claim timestamps, a claimed account ID, and limited event category/timestamp records | Limit this early alpha to invited users and investigate invitation lifecycle failures | The `alphaInvites` and `enrollmentAuditEvents` tables in the configured Convex deployment. The application does not store a raw invite token, invitee email, IP address, or career content in its enrollment audit records. |
 | Error-report metadata: deployment version, route path without query data, fixed operation type, fixed error category, and timestamp | Diagnose application failures during the alpha | Browser reports are stored in the `errorReports` table in the configured Convex deployment; backend failures use the same metadata-only structured Convex runtime log. Both deliberately exclude form values, job notes, resume files, application answers, auth tokens, passwords, email bodies, error messages, stack traces, account IDs, and full URLs or query strings. |
 
+The public ATS feed operators receive a normal server request for their feed;
+the request does not include the user's Target Profile or account identity.
 The current application does not implement advertising trackers, behavioral
 analytics, resume uploads, application-answer collection, job-board
 credentials, browser-control storage, raw job-board capture storage, or
@@ -98,26 +104,26 @@ certification claim.
 
 | Data | Retention in the current alpha | How to delete it |
 | --- | --- | --- |
-| Saved resume bundle | Until the user deletes the bundle, removes its pipeline role, deletes the account, or the alpha is retired. There is no automatic expiry. | Use Delete saved bundle in Resume Studio, remove the role, or delete the account. Downloaded exports and unsaved editor text are separate copies. |
 | A job-pipeline entry | Until the user removes that entry, deletes the account, or the alpha is retired. There is no automatic job-record expiry. | Select the entry's remove control in the pipeline, or delete the account from Account security. |
+| Saved resume bundle | Until the user deletes the bundle, removes its pipeline role, deletes the account, or the alpha is retired. There is no automatic expiry. | Use Delete saved bundle in Resume Studio, remove the role, or delete the account. Downloaded exports and unsaved editor text are separate copies. |
+| Target Profile | Until the user deletes the account or the alpha is retired. Disabling discovery stops future scheduled scans but does not delete the profile. | Delete the account from Account security. |
+| Scan run history | The 30 most recent runs per account, until account deletion or alpha retirement. | Delete the account from Account security. |
 | A discovered-role projection and its match decisions, reviewer overrides, review-status history, and material review metadata (state, timestamp, profile version, and artifact-ready flags only) | Until the user deletes the account or the alpha is retired. Archiving changes review status but does not delete the metadata; there is no automatic expiry. | Delete the account from Account security. |
 | Account and authentication records | Until the user deletes the account or the alpha is retired. | Use the Account security control and enter the current password to permanently delete the account and associated pipeline data. |
 | Verification and reset links | 15 minutes, as configured in the application. | They expire automatically; no user action is needed. |
 | HMAC-derived rate-limit records | The current alpha has no automated expiry job for these records; they are retained until the operator removes them or retires the alpha. | These keyed anti-abuse records are not linked to a readable account profile and may be retained temporarily for fraud prevention. |
 | Alpha invite and privacy-safe audit entries | Unused invites expire; digest and event records remain until the operator removes them or retires the alpha. | Invite tokens are not tied to an email before redemption. Deletion expires a redeemed invite and retains only the privacy-safe event record. |
 
-Account JSON exports include saved source resumes, job descriptions, drafts and
-review metadata. Job removal and account deletion also erase saved bundles.
-
 The Account security control downloads a portable JSON export containing only
-the signed-in user's manual pipeline records, privacy acknowledgement metadata,
-and the discovered-role metadata projection with its match decisions, reviewer
-overrides, and review-status history. It excludes Better Auth component records,
+the signed-in user's manual pipeline records, saved resume bundles (including
+source resumes and job descriptions), Target Profile, scan run history,
+privacy acknowledgement metadata, and the discovered-role metadata projection
+with its match decisions, reviewer overrides, and review-status history. It excludes Better Auth component records,
 browser credentials or state, local paths,
 and raw captured source content. It also supports permanent account deletion
 after the current password is confirmed; Better Auth removes the authentication
 account while the transactional trigger removes that user's manual pipeline
-records and every owner-scoped discovered-role projection record. The remaining
+records, saved resume bundles, and every owner-scoped discovered-role projection record. The remaining
 privacy-safe deletion audit event contains no career content. Do not include a
 password, authentication link, resume, or job notes in a support email.
 

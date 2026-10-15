@@ -24,6 +24,8 @@
     "test:evaluation": "node --test agent/test/evaluation.test.mjs",
     "test:agent": "node --test agent/test/*.test.mjs",
     "scheduler": "node agent/daemon.mjs",
+    "discovery:run": "node agent/daemon.mjs --once --collector-adapter agent/collectors/approved-adapter.mjs",
+    "discovery:review": "node agent/commands/review.mjs",
     "scheduler:status": "node agent/commands/status.mjs",
     "scheduler:systemd": "node agent/commands/scheduler-systemd.mjs",
     "daily-shortlist": "node agent/commands/daily-shortlist.mjs",

@@ -51,3 +51,62 @@ test("an unresolved onsite or hybrid commute stays unknown instead of being infe
   assert.equal(decision.outcome, "needs-review");
   assert.ok(decision.explanationCodes.includes("LOCATION_DISTANCE_UNKNOWN"));
 });
+
+test("dream industries can use any allowed region while ordinary hybrid roles keep location review", () => {
+  const target = structuredClone(profile);
+  target.location.preferredRegions = ["Nashville", "Dallas", "Colorado"];
+  target.location.dreamAnyRegion = true;
+  target.preferences.dreamIndustries = ["sports", "entertainment"];
+  const job = fixture("ranked");
+  job.role.location = "Chicago, IL, United States";
+  job.role.industry = "sports and entertainment";
+  const dream = createMatchDecision(target, job, { decidedAt: timestamp });
+  assert.equal(dream.hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "DREAM_INDUSTRY_LOCATION_ALLOWED");
+  assert.ok(dream.explanationCodes.includes("DREAM_INDUSTRY_MATCH"));
+
+  job.role.industry = "cybersecurity";
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "LOCATION_DISTANCE_UNKNOWN");
+  job.role.location = "Dallas, TX";
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "LOCATION_PREFERRED_REGION");
+  job.role.industry = "sports";
+  job.role.location = "Chicago, IL";
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "DREAM_INDUSTRY_REGION_UNKNOWN");
+  job.role.location = "Remote, US";
+  job.role.workplaceMode = "remote";
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "DREAM_INDUSTRY_LOCATION_ALLOWED");
+});
+
+test("explicit travel and office requirements enforce the configured limits", () => {
+  const target = structuredClone(profile);
+  target.criteria.maxTravelPercent = 50;
+  target.criteria.maxOfficeDaysPerWeek = 4;
+  const job = fixture("ranked");
+  job.evidence.requirements = ["Travel up to 60%", "5 days per week in office"];
+  const decision = createMatchDecision(target, job, { decidedAt: timestamp });
+  assert.equal(decision.outcome, "rejected");
+  assert.deepEqual(decision.hardFilterResults.filter((entry) => entry.outcome === "fail").map((entry) => entry.reasonCode), ["TRAVEL_EXCEEDS_LIMIT", "OFFICE_DAYS_EXCEEDS_LIMIT"]);
+  job.evidence.requirements = ["Travel up to 30%", "3 days per week in office"];
+  const acceptable = createMatchDecision(target, job, { decidedAt: timestamp });
+  assert.equal(acceptable.hardFilterResults.find((entry) => entry.ruleId === "TRAVEL").outcome, "pass");
+  assert.equal(acceptable.hardFilterResults.find((entry) => entry.ruleId === "OFFICE_DAYS").outcome, "pass");
+  job.evidence.requirements = ["More than 50% travel"];
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "TRAVEL").reasonCode, "TRAVEL_EXCEEDS_LIMIT");
+  job.evidence.requirements = ["Travel over 50%"];
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "TRAVEL").reasonCode, "TRAVEL_EXCEEDS_LIMIT");
+});
+
+test("dream locations outside the US reach review without assuming work authorization", () => {
+  const target = structuredClone(profile);
+  target.location.dreamRegions = ["London", "Barcelona"];
+  const job = fixture("ranked");
+  job.role.location = "London, UK";
+  const london = createMatchDecision(target, job, { decidedAt: timestamp });
+  assert.equal(london.outcome, "needs-review");
+  assert.equal(london.hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "DREAM_LOCATION_ALLOWED");
+  assert.equal(london.hardFilterResults.find((entry) => entry.ruleId === "WORK_AUTHORIZATION").reasonCode, "DREAM_LOCATION_WORK_AUTHORIZATION_UNKNOWN");
+
+  job.role.location = "Barcelona, Spain";
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "DREAM_LOCATION_ALLOWED");
+  target.location.dreamRegions = [];
+  assert.equal(createMatchDecision(target, job, { decidedAt: timestamp }).hardFilterResults.find((entry) => entry.ruleId === "LOCATION").reasonCode, "LOCATION_OUTSIDE_ALLOWED_REGIONS");
+});

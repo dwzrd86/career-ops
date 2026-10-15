@@ -1,8 +1,8 @@
 # Career Ops Web
 
-This is the Netlify-hosted dashboard for Career-Ops. The existing local CLI and
-scanner remain the automation layer; this app stores web-created pipeline data
-in Convex.
+This is the Netlify-hosted dashboard for Career-Ops. Its Convex worker can
+discover roles from approved public ATS feeds using a saved Target Profile.
+The local CLI and scanner remain separate for browser-assisted workflows.
 
 ## Local development
 
@@ -90,11 +90,20 @@ answers in Netlify environment variables.
 
 ## Current product scope
 
-The web app supports account registration, sign-in, isolated job pipelines,
-manual role creation, role search, and status tracking. The local Career-Ops
-scanner remains separate from the Convex dataset; automated discovery, document
-generation, browser-assisted form filling, and application submission are not
-implemented in this deployment.
+The web app supports account registration, sign-in, a saved Target Profile,
+manual and daily or weekday discovery scans, a private review queue, scan
+history, isolated job pipelines, manual role creation, role search, and status
+tracking. The web worker requests only the approved public Greenhouse and
+Ashby feeds in `convex/atsSources.ts`; it never controls a signed-in browser.
+To start, open Target Profile, enter target roles and search settings (or import
+an existing local YAML profile), select sources, enable discovery, and save.
+Use Run now for an immediate scan; otherwise the Convex cron checks due
+profiles daily at 13:00 UTC. Jobs with uncertain salary, location, work mode,
+travel, clearance, or authorization appear for human review; clear hard
+mismatches are excluded. Nothing is submitted to an employer. Resume Studio supports saved drafts and browser-local text, Word, and print-to-PDF
+exports. GLM generation currently requires the opt-in local bridge described in
+[Resume Studio](../docs/RESUME_STUDIO.md). Browser-assisted collection and
+application form filling are not available in the hosted web app.
 
 Before a verified account can create or change a pipeline entry, it must review
 and acknowledge the current in-product privacy notice. The backend records only
@@ -131,7 +140,20 @@ and downloading text or printing PDF requires factual review. Saved bundles
 restore on role selection. Conflicting saves from other tabs are rejected.
 Delete a bundle in Studio, remove its role, or delete the account to erase it.
 Account exports include saved bundle text. Limits: 50 bundles per account and
-40,000 characters per text field. No AI processing is implemented yet.
+40,000 characters per text field. Local GLM generation requires explicit consent
+and a configured Coding Plan model; hosted AI generation remains unavailable.
 
 See [Resume Studio](../docs/RESUME_STUDIO.md) and the updated
 [privacy notice](../docs/PRIVACY.md) before using real career content.
+
+
+## Discovery worker safety
+
+Workers claim queued scans in a single transaction. Duplicate invocations leave
+an active or completed run unchanged. A disabled or edited profile cancels a
+queued scan. Enrollment and the current privacy acknowledgement are checked
+again before collection and before each batch is saved, so revoked access
+cannot continue writing results. Per-feed results are deduplicated while
+preserving shortlist and approval decisions. See
+[discovery release verification](../docs/DISCOVERY_RELEASE_VERIFICATION.md) for
+local evidence and the remaining hosted-release checks.

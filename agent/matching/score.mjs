@@ -39,6 +39,8 @@ function seniorityScore(profile, job) {
 function preferenceScore(profile, job) {
   const companies = profile.preferences.companies;
   const industries = profile.preferences.industries;
+  const dreamIndustries = profile.preferences.dreamIndustries || [];
+  if (dreamIndustries.some((entry) => normalized(job.role.industry).includes(normalized(entry)))) return { score: 100, codes: ["DREAM_INDUSTRY_MATCH"] };
   if (companies.length === 0 && industries.length === 0) return { score: null, codes: ["PREFERENCE_NOT_CONFIGURED"] };
   if (industries.length > 0 && job.role.industry === null) return { score: null, codes: ["PREFERENCE_UNKNOWN"] };
   const values = [];

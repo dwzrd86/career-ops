@@ -1,5 +1,5 @@
-import type { ResumeBundle } from "../../src/convex";
 import type { DiscoveredJob, DiscoveryDecisionOutcome, DiscoveryReviewStatus, Job, JobStatus } from "./mock-convex";
+import type { DiscoveryScanRun, TargetProfile, TargetProfileInput, ResumeBundle } from "../../src/convex";
 
 type BrowserFlowState = {
   authenticated: boolean;
@@ -10,6 +10,8 @@ type BrowserFlowState = {
   password: string | null;
   pendingAccount: { email: string; password: string } | null;
   privacyAcknowledged: boolean;
+  targetProfile: TargetProfile | null;
+  scanRuns: DiscoveryScanRun[];
   resumeBundles: Record<string, ResumeBundle>;
 };
 
@@ -55,6 +57,8 @@ const initialState = (): BrowserFlowState => ({
   password: null,
   pendingAccount: null,
   privacyAcknowledged: false,
+  targetProfile: null,
+  scanRuns: [],
   resumeBundles: {},
 });
 
@@ -119,6 +123,19 @@ export function signInBrowserFlow(email: string, password: string) {
 
 export function acknowledgeBrowserFlowPrivacy() {
   publish({ privacyAcknowledged: true });
+}
+
+export function saveBrowserFlowTargetProfile(profile: TargetProfileInput) {
+  const version = (state.targetProfile?.profileVersion ?? 0) + 1;
+  publish({ targetProfile: { ...profile, profileVersion: version, updatedAt: Date.now() } });
+  return version;
+}
+
+export function requestBrowserFlowScan() {
+  if (!state.targetProfile?.enabled) throw new Error("Save and enable your Target Profile before scanning");
+  const now = Date.now();
+  publish({ scanRuns: [{ _id: `run-${now}`, profileVersion: state.targetProfile.profileVersion, trigger: "manual", status: "succeeded", queuedAt: now, finishedAt: now, feedsSucceeded: 2, feedsFailed: 0, discovered: 1, reviewable: 1, rejected: 0 }, ...state.scanRuns] });
+  return `run-${now}`;
 }
 
 export function updateBrowserFlowJobStatus(id: string, status: JobStatus) {

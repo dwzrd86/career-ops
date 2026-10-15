@@ -19,7 +19,7 @@ export const exportData = queryGeneric({
   args: {},
   handler: async (ctx) => {
     const userId = await requireVerifiedUser(ctx);
-    const [jobs, discoveredJobs, matchDecisions, reviewerOverrides, statusHistory] = await Promise.all([
+    const [jobs, discoveredJobs, matchDecisions, reviewerOverrides, statusHistory, targetProfile, scanRuns, resumeBundles] = await Promise.all([
       ctx.db
         .query("jobs")
         .withIndex("by_owner_created_at", (query) => query.eq("ownerId", userId))
@@ -45,8 +45,10 @@ export const exportData = queryGeneric({
         .withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", userId))
         .order("desc")
         .collect(),
+      ctx.db.query("targetProfiles").withIndex("by_owner", (query) => query.eq("ownerId", userId)).unique(),
+      ctx.db.query("discoveryScanRuns").withIndex("by_owner_queued_at", (query) => query.eq("ownerId", userId)).order("desc").take(30),
+      ctx.db.query("resumeBundles").withIndex("by_owner_job", (q) => q.eq("ownerId", userId)).take(50),
     ]);
-    const resumeBundles = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", userId)).take(50);
     const decisionsByJob = groupByDiscoveredJob(matchDecisions);
     const overridesByJob = groupByDiscoveredJob(reviewerOverrides);
     const statusesByJob = groupByDiscoveredJob(statusHistory);
@@ -56,6 +58,8 @@ export const exportData = queryGeneric({
       format: "jobbie-account-export-v4",
       jobs: jobs.map(withoutOwnership),
       resumeBundles: resumeBundles.map(withoutOwnership),
+      targetProfile: targetProfile === null ? null : withoutOwnership(targetProfile),
+      discoveryScanRuns: scanRuns.map(withoutOwnership),
       discovery: discoveredJobs.map((job) => ({
         ...withoutOwnership(job),
         matchDecisions: (decisionsByJob.get(job._id) ?? []).map(withoutOwnership),

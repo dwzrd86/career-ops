@@ -16,6 +16,20 @@ function hasConfigured(values) {
   return Array.isArray(values) && values.length > 0;
 }
 
+function isDreamIndustry(profile, job) {
+  const industry = normalized(job.role.industry);
+  return industry !== "" && (profile.preferences.dreamIndustries || []).some((entry) => industry.includes(normalized(entry)));
+}
+
+function regionMatches(region, location) {
+  if (normalized(region) === "united states") return /(?:^|[\s,()])(?:united states|usa|us|u\.s\.a?\.?)(?=$|[\s,()])/i.test(location);
+  return location.includes(normalized(region));
+}
+
+function isDreamLocation(profile, location) {
+  return (profile.location.dreamRegions || []).some((region) => normalized(location).includes(normalized(region)));
+}
+
 function result(ruleId, outcome, reasonCode) {
   return { ruleId, outcome, reasonCode };
 }
@@ -31,7 +45,7 @@ function evaluateWorkplaceMode(profile, job) {
 
 function evaluateLocation(profile, job) {
   const location = job.role.location;
-  if (!hasConfigured(profile.location.allowedRegions) && !hasConfigured(profile.location.excludedRegions)) {
+  if (!hasConfigured(profile.location.allowedRegions) && !hasConfigured(profile.location.excludedRegions) && !hasConfigured(profile.location.dreamRegions)) {
     return result("LOCATION", NOT_APPLICABLE, "LOCATION_NOT_CONFIGURED");
   }
   if (location === null) return result("LOCATION", UNKNOWN, "LOCATION_UNKNOWN");
@@ -40,9 +54,15 @@ function evaluateLocation(profile, job) {
   if (profile.location.excludedRegions.some((region) => candidate.includes(normalized(region)))) {
     return result("LOCATION", FAIL, "LOCATION_EXCLUDED_REGION");
   }
-  if (profile.location.allowedRegions.length > 0 && !profile.location.allowedRegions.some((region) => candidate.includes(normalized(region)))) {
+  if (isDreamLocation(profile, candidate)) return result("LOCATION", PASS, "DREAM_LOCATION_ALLOWED");
+  const preferred = profile.location.preferredRegions || [];
+  if (job.role.workplaceMode !== "remote" && preferred.some((region) => candidate.includes(normalized(region)))) return result("LOCATION", PASS, "LOCATION_PREFERRED_REGION");
+  if (profile.location.allowedRegions.length > 0 && !profile.location.allowedRegions.some((region) => regionMatches(region, candidate))) {
+    if (profile.location.dreamAnyRegion && isDreamIndustry(profile, job)) return result("LOCATION", UNKNOWN, "DREAM_INDUSTRY_REGION_UNKNOWN");
+    if (job.role.workplaceMode === "remote" && candidate === "remote") return result("LOCATION", UNKNOWN, "REMOTE_REGION_UNKNOWN");
     return result("LOCATION", FAIL, "LOCATION_OUTSIDE_ALLOWED_REGIONS");
   }
+  if (profile.location.dreamAnyRegion && isDreamIndustry(profile, job)) return result("LOCATION", PASS, "DREAM_INDUSTRY_LOCATION_ALLOWED");
   if (job.role.workplaceMode !== "remote" && profile.location.radiusMiles !== null && profile.location.home.trim() !== "" && !candidate.includes(normalized(profile.location.home))) {
     return result("LOCATION", UNKNOWN, "LOCATION_DISTANCE_UNKNOWN");
   }
@@ -62,6 +82,10 @@ function evaluateSalaryFloor(profile, job) {
 }
 
 function evaluateWorkAuthorization(profile, job) {
+  const location = job.role.location;
+  if (location !== null && isDreamLocation(profile, location) && profile.location.allowedRegions.length > 0 && !profile.location.allowedRegions.some((region) => regionMatches(region, normalized(location)))) {
+    return result("WORK_AUTHORIZATION", UNKNOWN, "DREAM_LOCATION_WORK_AUTHORIZATION_UNKNOWN");
+  }
   if (job.role.workAuthorization === "unknown") return result("WORK_AUTHORIZATION", UNKNOWN, "WORK_AUTHORIZATION_UNKNOWN");
   if (job.role.workAuthorization === "not-required") return result("WORK_AUTHORIZATION", PASS, "WORK_AUTHORIZATION_NOT_REQUIRED");
   return hasConfigured(profile.eligibility.workAuthorization)
@@ -100,6 +124,31 @@ function evaluateDealBreakers(profile, job) {
     : result("DEAL_BREAKER", PASS, "DEAL_BREAKER_CLEAR");
 }
 
+function evaluateTravel(profile, job) {
+  const maximum = profile.criteria.maxTravelPercent;
+  if (maximum === undefined || maximum === null) return result("TRAVEL", NOT_APPLICABLE, "TRAVEL_LIMIT_NOT_CONFIGURED");
+  const requirements = job.evidence?.requirements;
+  if (!Array.isArray(requirements)) return result("TRAVEL", UNKNOWN, "TRAVEL_UNKNOWN");
+  const text = requirements.join(" ").toLowerCase();
+  const percentages = [...text.matchAll(/\btravel(?:\s+(?:required|up to|over|more than))?\s*[:\-]?\s*(\d{1,3})\s*%|\b(\d{1,3})\s*%\s*(?:of the time\s*)?travel\b/g)].map((match) => Number(match[1] ?? match[2]));
+  if (percentages.length === 0) return result("TRAVEL", /\btravel\b/.test(text) ? UNKNOWN : NOT_APPLICABLE, /\btravel\b/.test(text) ? "TRAVEL_PERCENT_UNKNOWN" : "TRAVEL_NOT_STATED");
+  if (percentages.some((value) => value > maximum) || new RegExp(`(?:\\b(?:more than|over)\\s*${maximum}\\s*%\\s*travel\\b|\\btravel\\s+(?:over|more than)\\s*${maximum}\\s*%)`).test(text)) return result("TRAVEL", FAIL, "TRAVEL_EXCEEDS_LIMIT");
+  return result("TRAVEL", PASS, "TRAVEL_WITHIN_LIMIT");
+}
+
+function evaluateOfficeDays(profile, job) {
+  const maximum = profile.criteria.maxOfficeDaysPerWeek;
+  if (maximum === undefined || maximum === null) return result("OFFICE_DAYS", NOT_APPLICABLE, "OFFICE_DAYS_LIMIT_NOT_CONFIGURED");
+  const requirements = job.evidence?.requirements;
+  if (!Array.isArray(requirements)) return result("OFFICE_DAYS", UNKNOWN, "OFFICE_DAYS_UNKNOWN");
+  const text = requirements.join(" ").toLowerCase();
+  const days = [...text.matchAll(/\b(\d)\s*days?(?:\s+(?:per|a)\s+week)?\s*(?:in\s+(?:the\s+)?office|on[- ]site)\b|\b(?:in[- ]office|on[- ]site)\s*(\d)\s*days?\b/g)].map((match) => Number(match[1] ?? match[2]));
+  if (days.length === 0) return result("OFFICE_DAYS", NOT_APPLICABLE, "OFFICE_DAYS_NOT_STATED");
+  return days.some((value) => value > maximum)
+    ? result("OFFICE_DAYS", FAIL, "OFFICE_DAYS_EXCEEDS_LIMIT")
+    : result("OFFICE_DAYS", PASS, "OFFICE_DAYS_WITHIN_LIMIT");
+}
+
 export function evaluateHardFilters(profile, job) {
   return [
     evaluateWorkplaceMode(profile, job),
@@ -110,6 +159,8 @@ export function evaluateHardFilters(profile, job) {
     evaluateExcludedValue("EXCLUDED_COMPANY", profile.preferences.excludedCompanies, job.role.company, "COMPANY_EXCLUDED", "COMPANY_ALLOWED", "COMPANY_UNKNOWN"),
     evaluateExcludedValue("EXCLUDED_INDUSTRY", profile.preferences.excludedIndustries, job.role.industry, "INDUSTRY_EXCLUDED", "INDUSTRY_ALLOWED", "INDUSTRY_UNKNOWN"),
     evaluateDealBreakers(profile, job),
+    evaluateTravel(profile, job),
+    evaluateOfficeDays(profile, job),
   ];
 }
 

@@ -5,9 +5,11 @@ import {
   browserFlowState,
   createBrowserFlowJob,
   overrideBrowserFlowDiscoveryDecision,
-  subscribeBrowserFlow,
+  requestBrowserFlowScan,
+  saveBrowserFlowTargetProfile,
   saveBrowserFlowBundle,
   removeBrowserFlowBundle,
+  subscribeBrowserFlow,
   updateBrowserFlowDiscoveryStatus,
   updateBrowserFlowJobStatus,
 } from "./browser-state";
@@ -50,11 +52,13 @@ export function useQuery(reference: string, args?: Record<string, any> | "skip")
   if (reference === "resumeBundles:get") return args && args !== "skip" ? state.resumeBundles[args.jobId] ?? null : undefined;
   if (reference === "jobs:list") return state.jobs;
   if (reference === "discovery:list") return state.discoveredJobs;
+  if (reference === "targetProfile:get") return state.targetProfile;
+  if (reference === "autoDiscovery:listRuns") return state.scanRuns;
   return undefined;
 }
 
 export function useMutation(reference: string) {
-  return async (args: Record<string, string> = {}) => {
+  return async (args: Record<string, any> = {}) => {
     if (reference === "resumeBundles:save") return saveBrowserFlowBundle(args);
     if (reference === "resumeBundles:remove") return removeBrowserFlowBundle(args.jobId);
     if (reference === "privacy:acknowledge") return acknowledgeBrowserFlowPrivacy();
@@ -65,6 +69,8 @@ export function useMutation(reference: string) {
     if (reference === "discovery:archive") return updateBrowserFlowDiscoveryStatus(args.id, "archived");
     if (reference === "discovery:approveForEvaluation") return updateBrowserFlowDiscoveryStatus(args.id, "approvedForEvaluation");
     if (reference === "discovery:overrideDecision") return overrideBrowserFlowDiscoveryDecision(args.id, args.outcome as import("./mock-convex").DiscoveryDecisionOutcome, args.reason);
+    if (reference === "targetProfile:save") return saveBrowserFlowTargetProfile(args.profile);
+    if (reference === "autoDiscovery:requestScan") return requestBrowserFlowScan();
     if (reference === "errorReporting:reportClient") return undefined;
     throw new Error("unsupported browser-flow mutation");
   };

@@ -37,7 +37,7 @@
         </div></fieldset>
         <fieldset><legend>Location and compensation</legend><div class="grid">
           <label>Home location <input name="home" /></label><label>Radius in miles <input name="radiusMiles" inputmode="numeric" min="0" type="number" /></label>
-          <label>Allowed regions <textarea name="allowedRegions" placeholder="United States"></textarea><label>Excluded regions <textarea name="excludedRegions"></textarea></label>
+          <label>Allowed regions <textarea name="allowedRegions" placeholder="United States"></textarea><label>Preferred cities or states <textarea name="preferredRegions" placeholder="Nashville&#10;Dallas&#10;Colorado"></textarea></label><label>Excluded regions <textarea name="excludedRegions"></textarea></label>
           <label>Salary floor <input name="floor" inputmode="numeric" min="0" type="number" /></label><label>Target compensation <input name="target" inputmode="numeric" min="0" type="number" /></label>
         </div><div class="checkboxes" aria-label="Workplace modes"><label><input name="workplaceModes" type="checkbox" value="remote" />Remote</label><label><input name="workplaceModes" type="checkbox" value="hybrid" />Hybrid</label><label><input name="workplaceModes" type="checkbox" value="onsite" />On-site</label></div></fieldset>
         <fieldset><legend>Eligibility</legend><div class="grid">
@@ -49,8 +49,13 @@
           <label>Frameworks/compliance <textarea name="frameworks" placeholder="NIST CSF&#10;ISO 27001"></textarea></label><label>Cloud platforms <textarea name="cloudPlatforms" placeholder="AWS&#10;Azure"></textarea></label>
           <label>Tools <textarea name="tools"></textarea></label><label>Skills <textarea name="skills"></textarea></label>
         </div></fieldset>
+        <fieldset><legend>Dream jobs</legend><div class="grid">
+          <label>Industries <textarea name="dreamIndustries" placeholder="sports&#10;entertainment"></textarea><span class="hint">One industry per line.</span></label>
+          <label>Locations <textarea name="dreamRegions" placeholder="London&#10;Barcelona"></textarea><span class="hint">One city or region per line.</span></label>
+        </div><div class="checkboxes"><label><input name="dreamAnyRegion" type="checkbox" />Consider these roles anywhere in allowed regions</label></div></fieldset>
         <fieldset><legend>Decision rules and local evidence</legend><div class="grid">
           <label>Must-have criteria <textarea name="mustHave"></textarea></label><label>Deal-breakers <textarea name="dealBreakers"></textarea></label>
+          <label>Maximum travel (%) <input name="maxTravelPercent" inputmode="numeric" min="0" max="100" type="number" /></label><label>Maximum office days per week <input name="maxOfficeDaysPerWeek" inputmode="numeric" min="0" max="7" type="number" /></label>
           <label>Evidence references <textarea name="evidenceReferences" placeholder="resume|cv.md|Primary resume&#10;portfolio|article-digest.md|Career evidence"></textarea><span class="hint">One line: kind|local path|label.</span></label>
           <label>Notes <textarea name="notes"></textarea></label>
         </div></fieldset>
@@ -66,6 +71,7 @@
       const status = document.querySelector('#status');
       const token = new URLSearchParams(location.hash.slice(1)).get('token');
       let loadedProfileVersion = 0;
+      let loadedProfile = null;
       const split = (value) => value.split('\n').map((item) => item.trim()).filter(Boolean);
       const join = (items) => (items || []).join('\n');
       const checked = (name) => [...form.querySelectorAll(`[name="${name}"]:checked`)].map((input) => input.value);
@@ -78,14 +84,17 @@
         return payload.profile;
       };
       const render = (profile) => {
+        loadedProfile = profile;
         loadedProfileVersion = profile.profileVersion;
         set('roles', join(profile.targetRoles.map((role) => role.title))); set('seniority', join(profile.targetRoles[0]?.seniority));
-        set('home', profile.location.home); set('radiusMiles', profile.location.radiusMiles); set('allowedRegions', join(profile.location.allowedRegions)); set('excludedRegions', join(profile.location.excludedRegions)); setChecked('workplaceModes', profile.location.workplaceModes);
+        set('home', profile.location.home); set('radiusMiles', profile.location.radiusMiles); set('allowedRegions', join(profile.location.allowedRegions)); set('preferredRegions', join(profile.location.preferredRegions)); set('excludedRegions', join(profile.location.excludedRegions)); setChecked('workplaceModes', profile.location.workplaceModes);
         set('floor', profile.compensation.floor); set('target', profile.compensation.target);
         set('workAuthorization', join(profile.eligibility.workAuthorization)); set('clearanceLevels', join(profile.eligibility.clearance.levels)); form.elements.clearanceRequired.checked = profile.eligibility.clearance.required;
         for (const field of ['industries', 'excludedIndustries', 'companies', 'excludedCompanies']) set(field, join(profile.preferences[field]));
+        set('dreamIndustries', join(profile.preferences.dreamIndustries)); set('dreamRegions', join(profile.location.dreamRegions)); form.elements.dreamAnyRegion.checked = profile.location.dreamAnyRegion || false;
         for (const field of ['frameworks', 'cloudPlatforms', 'tools', 'skills']) set(field, join(profile.expertise[field]));
         set('mustHave', join(profile.criteria.mustHave)); set('dealBreakers', join(profile.criteria.dealBreakers)); set('notes', profile.criteria.notes);
+        set('maxTravelPercent', profile.criteria.maxTravelPercent); set('maxOfficeDaysPerWeek', profile.criteria.maxOfficeDaysPerWeek);
         set('evidenceReferences', profile.evidenceReferences.map((ref) => `${ref.kind}|${ref.localPath}|${ref.label}`).join('\n'));
         set('schedule', profile.discovery.schedule); set('maxPerRun', profile.discovery.maxPerRun); setChecked('sources', profile.discovery.sources); form.elements.enabled.checked = profile.discovery.enabled;
         const interceptor = profile.discovery.interceptor || { contextId: null, allowedSources: [] };
@@ -94,14 +103,15 @@
       const numberOrNull = (value) => value.trim() === '' ? null : Number(value);
       const profileFromForm = () => {
         const roles = split(form.elements.roles.value); const seniority = split(form.elements.seniority.value);
-        return { schemaVersion: 1, profileVersion: loadedProfileVersion, targetRoles: roles.map((title, index) => ({ title, aliases: [], priority: index === 0 ? 'primary' : 'secondary', seniority })),
-          location: { home: form.elements.home.value.trim(), radiusMiles: numberOrNull(form.elements.radiusMiles.value), workplaceModes: checked('workplaceModes'), allowedRegions: split(form.elements.allowedRegions.value), excludedRegions: split(form.elements.excludedRegions.value) },
+        const seniorityChanged = join(seniority) !== join(loadedProfile?.targetRoles[0]?.seniority);
+        return { schemaVersion: 1, profileVersion: loadedProfileVersion, targetRoles: roles.map((title, index) => { const existing = loadedProfile?.targetRoles.find((role) => role.title === title); return { title, aliases: existing?.aliases || [], priority: existing?.priority || (index === 0 ? 'primary' : 'secondary'), seniority: seniorityChanged ? seniority : (existing?.seniority || seniority) }; }),
+          location: { home: form.elements.home.value.trim(), radiusMiles: numberOrNull(form.elements.radiusMiles.value), workplaceModes: checked('workplaceModes'), allowedRegions: split(form.elements.allowedRegions.value), preferredRegions: split(form.elements.preferredRegions.value), dreamRegions: split(form.elements.dreamRegions.value), excludedRegions: split(form.elements.excludedRegions.value), dreamAnyRegion: form.elements.dreamAnyRegion.checked },
           compensation: { floor: numberOrNull(form.elements.floor.value), target: numberOrNull(form.elements.target.value), currency: 'USD', basis: 'annual' },
           eligibility: { workAuthorization: split(form.elements.workAuthorization.value), clearance: { required: form.elements.clearanceRequired.checked, levels: split(form.elements.clearanceLevels.value) } },
-          preferences: Object.fromEntries(['industries', 'excludedIndustries', 'companies', 'excludedCompanies'].map((field) => [field, split(form.elements[field].value)])),
+          preferences: Object.fromEntries(['industries', 'dreamIndustries', 'excludedIndustries', 'companies', 'excludedCompanies'].map((field) => [field, split(form.elements[field].value)])),
           expertise: Object.fromEntries(['frameworks', 'cloudPlatforms', 'tools', 'skills'].map((field) => [field, split(form.elements[field].value)])),
-          criteria: { mustHave: split(form.elements.mustHave.value), dealBreakers: split(form.elements.dealBreakers.value), notes: form.elements.notes.value.trim() },
-          evidenceReferences: split(form.elements.evidenceReferences.value).map((line) => { const [kind, localPath, label] = line.split('|').map((part) => part.trim()); return { kind, localPath, label, updatedAt: null }; }),
+          criteria: { mustHave: split(form.elements.mustHave.value), dealBreakers: split(form.elements.dealBreakers.value), maxTravelPercent: numberOrNull(form.elements.maxTravelPercent.value), maxOfficeDaysPerWeek: numberOrNull(form.elements.maxOfficeDaysPerWeek.value), notes: form.elements.notes.value.trim() },
+          evidenceReferences: split(form.elements.evidenceReferences.value).map((line) => { const [kind, localPath, label] = line.split('|').map((part) => part.trim()); const existing = loadedProfile?.evidenceReferences.find((ref) => ref.kind === kind && ref.localPath === localPath && ref.label === label); return { kind, localPath, label, updatedAt: existing?.updatedAt || null }; }),
           discovery: { sources: checked('sources'), schedule: form.elements.schedule.value, maxPerRun: Number(form.elements.maxPerRun.value), enabled: form.elements.enabled.checked,
             interceptor: { contextId: form.elements.interceptorContextId.value.trim() || null, allowedSources: split(form.elements.interceptorAllowedSources.value) } } };
       };

@@ -25,12 +25,12 @@ export function emptyTargetProfile() {
     profileVersion: 0,
     updatedAt: null,
     targetRoles: [],
-    location: { home: "", radiusMiles: null, workplaceModes: ["remote"], allowedRegions: [], excludedRegions: [] },
+    location: { home: "", radiusMiles: null, workplaceModes: ["remote"], allowedRegions: [], excludedRegions: [], preferredRegions: [], dreamRegions: [], dreamAnyRegion: false },
     compensation: { floor: null, target: null, currency: "USD", basis: "annual" },
     eligibility: { workAuthorization: [], clearance: { required: false, levels: [] } },
-    preferences: { industries: [], excludedIndustries: [], companies: [], excludedCompanies: [] },
+    preferences: { industries: [], dreamIndustries: [], excludedIndustries: [], companies: [], excludedCompanies: [] },
     expertise: { frameworks: [], cloudPlatforms: [], tools: [], skills: [] },
-    criteria: { mustHave: [], dealBreakers: [], notes: "" },
+    criteria: { mustHave: [], dealBreakers: [], maxTravelPercent: null, maxOfficeDaysPerWeek: null, notes: "" },
     evidenceReferences: [],
     discovery: {
       sources: ["greenhouse", "ashby", "lever"],
@@ -115,6 +115,9 @@ export function validateTargetProfile(profile) {
     if (requireStringArray(profile.location.workplaceModes, "location.workplaceModes", errors) && profile.location.workplaceModes.some((mode) => !workplaceModes.has(mode))) errors.push("location.workplaceModes may contain remote, hybrid, or onsite only");
     requireStringArray(profile.location.allowedRegions, "location.allowedRegions", errors);
     requireStringArray(profile.location.excludedRegions, "location.excludedRegions", errors);
+    if (profile.location.preferredRegions !== undefined) requireStringArray(profile.location.preferredRegions, "location.preferredRegions", errors);
+    if (profile.location.dreamRegions !== undefined) requireStringArray(profile.location.dreamRegions, "location.dreamRegions", errors);
+    if (profile.location.dreamAnyRegion !== undefined && typeof profile.location.dreamAnyRegion !== "boolean") errors.push("location.dreamAnyRegion must be boolean");
   }
 
   if (requireObject(profile.compensation, "compensation", errors)) {
@@ -142,7 +145,12 @@ export function validateTargetProfile(profile) {
       for (const field of fields) requireStringArray(profile[section][field], `${section}.${field}`, errors);
     }
   }
+  if (isPlainObject(profile.preferences) && profile.preferences.dreamIndustries !== undefined) requireStringArray(profile.preferences.dreamIndustries, "preferences.dreamIndustries", errors);
   if (isPlainObject(profile.criteria) && typeof profile.criteria.notes !== "string") errors.push("criteria.notes must be a string");
+  for (const [field, maximum] of [["maxTravelPercent", 100], ["maxOfficeDaysPerWeek", 7]]) {
+    const value = profile.criteria?.[field];
+    if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0 || value > maximum)) errors.push(`criteria.${field} must be an integer from 0 through ${maximum} or null`);
+  }
 
   if (!Array.isArray(profile.evidenceReferences)) {
     errors.push("evidenceReferences must be an array");

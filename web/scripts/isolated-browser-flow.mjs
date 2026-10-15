@@ -29,9 +29,11 @@ async function main() {
   let context;
 
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: true }).catch(() => chromium.launch({ channel: "chrome", headless: true }));
     context = await browser.newContext();
     const page = await context.newPage();
+    page.on("pageerror", (error) => console.error("Browser page error:", error.message));
+    page.on("console", (message) => { if (message.type() === "error") console.error("Browser console:", message.text()); });
     page.setDefaultTimeout(5_000);
     await page.route("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", async (route) => {
       await route.fulfill({
@@ -69,6 +71,20 @@ async function main() {
     await page.getByRole("button", { name: "Acknowledge and continue" }).click();
     await expectVisible(page, page.locator("h1").filter({ hasText: "Pipeline" }), "pipeline dashboard");
 
+    const settings = page.locator("#discovery-settings");
+    await expectVisible(page, settings.getByRole("heading", { name: "Target Profile" }), "Target Profile editor");
+    await settings.locator('input[type="file"]').setInputFiles({ name: "target-profile.yml", mimeType: "text/yaml", buffer: Buffer.from("targetRoles:\n  - title: Security Architect\n    aliases: [Cloud Security Architect]\nlocation:\n  home: Nashville\n  allowedRegions: [United States]\ncompensation:\n  floor: 150000\nevidenceReferences:\n  - localPath: secret-resume.pdf\n") });
+    await expectVisible(page, settings.getByText("Profile loaded. Review it, then save to start web discovery."), "profile import confirmation");
+    assert.equal(await settings.getByRole("textbox", { name: "Target role", exact: true }).inputValue(), "Security Architect");
+    assert.equal(await settings.getByLabel("Minimum annual salary").inputValue(), "150000");
+    await settings.getByLabel("Home location").fill("Nashville");
+    await settings.getByLabel("Enable discovery").check();
+    await settings.getByRole("button", { name: "Save Target Profile" }).click();
+    await expectVisible(page, settings.getByText("Target Profile v1 saved."), "saved Target Profile confirmation");
+    await settings.getByRole("button", { name: "Run now" }).click();
+    await expectVisible(page, settings.getByText("Scan queued. Results will appear in the review queue."), "scan confirmation");
+    await expectVisible(page, settings.getByText("Recent scans"), "scan history");
+
     await expectVisible(page, page.getByRole("heading", { name: "Discovery review queue" }), "discovery review queue");
     await expectVisible(page, page.getByText("Review target role", { exact: true }), "projected discovery role");
     await expectVisible(page, page.getByText("Mock Board", { exact: true }), "projected source");
@@ -77,7 +93,8 @@ async function main() {
     await expectVisible(page, page.getByText("Work Authorization Required", { exact: true }), "projected hard-filter reason");
     await expectVisible(page, page.getByText("Salary Unknown", { exact: true }), "projected unknown");
     await expectVisible(page, page.getByText("Draft Awaiting Review · report, PDF, checklist", { exact: true }), "read-only material status");
-    await page.getByRole("button", { name: "Shortlist" }).click();
+    await page.getByRole("button", { name: "Shortlist", exact: true }).click();
+    await page.getByRole("button", { name: "Shortlisted", exact: true }).click();
     await expectVisible(page, page.getByText("Shortlisted for evaluation review", { exact: true }), "shortlisted next action");
     await page.getByRole("button", { name: "Override decision" }).click();
     await expectVisible(page, page.getByRole("heading", { name: "Override discovery decision" }), "decision override dialog");
@@ -93,14 +110,15 @@ async function main() {
     await discoveredTarget.selectOption("");
     await page.getByRole("button", { name: "Approve for evaluation" }).click();
     assert.equal(await discoveredTarget.locator("option").filter({ hasText: "Example Discovery Co. · Review target role" }).count(), 1, "repeat approval does not duplicate target");
-    await page.getByRole("button", { name: "Archive" }).click();
+    await page.getByRole("button", { name: "Archive", exact: true }).click();
+    await page.getByRole("button", { name: "Archived", exact: true }).click();
     await expectVisible(page, page.getByText("Archived — no further action", { exact: true }), "archived discovery role");
 
     await page.getByRole("button", { name: "Add role" }).click();
     await page.getByLabel("Company").fill("Example Company");
     await page.getByLabel("Role title").fill("Security regression role");
-    await page.getByLabel("Location").fill("Remote");
-    await page.getByLabel("Source").fill("Isolated browser test");
+    await page.getByRole("textbox", { name: "Location", exact: true }).fill("Remote");
+    await page.getByRole("textbox", { name: "Source", exact: true }).fill("Isolated browser test");
     await page.getByLabel("Application URL").fill("https://example.test/roles/security-regression");
     await page.getByRole("button", { name: "Save role" }).click();
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "created role");
@@ -230,6 +248,10 @@ async function main() {
     await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectVisible(page, page.locator("#discovery-settings"), "mobile Target Profile editor");
+    const mobileWidth = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: window.innerWidth, outside: [...document.querySelectorAll("body *")].filter((element) => element.getBoundingClientRect().right > innerWidth + 1 && !element.closest(".table-wrap")).slice(0, 20).map((element) => `${element.tagName}.${element.className} ${Math.round(element.getBoundingClientRect().right)}`) }));
+    assert.equal(mobileWidth.page <= mobileWidth.viewport, true, `mobile dashboard has horizontal overflow: ${JSON.stringify(mobileWidth)}`);
     console.log("Isolated browser flow passed");
   } finally {
     await context?.close();

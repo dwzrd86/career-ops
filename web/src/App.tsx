@@ -20,6 +20,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { DiscoveredJob, DiscoveryDecisionOutcome, functions, Job, JobStatus } from "./convex";
 import { authClient } from "./auth-client";
 import { ResumeStudio } from "./ResumeStudio";
+import { DiscoverySettings } from "./DiscoverySettings";
 import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
 
 const statusLabels: Record<JobStatus, string> = {
@@ -204,7 +205,7 @@ function EmptyPipeline({ onAdd }: { onAdd: () => void }) {
     <section className="empty-state">
       <div className="empty-icon"><BriefcaseBusiness size={24} /></div>
       <h2>Your pipeline is clear.</h2>
-      <p>Add a role manually or connect the existing Career-Ops scanner to this Convex dataset.</p>
+      <p>Saved roles and approved applications appear here.</p>
       <button className="button primary" onClick={onAdd} type="button">
         <CirclePlus size={16} />
         Add a role
@@ -339,6 +340,8 @@ function DiscoveryActions({ job, onOverride }: { job: DiscoveredJob; onOverride:
 function DiscoveryReviewQueue() {
   const discoveredJobs = useQuery(functions.listDiscoveredJobs, {});
   const [overrideJob, setOverrideJob] = useState<DiscoveredJob | null>(null);
+  const [view, setView] = useState<"review" | "shortlisted" | "archived" | "all">("review");
+  const visibleJobs = discoveredJobs?.filter((job) => view === "all" || (view === "review" ? job.reviewStatus === "discovered" : view === "shortlisted" ? job.reviewStatus === "shortlisted" || job.reviewStatus === "approvedForEvaluation" : job.reviewStatus === "archived"));
 
   return (
     <section className="discovery-panel" id="review-queue" aria-labelledby="review-queue-title">
@@ -346,21 +349,24 @@ function DiscoveryReviewQueue() {
         <div>
           <p className="eyebrow">Private review</p>
           <h2 id="review-queue-title">Discovery review queue</h2>
-          <p>Review projected job metadata before it enters evaluation.</p>
+          <p>{discoveredJobs?.filter((job) => job.reviewStatus === "discovered").length ?? 0} roles awaiting a decision</p>
+        </div>
+        <div aria-label="Review queue filter" className="review-tabs" role="group">
+          {(["review", "shortlisted", "archived", "all"] as const).map((option) => <button aria-pressed={view === option} key={option} onClick={() => setView(option)} type="button">{option === "review" ? "To review" : humanizeCode(option)}</button>)}
         </div>
       </header>
-      {discoveredJobs === undefined ? <div className="loading-state"><LoaderCircle className="spin" size={20} />Loading discovery queue</div> : discoveredJobs.length === 0 ? (
-        <div className="discovery-empty"><strong>No discovered roles to review.</strong><span>New projected matches will appear here for your decision.</span></div>
+      {discoveredJobs === undefined ? <div className="loading-state"><LoaderCircle className="spin" size={20} />Loading discovery queue</div> : visibleJobs?.length === 0 ? (
+        <div className="discovery-empty"><strong>No roles in this view.</strong></div>
       ) : (
         <div className="discovery-list">
-          {discoveredJobs.map((job) => {
+          {visibleJobs?.map((job) => {
             const hardFilterReasons = job.decision?.hardFilters.filter((filter) => filter.outcome === "fail") ?? [];
             const unknowns = job.decision?.hardFilters.filter((filter) => filter.outcome === "unknown") ?? [];
             return (
               <article className="discovery-card" key={job._id}>
                 <div className="discovery-card-heading">
                   <div>
-                    <h3>{job.title}</h3>
+                    <h3><a href={job.url} rel="noreferrer" target="_blank">{job.title} <ArrowUpRight aria-hidden="true" size={14} /></a></h3>
                     <p>{job.company}{job.location ? ` · ${job.location}` : ""}</p>
                   </div>
                   <span className={`review-status review-status-${job.reviewStatus}`}>{humanizeCode(job.reviewStatus)}</span>
@@ -546,7 +552,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
         <p className="eyebrow">Private career workspace</p>
         <h1>{heading}</h1>
         <p className="access-copy">
-          {mode === "verify" ? `Open the verification link sent to ${email}.` : "Job leads, applications, and tailored materials remain scoped to your authenticated account."}
+          {mode === "verify" ? `Open the verification link sent to ${email}.` : "Your Target Profile, discovered roles, and pipeline remain private to your account."}
         </p>
         <form onSubmit={submit}>
           {!isResetVerification && mode !== "verify" ? (
@@ -668,7 +674,7 @@ function PrivacyAcknowledgement({
         <div className="access-mark"><ShieldCheck size={22} /></div>
         <p className="eyebrow">Before you add career data</p>
         <h1 id="privacy-notice-title">Review the alpha privacy notice.</h1>
-        <p className="access-copy">Jobbie stores the roles, job links, and notes you add to your private pipeline. Please read the current policies before saving that information.</p>
+        <p className="access-copy">Jobbie stores your private pipeline, Target Profile, and job-discovery review metadata. When enabled, scheduled scans check approved public job feeds. Please read the current policies before saving that information.</p>
         <ul className="policy-links">
           <li><a href={policyLinks.privacy} rel="noreferrer" target="_blank">Privacy notice (version {privacyStatus.currentVersion})</a></li>
           <li><a href={policyLinks.terms} rel="noreferrer" target="_blank">Alpha terms of use</a></li>
@@ -843,6 +849,7 @@ function PipelineDashboard({
         <div className="brand"><Sparkles size={20} /><span>Career Ops</span></div>
         <nav aria-label="Primary navigation">
           <a aria-current="page" href="#pipeline"><ClipboardList size={18} />Pipeline</a>
+          <a href="#discovery-settings"><ShieldCheck size={18} />Target Profile</a>
           <a href="#review-queue"><Search size={18} />Discovery review</a>
           <a href="#resume-studio"><ClipboardList size={18} />Resume Studio</a>
         </nav>
@@ -911,6 +918,7 @@ function PipelineDashboard({
           )}
         </section>
 
+        <DiscoverySettings />
         <ResumeStudio jobs={jobs || []} />
         <DiscoveryReviewQueue />
       </section>

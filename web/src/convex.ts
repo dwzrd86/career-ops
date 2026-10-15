@@ -28,6 +28,44 @@ export type DiscoveryDecisionOutcome = "rejected" | "ranked" | "needsReview";
 export type DiscoveryReviewStatus = "discovered" | "shortlisted" | "archived" | "approvedForEvaluation";
 export type DiscoveryFreshnessStatus = "fresh" | "stale" | "unknown" | "expired";
 export type DiscoveryHardFilterOutcome = "pass" | "fail" | "unknown" | "notApplicable";
+export type TargetProfileInput = {
+  targetRoles: Array<{ title: string; aliases: string[]; seniority: string[] }>;
+  home: string;
+  radiusMiles?: number;
+  workplaceModes: Array<"remote" | "hybrid" | "onsite">;
+  allowedRegions: string[];
+  preferredRegions: string[];
+  dreamRegions: string[];
+  dreamIndustries: string[];
+  excludedCompanies: string[];
+  excludedIndustries: string[];
+  frameworks: string[];
+  cloudPlatforms: string[];
+  salaryFloor?: number;
+  currency: string;
+  workAuthorization: string[];
+  clearanceLevels: string[];
+  maxTravelPercent?: number;
+  maxOfficeDaysPerWeek?: number;
+  sources: Array<"greenhouse" | "ashby" | "lever">;
+  schedule: "manual" | "daily" | "weekdays";
+  enabled: boolean;
+};
+export type TargetProfile = TargetProfileInput & { profileVersion: number; updatedAt: number; lastScanAt?: number };
+export type DiscoveryScanRun = {
+  _id: string;
+  profileVersion: number;
+  trigger: "manual" | "scheduled";
+  status: "queued" | "running" | "succeeded" | "partial" | "failed";
+  queuedAt: number;
+  finishedAt?: number;
+  feedsSucceeded: number;
+  feedsFailed: number;
+  discovered: number;
+  reviewable: number;
+  rejected: number;
+  errorCode?: string;
+};
 export type MaterialReviewState = "draftAwaitingReview" | "approved" | "changesRequested" | "rejected";
 
 export type DiscoveredJob = {
@@ -115,6 +153,8 @@ export type AccountExport = {
   exportedAt: string;
   format: string;
   jobs: Array<Omit<Job, "_id" | "_creationTime"> & { id: string }>;
+  targetProfile?: (TargetProfile & { id: string }) | null;
+  discoveryScanRuns?: Array<Omit<DiscoveryScanRun, "_id"> & { id: string }>;
   privacy: { acknowledgedAt: string; policyVersion: string | null } | null;
 };
 
@@ -141,6 +181,10 @@ export const functions = {
   >("errorReporting:reportClient"),
   listJobs: makeFunctionReference<"query", Record<string, never>, Job[]>("jobs:list"),
   listDiscoveredJobs: makeFunctionReference<"query", Record<string, never>, DiscoveredJob[]>("discovery:list"),
+  getTargetProfile: makeFunctionReference<"query", Record<string, never>, TargetProfile | null>("targetProfile:get"),
+  saveTargetProfile: makeFunctionReference<"mutation", { profile: TargetProfileInput }, number>("targetProfile:save"),
+  requestDiscoveryScan: makeFunctionReference<"mutation", Record<string, never>, string>("autoDiscovery:requestScan"),
+  listDiscoveryScanRuns: makeFunctionReference<"query", Record<string, never>, DiscoveryScanRun[]>("autoDiscovery:listRuns"),
   getPrivacyStatus: makeFunctionReference<"query", Record<string, never>, PrivacyStatus>("privacy:status"),
   getEnrollmentStatus: makeFunctionReference<"query", Record<string, never>, EnrollmentStatus>("enrollment:status"),
   createJob: makeFunctionReference<
