@@ -110,6 +110,9 @@ async function claimReservedInvite(ctx: MutationCtx, email: string, userId: Id<"
   if (invite === null || invite.claimedBy !== undefined || invite.expiresAt <= now || invite.reservationExpiresAt === undefined || invite.reservationExpiresAt <= now) {
     throw new Error("A valid alpha invite is required.");
   }
+  if (invite.tokenHash === "local-owner-bootstrap" && (await ctx.db.query("users").take(2)).length !== 1) {
+    throw new Error("A local owner already exists. Sign in instead.");
+  }
   await ctx.db.patch(invite._id, {
     claimedAt: now,
     claimedBy: userId,

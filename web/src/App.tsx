@@ -405,6 +405,16 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [botProtectionToken, setBotProtectionToken] = useState("");
+  const [localOwnerSetup, setLocalOwnerSetup] = useState(false);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const controller = new AbortController();
+    void fetch("/__career_ops/local-owner", { headers: { "X-Career-Ops-Local": "1" }, signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(result => { if (!controller.signal.aborted) setLocalOwnerSetup(result?.enabled === true); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
   const botProtectionElement = useRef<HTMLDivElement>(null);
   const botProtectionWidgetId = useRef<string | undefined>(undefined);
 
@@ -413,7 +423,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
 
   useEffect(() => {
     const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (mode !== "signUp" || !siteKey || !botProtectionElement.current) return;
+    if (localOwnerSetup || mode !== "signUp" || !siteKey || !botProtectionElement.current) return;
 
     const render = () => {
       if (!window.turnstile || !botProtectionElement.current || botProtectionWidgetId.current) return;
@@ -443,7 +453,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
       botProtectionWidgetId.current = undefined;
       setBotProtectionToken("");
     };
-  }, [mode]);
+  }, [mode, localOwnerSetup]);
 
   function clearMessages() {
     setError("");
@@ -493,6 +503,16 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
         setMode("signIn");
         setNotice("Password reset. Sign in with your new password.");
       } else if (mode === "signUp") {
+        if (localOwnerSetup) {
+          const response = await fetch("/__career_ops/local-owner", { method: "POST",
+            headers: { "Content-Type": "application/json", "X-Career-Ops-Local": "1" },
+            body: JSON.stringify({ email: submittedEmail, password }) });
+          const result = await response.json();
+          if (!response.ok) { setError(result.error || "Could not create your local workspace."); return; }
+          const signedIn = await authClient.signIn.email({ email: submittedEmail, password, rememberMe: true });
+          if (signedIn.error) { setMode("signIn"); setNotice("Your account was created. Sign in with the password you chose."); }
+          return;
+        }
         const result = await authClient.signUp.email({
           botProtectionToken,
           callbackURL: window.location.origin,
@@ -573,23 +593,24 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
               <input autoComplete="new-password" minLength={12} name="confirmation" required type="password" />
             </label>
           ) : null}
-          {mode === "signUp" ? (
+          {mode === "signUp" && !localOwnerSetup ? (
             <label>
               Alpha invite code
               <input autoComplete="off" name="inviteToken" required />
             </label>
           ) : null}
-          {mode === "signUp" ? (
+          {mode === "signUp" && !localOwnerSetup ? (
             <div aria-label="Bot protection" ref={botProtectionElement} />
           ) : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {notice ? <p className="access-notice" role="status">{notice}</p> : null}
-          <button className="button primary access-submit" disabled={isSubmitting || (mode === "signUp" && !botProtectionToken)} type="submit">
+          {mode === "signUp" && localOwnerSetup && <p className="access-notice">Create your first local owner account. No invite or email verification is needed. Use an email as your sign-in name; keep your password safe.</p>}
+          <button className="button primary access-submit" disabled={isSubmitting || (mode === "signUp" && !localOwnerSetup && !botProtectionToken)} type="submit">
             {isSubmitting ? <LoaderCircle className="spin" size={16} /> : <LockKeyhole size={16} />}
             {submitLabel}
           </button>
         </form>
-        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" ? " A valid alpha invite code is also required." : ""}{mode === "signUp" && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
+        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" && !localOwnerSetup ? " A valid alpha invite code is also required." : ""}{mode === "signUp" && !localOwnerSetup && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
         {mode === "verify" ? <>
           <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification link</button>
           <button className="text-button" onClick={() => startOver("signIn")} type="button">Back to sign in</button>
@@ -597,7 +618,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           <button className="text-button" onClick={() => startOver(mode === "signIn" ? "signUp" : "signIn")} type="button">
             {mode === "signIn" ? "Create an account" : "Already have an account? Sign in"}
           </button>
-          {mode === "signIn" ? <button className="text-button" onClick={() => startOver("reset")} type="button">Forgot your password?</button> : null}
+          {mode === "signIn" && !localOwnerSetup ? <button className="text-button" onClick={() => startOver("reset")} type="button">Forgot your password?</button> : null}
         </>}
       </section>
     </main>

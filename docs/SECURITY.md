@@ -95,7 +95,14 @@ approval copies it only to new pipeline roles. Existing roles and saved bundles 
 Posting text is rendered as text, never HTML. Account export and deletion
 cover both copies. The public local-projection API remains metadata-only.
 
-Signup requires a Cloudflare Turnstile token, an opaque single-use alpha invite, and an HMAC-keyed rate-limit check. The invite is reserved against an opaque keyed email value before Better Auth creates the account, then claimed by the component's transactional user trigger. Raw invite tokens and email addresses are not persisted in enrollment records.
+Hosted signup requires a Cloudflare Turnstile token, an opaque single-use alpha invite, and an HMAC-keyed rate-limit check. The invite is reserved against an opaque keyed email value before Better Auth creates the account, then claimed by the component's transactional user trigger. Raw invite tokens and email addresses are not persisted in enrollment records.
+
+Operator-authorized personal development setup can create one local owner without
+email delivery or bot checks; see [[LOCAL_OWNER_SETUP]]. It requires an explicit
+matching development selector, loopback site origin, and the server-held enrollment
+operator key. The account's email is an identifier, not a verified contact claim.
+Existing password authentication, enrollment, privacy acknowledgement, and per-owner
+data checks remain enforced. Never enable this setup for a hosted release.
 
 Verification and password recovery use single-use, 15-minute Resend links. Password reset and password change revoke other sessions. The app does not expose Better Auth component records, session values, tokens, or password material to application queries.
 

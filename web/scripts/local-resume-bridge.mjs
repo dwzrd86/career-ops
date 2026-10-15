@@ -3,9 +3,9 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { generationFailureResponse } from "./resume-generation-errors.mjs";
+import { isLocalRequest } from "./local-request.mjs";
 
 const endpoint = "/__career_ops/resume";
-const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 // Development middleware only. The production build contains no runner or credentials.
 export function resumeMiddleware({ root, model, generate }) {
@@ -17,19 +17,14 @@ export function resumeMiddleware({ root, model, generate }) {
         "X-Content-Type-Options": "nosniff" });
       res.end(JSON.stringify(data));
     };
-    let url;
-    try { url = new URL(`http://${req.headers.host}`); } catch { return reply(403, { error: "Local connection required." }); }
-    if (!loopback.has(req.socket.remoteAddress) || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ||
-        Number(url.port || 80) !== req.socket.localPort ||
-        (req.headers.origin && req.headers.origin !== url.origin) ||
-        req.headers["x-career-ops-local"] !== "1") {
+    if (!isLocalRequest(req)) {
       return reply(403, { error: "Use Resume Studio from this local development server." });
     }
     const enabled = /^zai-coding-plan\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(model ?? "");
     if (req.method === "GET") return reply(200, { enabled, model: enabled ? model : null, running });
     if (req.method !== "POST") return reply(405, { error: "Method not allowed." });
     if (!enabled) return reply(503, { error: "Start the local server with CAREER_OPS_GLM_MODEL configured." });
-    if (req.headers.origin !== url.origin || req.headers["content-type"] !== "application/json") {
+    if (!isLocalRequest(req, true) || req.headers["content-type"] !== "application/json") {
       return reply(403, { error: "Same-origin JSON request required." });
     }
     if (running) return reply(409, { error: "A GLM draft is already generating. Try again when it finishes." });

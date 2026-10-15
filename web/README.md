@@ -6,6 +6,10 @@ The local CLI and scanner remain separate for browser-assisted workflows.
 
 ## Local development
 
+For the personal first-user path without email delivery, bot checks, or an invite,
+see [Local owner setup](../docs/LOCAL_OWNER_SETUP.md). It retains password sign-in,
+private Convex storage, enrollment, and account ownership checks.
+
 Use Node.js 24.
 
 ```bash

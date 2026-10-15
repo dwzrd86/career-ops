@@ -21,6 +21,7 @@ import type * as enrollmentCore from "../enrollmentCore.js";
 import type * as errorReporting from "../errorReporting.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
+import type * as localOwner from "../localOwner.js";
 import type * as privacy from "../privacy.js";
 import type * as resumeBundles from "../resumeBundles.js";
 import type * as targetProfile from "../targetProfile.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   errorReporting: typeof errorReporting;
   http: typeof http;
   jobs: typeof jobs;
+  localOwner: typeof localOwner;
   privacy: typeof privacy;
   resumeBundles: typeof resumeBundles;
   targetProfile: typeof targetProfile;
