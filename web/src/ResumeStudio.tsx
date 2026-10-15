@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Download, FileText, Printer } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { functions, type Job } from "./convex";
 
 import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges, unsupportedDetails } from "./resumeTailoring";
 
-export function ResumeStudio({ jobs }: { jobs: Job[] }) {
+export type ResumeStudioHandle = { openJob: (jobId: string) => void };
+
+export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudioHandle> }) {
+  const targetSelect = useRef<HTMLSelectElement>(null);
   const [jobId, setJobId] = useState("");
   const [resume, setResume] = useState("");
   const [description, setDescription] = useState("");
@@ -56,13 +59,24 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   }, [jobId, saved, loadedJob]);
 
   function selectJob(next: string) {
-    if (next === jobId) return;
-    if (dirty && !window.confirm("Discard unsaved edits and switch roles?")) return;
+    if (busy) return false;
+    if (next === jobId) return true;
+    if (dirty && !window.confirm("Discard unsaved edits and switch roles?")) return false;
     setLoadedJob("");
     setJobId(next);
     setResume(""); setDescription(""); setSourceResume("");
     setRevision(null); setReviewed(false); setDirty(false); setMessage("");
+    return true;
   }
+
+  useImperativeHandle(ref, () => ({
+    openJob(next: string) {
+      if (!jobs.some(item => item._id === next)) return;
+      if (!selectJob(next)) return;
+      targetSelect.current?.scrollIntoView({ block: "center" });
+      targetSelect.current?.focus({ preventScroll: true });
+    },
+  }));
 
   async function save() {
     setBusy(true); setMessage("");
@@ -204,7 +218,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
     </section>
     <div className="resume-studio-body">
       <div className="resume-controls">
-        <label>Target role<select aria-label="Resume target role" value={jobId} onChange={(event) => selectJob(event.target.value)}><option value="">Choose a pipeline role</option>{jobs.map((item) => <option key={item._id} value={item._id}>{item.company} · {item.title}</option>)}</select></label>
+        <label>Target role<select ref={targetSelect} aria-label="Resume target role" value={jobId} onChange={(event) => selectJob(event.target.value)}><option value="">Choose a pipeline role</option>{jobs.map((item) => <option key={item._id} value={item._id}>{item.company} · {item.title}</option>)}</select></label>
         {job && <a href={job.url} target="_blank" rel="noreferrer">Read the original posting ↗</a>}
         {!jobs.length && <p>Add a role to your pipeline to start preparing its resume.</p>}
         {loading && <p role="status">Loading saved bundle…</p>}

@@ -68,12 +68,14 @@ async function main() {
     });
 
     let generationFailure = false;
+    let generationHold;
     await page.route("**/__career_ops/resume", async route => {
       if (route.request().method() === "GET") return route.fulfill({ json: { enabled: true, model: "zai-coding-plan/test-model" } });
       const data = route.request().postDataJSON();
       assert.equal(data.consent, true);
       assert.ok(data.brief.includes("Test Candidate: Built Python automation"));
       assert.equal(route.request().headers()["x-career-ops-local"], "1");
+      await generationHold;
       return route.fulfill(generationFailure ? { status: 502, json: { error: "Test GLM failure. Editor retained." } } :
         { json: { draft: "Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS" } });
     });
@@ -150,10 +152,25 @@ async function main() {
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "created role");
 
     const studio = page.locator("#resume-studio");
-    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    const prepareResume = page.getByRole("button", { name: "Prepare resume for Security regression role at Example Company", exact: true });
+    const prepareDiscoveryResume = page.getByRole("button", { name: "Prepare resume for Review target role at Example Discovery Co.", exact: true });
+    await prepareResume.click();
+    const targetRole = studio.getByLabel("Resume target role", { exact: true });
+    assert.equal(await targetRole.locator("option:checked").textContent(), "Example Company · Security regression role", "pipeline action selects its own role");
+    assert.equal(await targetRole.evaluate(element => document.activeElement === element), true, "pipeline action moves keyboard focus into Resume Studio");
     await studio.getByLabel("Source resume", { exact: true }).fill("Test Candidate: Built Python automation with SQL on AWS.");
     await studio.getByLabel("Job description", { exact: true }).fill("Python, SQL, AWS and leadership required. React experience preferred.");
     await studio.getByLabel("Resume text", { exact: true }).fill("Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS");
+    let switchPrompts = 0;
+    const rejectSwitch = async dialog => { switchPrompts++; await dialog.dismiss(); };
+    page.on("dialog", rejectSwitch);
+    await prepareResume.click();
+    assert.equal(switchPrompts, 0, "opening the current role retains edits without a discard prompt");
+    await prepareDiscoveryResume.click();
+    page.off("dialog", rejectSwitch);
+    assert.equal(switchPrompts, 1, "switching roles requires confirmation for unsaved edits");
+    assert.equal(await targetRole.locator("option:checked").textContent(), "Example Company · Security regression role");
+    assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"), "cancelled navigation preserves the draft");
     await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
@@ -164,9 +181,16 @@ async function main() {
       await expectVisible(page, generate, "connected local GLM generator");
       assert.equal(await generate.isEnabled(), false, "provider consent required");
       await studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." }).check();
+      let releaseGeneration;
+      generationHold = new Promise(resolve => { releaseGeneration = resolve; });
       const acceptedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
       await generate.click();
       await acceptedGeneration;
+      await expectVisible(page, studio.getByRole("button", { name: "Generating GLM draft…", exact: true }), "generation in progress");
+      await prepareDiscoveryResume.click();
+      assert.equal(await targetRole.locator("option:checked").textContent(), "Example Company · Security regression role", "pipeline navigation cannot switch roles during generation");
+      releaseGeneration();
+      generationHold = undefined;
       await expectVisible(page, studio.getByText("GLM draft ready. Review changed lines and facts, then save and export your resume.", { exact: true }), "generated draft arrival");
       assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
       generationFailure = true;
@@ -205,6 +229,12 @@ async function main() {
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
     await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
     await expectVisible(page, studio.getByRole("button", { name: "Ready to export (1)", exact: true }), "reviewed resume appears in queue");
+    await prepareDiscoveryResume.click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Source resume"]').disabled === false);
+    assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "", "another role does not inherit the saved draft");
+    await prepareResume.click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Resume text"]').value.includes("Built Python automation"));
+    assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), true, "pipeline navigation restores saved review state");
     await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
     await studio.getByRole("button", { name: "Open for export for Example Company · Security regression role", exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Resume text"]')?.value?.includes("Built Python automation"));
@@ -281,8 +311,9 @@ async function main() {
     await studio.getByRole("button", { name: "Delete saved bundle" }).click();
     await expectVisible(page, studio.getByText("Saved bundle deleted. Editor text remains unsaved."), "deleted saved bundle");
     page.once("dialog", dialog => dialog.accept());
-    await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
-    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    await prepareDiscoveryResume.click();
+    assert.equal(await targetRole.locator("option:checked").textContent(), "Example Discovery Co. · Review target role", "confirmed navigation switches roles");
+    await prepareResume.click();
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");
     await page.setViewportSize({ width: 390, height: 844 });

@@ -19,7 +19,7 @@ import {
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { DiscoveredJob, DiscoveryDecisionOutcome, functions, Job, JobStatus } from "./convex";
 import { authClient } from "./auth-client";
-import { ResumeStudio } from "./ResumeStudio";
+import { ResumeStudio, type ResumeStudioHandle } from "./ResumeStudio";
 import { DiscoverySettings } from "./DiscoverySettings";
 import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
 
@@ -832,6 +832,7 @@ function PipelineDashboard({
   const [query, setQuery] = useState("");
   const [showNewJob, setShowNewJob] = useState(false);
   const [showAccountSecurity, setShowAccountSecurity] = useState(false);
+  const resumeStudio = useRef<ResumeStudioHandle>(null);
 
   const filteredJobs = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -909,7 +910,7 @@ function PipelineDashboard({
                       <td><span className="location"><MapPin size={14} />{job.location}</span></td>
                       <td>{job.source}</td>
                       <td><StatusSelect job={job} /></td>
-                      <td><JobActions job={job} /></td>
+                      <td><button type="button" className="button secondary" aria-label={`Prepare resume for ${job.title} at ${job.company}`} onClick={() => resumeStudio.current?.openJob(job._id)}>Prepare resume</button><JobActions job={job} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -919,7 +920,7 @@ function PipelineDashboard({
         </section>
 
         <DiscoverySettings />
-        <ResumeStudio jobs={jobs || []} />
+        <ResumeStudio ref={resumeStudio} jobs={jobs || []} />
         <DiscoveryReviewQueue />
       </section>
 
