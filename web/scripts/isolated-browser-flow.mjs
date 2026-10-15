@@ -204,8 +204,10 @@ async function main() {
     await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).check();
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
     await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
+    await expectVisible(page, studio.getByRole("button", { name: "Ready to export (1)", exact: true }), "reviewed resume appears in queue");
     await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
-    await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
+    await studio.getByRole("button", { name: "Open for export for Example Company · Security regression role", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Resume text"]')?.value?.includes("Built Python automation"));
     assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), true);
     const savedSource = await studio.getByLabel("Source resume", { exact: true }).inputValue();
@@ -254,10 +256,15 @@ async function main() {
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
     await expectVisible(page, studio.getByText("Saved revision 2.", { exact: true }), "updated unreviewed bundle");
 
+    await expectVisible(page, studio.getByRole("button", { name: "Ready to export (0)", exact: true }), "editing clears queue readiness after saving");
+    await studio.getByRole("button", { name: "Needs review (1)", exact: true }).click();
+    await expectVisible(page, studio.getByRole("button", { name: "Review draft for Example Company · Security regression role", exact: true }), "unreviewed draft in queue");
+
     const status = page.getByLabel("Update status for Security regression role");
     await status.selectOption("applied");
     await page.waitForFunction((select) => select instanceof HTMLSelectElement && select.value === "applied", await status.elementHandle());
 
+    await expectVisible(page, studio.getByRole("button", { name: "Needs review (0)", exact: true }), "applied role leaves preparation queue");
     await page.getByRole("button", { name: "Sign out" }).click();
     await expectVisible(page, page.getByRole("heading", { name: "Welcome back." }), "signed-out screen");
     await page.getByLabel("Email").fill("security-flow@example.test");

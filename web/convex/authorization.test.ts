@@ -264,6 +264,27 @@ describe("saved resume bundles", () => {
     expect((await a.client.query(api.account.exportData, {})).resumeBundles).toEqual([]);
   });
 
+  test("resume queue exposes only owned metadata and tracks review changes and deletion", async () => {
+    const deployment = createIsolatedDeployment();
+    const a = await provisionDisposableAccount(deployment, "shelf-a");
+    const b = await provisionDisposableAccount(deployment, "shelf-b");
+    await expect(deployment.query(api.resumeBundles.summaries, {})).rejects.toThrow("Authentication required");
+    const jobId = await a.client.mutation(api.jobs.create, jobInput("shelf-role"));
+    const input = { jobId, sourceResume: "Private source", description: "Private posting",
+      resume: "Private draft", reviewed: true, expectedRevision: null };
+    await a.client.mutation(api.resumeBundles.save, input);
+    expect(await a.client.query(api.resumeBundles.summaries, {})).toEqual([
+      { jobId, revision: 1, reviewedAt: expect.any(Number), updatedAt: expect.any(Number) },
+    ]);
+    expect(await b.client.query(api.resumeBundles.summaries, {})).toEqual([]);
+    await a.client.mutation(api.resumeBundles.save, { ...input, reviewed: false, expectedRevision: 1 });
+    expect(await a.client.query(api.resumeBundles.summaries, {})).toEqual([
+      { jobId, revision: 2, reviewedAt: null, updatedAt: expect.any(Number) },
+    ]);
+    await a.client.mutation(api.jobs.remove, { id: jobId });
+    expect(await a.client.query(api.resumeBundles.summaries, {})).toEqual([]);
+  });
+
   test("source library is private, deduplicates original evidence, and follows deletion", async () => {
     const deployment = createIsolatedDeployment();
     const a = await provisionDisposableAccount(deployment, "source-a");

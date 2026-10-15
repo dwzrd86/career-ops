@@ -15,6 +15,8 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   const [dirty, setDirty] = useState(false);
   const [loadedJob, setLoadedJob] = useState("");
   const saved = useQuery(functions.getResumeBundle, jobId ? { jobId } : "skip");
+  const summaries = useQuery(functions.listResumeSummaries, {});
+  const [shelfFilter, setShelfFilter] = useState("ready");
   const sources = useQuery(functions.listResumeSources, {});
   const saveBundle = useMutation(functions.saveResumeBundle);
   const removeBundle = useMutation(functions.removeResumeBundle);
@@ -34,6 +36,12 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
     return () => { controller.abort(); generationRequest.current?.abort(); };
   }, []);
   const job = jobs.find((item) => item._id === jobId);
+  const shelf = (summaries ?? []).flatMap(summary => {
+    const role = jobs.find(item => item._id === summary.jobId);
+    return role && !["applied", "interview", "offer", "rejected", "discarded"].includes(role.status)
+      ? [{ ...summary, role }] : [];
+  });
+  const readyCount = shelf.filter(item => item.reviewedAt !== null).length;
   const loading = Boolean(jobId && (saved === undefined || loadedJob !== jobId));
 
   useEffect(() => {
@@ -48,6 +56,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   }, [jobId, saved, loadedJob]);
 
   function selectJob(next: string) {
+    if (next === jobId) return;
     if (dirty && !window.confirm("Discard unsaved edits and switch roles?")) return;
     setLoadedJob("");
     setJobId(next);
@@ -178,6 +187,21 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
   return <section className="pipeline-panel resume-studio" id="resume-studio" aria-labelledby="resume-studio-title">
     <header className="panel-header"><div><p className="eyebrow">Application desk</p><h2 id="resume-studio-title">Resume Studio</h2><p>Prepare a clear, single-column resume for one specific role.</p></div><FileText size={24} aria-hidden="true" /></header>
     <fieldset disabled={busy} className="resume-fieldset">
+    <section className="resume-shelf" aria-labelledby="resume-shelf-title">
+      <h3 id="resume-shelf-title">Your resume queue</h3>
+      <p>Saved resumes for roles you haven’t applied to yet. Ready means you reviewed the saved facts; check that the posting is still open before applying.</p>
+      <div className="resume-export" role="group" aria-label="Resume queue filters">
+        <button type="button" className="button secondary" aria-pressed={shelfFilter === "ready"} onClick={() => setShelfFilter("ready")}>Ready to export ({readyCount})</button>
+        <button type="button" className="button secondary" aria-pressed={shelfFilter === "review"} onClick={() => setShelfFilter("review")}>Needs review ({shelf.length - readyCount})</button>
+      </div>
+      {summaries === undefined ? <p role="status">Loading resume queue…</p> : <>
+        {!shelf.some(item => (item.reviewedAt !== null) === (shelfFilter === "ready")) && <p>{shelfFilter === "ready" ? "No reviewed resumes ready yet. Choose a role below, prepare its draft, review the facts, and save." : "No saved drafts waiting for review."}</p>}
+        <ul className="resume-shelf-list">{shelf.filter(item => (item.reviewedAt !== null) === (shelfFilter === "ready")).map(item => <li key={item.jobId}>
+          <div><strong>{item.role.company} · {item.role.title}</strong><p>Revision {item.revision} · Saved {new Date(item.updatedAt).toLocaleDateString()}{item.jobId === jobId && dirty ? " · Unsaved editor changes" : ""}</p></div>
+          <button type="button" className="button secondary" disabled={loading} onClick={() => selectJob(item.jobId)}>{item.reviewedAt !== null ? "Open for export" : "Review draft"}<span className="sr-only"> for {item.role.company} · {item.role.title}</span></button>
+        </li>)}</ul>
+      </>}
+    </section>
     <div className="resume-studio-body">
       <div className="resume-controls">
         <label>Target role<select aria-label="Resume target role" value={jobId} onChange={(event) => selectJob(event.target.value)}><option value="">Choose a pipeline role</option>{jobs.map((item) => <option key={item._id} value={item._id}>{item.company} · {item.title}</option>)}</select></label>

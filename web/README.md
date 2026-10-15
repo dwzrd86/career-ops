@@ -135,6 +135,15 @@ bodies, account IDs, or full URLs. Set the matching non-secret
 
 ## Saved resume bundles
 
+Resume Studio’s resume queue groups saved bundles into **Ready to export** and
+**Needs review**, with revision and saved date. Open a row to restore the draft
+in Studio and download it. The queue shows roles in Discovered or Evaluated
+status; marking a role Applied removes it from this preparation queue without
+deleting its saved bundle. “Ready” reflects your factual review of the saved
+revision, not a verified live posting or ATS ranking. Unsaved editor changes
+still require review before export. The queue query returns only private bundle
+metadata and is limited to the account’s 50 saved bundles.
+
 Reviewed drafts can be downloaded directly as Word (.docx) documents, as plain
 text, or printed to PDF. Word export preserves the draft's text in a single
 column of ordinary paragraphs and generates the file locally in the browser.

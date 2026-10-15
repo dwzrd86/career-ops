@@ -159,6 +159,7 @@ export type AccountExport = {
 };
 
 export const functions = {
+  listResumeSummaries: makeFunctionReference<"query", Record<string, never>, Array<{ jobId: string; revision: number; reviewedAt: number | null; updatedAt: number }>>("resumeBundles:summaries"),
   listResumeSources: makeFunctionReference<"query", Record<string, never>, Array<{ jobId: string; company: string; title: string; sourceResume: string; updatedAt: number }>>("resumeBundles:sources"),
   getResumeBundle: makeFunctionReference<"query", { jobId: string }, ResumeBundle | null>("resumeBundles:get"),
   saveResumeBundle: makeFunctionReference<"mutation", {

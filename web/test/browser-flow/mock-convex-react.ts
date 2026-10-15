@@ -40,6 +40,9 @@ export function useQuery(reference: string, args?: Record<string, any> | "skip")
       requiresAcknowledgement: !state.privacyAcknowledged,
     };
   }
+  if (reference === "resumeBundles:summaries") return Object.values(state.resumeBundles)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map(({ jobId, revision, reviewedAt, updatedAt }) => ({ jobId, revision, reviewedAt, updatedAt }));
   if (reference === "resumeBundles:sources") {
     const seen = new Set<string>();
     return Object.values(state.resumeBundles).sort((a, b) => b.updatedAt - a.updatedAt).flatMap(bundle => {

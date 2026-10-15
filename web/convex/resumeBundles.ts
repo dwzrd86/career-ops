@@ -68,6 +68,29 @@ export const sources = query({
   },
 });
 
+// Metadata-only shelf: fetching the queue never returns resume or posting text.
+export const summaries = query({
+  args: {},
+  returns: v.array(v.object({
+    jobId: v.id("jobs"), revision: v.number(),
+    reviewedAt: v.union(v.number(), v.null()), updatedAt: v.number(),
+  })),
+  handler: async (ctx) => {
+    const ownerId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, ownerId);
+    const saved = await ctx.db.query("resumeBundles")
+      .withIndex("by_owner_job", q => q.eq("ownerId", ownerId)).take(MAX_RESUME_BUNDLES);
+    const result = [];
+    for (const item of saved.sort((a, b) => b.updatedAt - a.updatedAt)) {
+      const job = await ctx.db.get(item.jobId);
+      if (!job || job.ownerId !== ownerId) continue;
+      result.push({ jobId: item.jobId, revision: item.revision,
+        reviewedAt: item.reviewedAt, updatedAt: item.updatedAt });
+    }
+    return result;
+  },
+});
+
 export const save = mutation({
   args: { jobId: v.id("jobs"), ...content, reviewed: v.boolean(), expectedRevision: v.union(v.number(), v.null()) },
   returns: v.number(),
