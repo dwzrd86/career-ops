@@ -14,6 +14,8 @@
     "test:browser-flow": "node scripts/isolated-browser-flow.mjs",
     "test:production-build-guard": "node --test scripts/production-build-guard.test.mjs",
     "test:release-smoke": "node --test scripts/release-smoke.test.mjs",
+    "test:release-preflight": "node --test scripts/release-preflight.test.mjs",
+    "release:preflight": "node scripts/release-preflight.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
     "test:security-regression": "node scripts/security-regression.mjs",
     "test:security-headers": "node --test scripts/security-headers.test.mjs",

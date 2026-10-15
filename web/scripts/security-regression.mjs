@@ -27,6 +27,7 @@ const checks = [
   },
   { name: "authorization tests", command: "npm", args: ["run", "test:auth"] },
   { name: "production build guard tests", command: "npm", args: ["run", "test:production-build-guard"] },
+  { name: "read-only release preflight tests", command: "npm", args: ["run", "test:release-preflight"] },
   {
     name: "guarded production build and endpoint verification",
     command: "npm",

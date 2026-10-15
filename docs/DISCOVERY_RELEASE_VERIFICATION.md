@@ -159,3 +159,32 @@ and must be rebuilt for the intended production deployment. No provider
 configuration, production deployment, or real-account discovery was performed.
 Continue with the production preconditions in [[RELEASE_RUNBOOK]]; hosted
 sign-in and real discovery-to-resume-export verification remain outstanding.
+
+## Executable release preflight (2026-10-14, iteration 7)
+
+Added `web/scripts/release-preflight.mjs`, available as `npm run release:preflight`.
+An explicit production endpoint is required. The command reports all missing
+inputs together: Node 24, CSP compatibility, process build settings, the known
+local development URL denylist, optional endpoint overrides, and existing dist
+endpoints. `--check-convex-env` adds a read-only provider audit using
+`convex env list --names-only --deployment <explicit-name>`. Provider output,
+secret values, and exception messages are never printed. Seven regression
+tests cover configuration failures, provider targeting, and output redaction;
+these now run in the full security gate.
+
+Fresh production reads for `beaming-bass-637` returned only `JWKS`,
+`JWT_PRIVATE_KEY`, and `SITE_URL`. Better Auth, Turnstile, Resend, abuse-key,
+enrollment-key, and backend release-version settings are missing.
+`convex deployment usage-limits list --json --deployment beaming-bass-637`
+returned an empty array. No limits were configured by this iteration.
+The current local process also lacks the required build inputs; this does not
+prove whether those inputs exist in Netlify's production secret store.
+The existing dist still fails the intended-production endpoint check.
+
+All ten security-regression checks passed under Node 24.19.0, including seven
+new preflight tests, authorization, TypeScript/Vite build, and both compiled
+browser flows. The production preflight deliberately exited nonzero for the
+confirmed blockers. Source secret scanning and `git diff --check` passed.
+No production configuration or deployment was changed, and no real-account
+journey was attempted. See [[RELEASE_RUNBOOK]] for remaining provider value/scope,
+budget/notification, deployment, and hosted discovery-to-export checks.

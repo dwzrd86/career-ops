@@ -18,6 +18,26 @@ career files or credentials in a release branch or deployment.
 
 ## Preconditions
 
+- Inspect the production release inputs without deploying or changing settings:
+
+  ```bash
+  cd web
+  npm run release:preflight -- \
+    --expected-convex-url https://beaming-bass-637.convex.cloud \
+    --check-convex-env
+  ```
+
+  The preflight checks Node 24, the reviewed CSP, required build-setting
+  presence in the current process, the local development URL denylist,
+  optional endpoint overrides, and existing bundle endpoints. The optional
+  Convex audit requests **names only** from the explicitly named deployment;
+  it never fetches secret values. Missing settings or an unavailable provider
+  fail the check. Output contains only fixed diagnostics and variable names.
+  A local missing build setting does not establish whether Netlify has it:
+  run in the production build environment or review Netlify's names/scopes
+  separately. This is a preflight, not deployment authorization or proof that
+  secret values, sender verification, site-key hostnames, or accounts work.
+  A stale/missing dist failure requires a fresh guarded production build.
 - Node.js 24 is installed.
 - The source-only change set passes the `Web Release Safety` GitHub workflow.
 - The security release gate passes from `web/` before the deploy or release tag:

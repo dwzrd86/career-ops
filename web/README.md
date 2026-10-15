@@ -39,6 +39,10 @@ generated `dist/assets/*.js` contains only that expected production endpoint.
 Never publish `dist/` using `npm run build:app`, which omits the guard.
 
 For a manual release, use [the source-controlled release runbook](../docs/RELEASE_RUNBOOK.md).
+Run `npm run release:preflight -- --expected-convex-url https://beaming-bass-637.convex.cloud --check-convex-env`
+to check release inputs and production variable names without deployment or
+secret-value retrieval. Missing local build settings do not prove they are
+missing from Netlify; the command reports only its current environment.
 
 ## Security release gate
 
