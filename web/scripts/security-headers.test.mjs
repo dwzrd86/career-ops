@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const netlifyConfig = fs.readFileSync(new URL("../../netlify.toml", import.meta.url), "utf8");
-const reportOnlyPolicy = netlifyConfig.match(/Content-Security-Policy-Report-Only\s*=\s*"([^"]+)"/)?.[1];
+const enforcedPolicy = netlifyConfig.match(/Content-Security-Policy\s*=\s*"([^"]+)"/)?.[1];
 
 function headersFor(path) {
   const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -11,8 +11,9 @@ function headersFor(path) {
   return Object.fromEntries([...block?.matchAll(/^\s*([A-Za-z-]+)\s*=\s*"([^"]+)"$/gm) || []].map(([, name, value]) => [name, value]));
 }
 
-test("report-only CSP constrains the authenticated SPA to its required production origins", () => {
-  assert.ok(reportOnlyPolicy, "netlify.toml must define a report-only CSP");
+test("enforced CSP constrains the authenticated SPA to its required production origins", () => {
+  assert.ok(enforcedPolicy, "netlify.toml must define an enforced CSP");
+  assert.doesNotMatch(netlifyConfig, /Content-Security-Policy-Report-Only/);
 
   for (const directive of [
     "base-uri 'self'",
@@ -21,13 +22,13 @@ test("report-only CSP constrains the authenticated SPA to its required productio
     "object-src 'none'",
     "connect-src 'self' https://beaming-bass-637.convex.cloud wss://beaming-bass-637.convex.cloud https://beaming-bass-637.convex.site",
   ]) {
-    assert.match(reportOnlyPolicy, new RegExp(`(?:^|; )${directive.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:;|$)`));
+    assert.match(enforcedPolicy, new RegExp(`(?:^|; )${directive.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:;|$)`));
   }
 
-  assert.match(reportOnlyPolicy, /script-src 'self' https:\/\/challenges\.cloudflare\.com/);
-  assert.match(reportOnlyPolicy, /frame-src https:\/\/challenges\.cloudflare\.com/);
-  assert.doesNotMatch(reportOnlyPolicy, /\*/);
-  assert.doesNotMatch(reportOnlyPolicy, /'unsafe-inline'|'unsafe-eval'/);
+  assert.match(enforcedPolicy, /script-src 'self' https:\/\/challenges\.cloudflare\.com/);
+  assert.match(enforcedPolicy, /frame-src https:\/\/challenges\.cloudflare\.com/);
+  assert.doesNotMatch(enforcedPolicy, /\*/);
+  assert.doesNotMatch(enforcedPolicy, /'unsafe-inline'|'unsafe-eval'/);
 });
 
 test("static authenticated SPA headers restrict browser capabilities and cache by resource type", () => {

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { createServer } from "vite";
+import { build, createServer, preview } from "vite";
 import JSZip from "jszip";
 
 const scriptDirectory = resolve(fileURLToPath(new URL(".", import.meta.url)));
@@ -18,11 +19,29 @@ async function expectVisible(page, locator, label) {
 }
 
 async function main() {
-  const server = await createServer({
-    configFile: viteConfig,
-    server: { host: "127.0.0.1", port: 0 },
-  });
-  await server.listen();
+  const productionCsp = process.argv.includes("--production-csp");
+  let outputDirectory;
+  let server;
+  if (productionCsp) {
+    const config = await readFile(new URL("../../netlify.toml", import.meta.url), "utf8");
+    const policy = config.match(/Content-Security-Policy\s*=\s*"([^"]+)"/)?.[1];
+    assert.ok(policy, "An enforced production policy is required");
+    // Compile the existing mocked account fixture, without replacing release dist/.
+    const localDirectory = resolve(scriptDirectory, "../../agent/.local");
+    await mkdir(localDirectory, { recursive: true });
+    outputDirectory = await mkdtemp(resolve(localDirectory, "csp-browser-"));
+    try {
+      await build({ configFile: viteConfig, build: { outDir: outputDirectory, emptyOutDir: true }, logLevel: "error" });
+      server = await preview({ configFile: viteConfig, build: { outDir: outputDirectory },
+        preview: { host: "127.0.0.1", port: 0, headers: { "Content-Security-Policy": policy } } });
+    } catch (error) {
+      await rm(outputDirectory, { recursive: true, force: true });
+      throw error;
+    }
+  } else {
+    server = await createServer({ configFile: viteConfig, server: { host: "127.0.0.1", port: 0 } });
+    await server.listen();
+  }
   const baseUrl = server.resolvedUrls?.local.find((url) => url.startsWith("http://127.0.0.1"));
   if (!baseUrl) failure("local test server did not expose a loopback URL");
   let browser;
@@ -32,7 +51,14 @@ async function main() {
     browser = await chromium.launch({ headless: true }).catch(() => chromium.launch({ channel: "chrome", headless: true }));
     context = await browser.newContext();
     const page = await context.newPage();
-    page.on("pageerror", (error) => console.error("Browser page error:", error.message));
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.addInitScript(() => {
+      window.__cspViolations = [];
+      document.addEventListener("securitypolicyviolation", event => {
+        window.__cspViolations.push(`${event.effectiveDirective}: ${event.blockedURI}`);
+      });
+    });
     page.on("console", (message) => { if (message.type() === "error") console.error("Browser console:", message.text()); });
     page.setDefaultTimeout(5_000);
     await page.route("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", async (route) => {
@@ -52,7 +78,8 @@ async function main() {
       return route.fulfill(generationFailure ? { status: 502, json: { error: "Test GLM failure. Editor retained." } } :
         { json: { draft: "Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS" } });
     });
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    const entry = await page.goto(baseUrl, { waitUntil: "networkidle" });
+    if (productionCsp) assert.ok(entry.headers()["content-security-policy"], "The browser must receive the enforced CSP");
     await page.getByRole("button", { name: "Create an account" }).click({ force: true });
     await page.getByLabel("Email").fill("security-flow@example.test");
     await page.getByLabel("Password", { exact: true }).fill("SecurityFlow123");
@@ -132,20 +159,24 @@ async function main() {
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
     const generate = studio.getByRole("button", { name: "Generate GLM draft", exact: true });
-    await expectVisible(page, generate, "connected local GLM generator");
-    assert.equal(await generate.isEnabled(), false, "provider consent required");
-    await studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." }).check();
-    const acceptedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
-    await generate.click();
-    await acceptedGeneration;
-    await expectVisible(page, studio.getByText("GLM draft ready. Review changed lines and facts, then save and export your resume.", { exact: true }), "generated draft arrival");
-    assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
-    generationFailure = true;
-    const failedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
-    await generate.click();
-    await failedGeneration;
-    await expectVisible(page, studio.getByText("Test GLM failure. Editor retained.", { exact: true }), "generation failure recovery");
-    assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
+    if (productionCsp) {
+      assert.equal(await generate.count(), 0, "The hosted bundle must not expose local generation");
+    } else {
+      await expectVisible(page, generate, "connected local GLM generator");
+      assert.equal(await generate.isEnabled(), false, "provider consent required");
+      await studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." }).check();
+      const acceptedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
+      await generate.click();
+      await acceptedGeneration;
+      await expectVisible(page, studio.getByText("GLM draft ready. Review changed lines and facts, then save and export your resume.", { exact: true }), "generated draft arrival");
+      assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+      generationFailure = true;
+      const failedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
+      await generate.click();
+      await failedGeneration;
+      await expectVisible(page, studio.getByText("Test GLM failure. Editor retained.", { exact: true }), "generation failure recovery");
+      assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"));
+    }
     const briefDownload = page.waitForEvent("download");
     await studio.getByRole("button", { name: "Download GLM brief" }).click();
     const brief = await briefDownload;
@@ -252,11 +283,28 @@ async function main() {
     await expectVisible(page, page.locator("#discovery-settings"), "mobile Target Profile editor");
     const mobileWidth = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: window.innerWidth, outside: [...document.querySelectorAll("body *")].filter((element) => element.getBoundingClientRect().right > innerWidth + 1 && !element.closest(".table-wrap")).slice(0, 20).map((element) => `${element.tagName}.${element.className} ${Math.round(element.getBoundingClientRect().right)}`) }));
     assert.equal(mobileWidth.page <= mobileWidth.viewport, true, `mobile dashboard has horizontal overflow: ${JSON.stringify(mobileWidth)}`);
-    console.log("Isolated browser flow passed");
+    assert.deepEqual(pageErrors, [], "The workflow must have no browser runtime errors");
+    if (productionCsp) {
+      assert.deepEqual(await page.evaluate(() => window.__cspViolations), [], "The workflow must have no CSP violations");
+      // Prove enforcement rather than merely checking the header is present.
+      let offOriginRequests = 0;
+      await page.route("https://csp-probe.invalid/**", route => { offOriginRequests++; return route.abort(); });
+      assert.equal(await page.evaluate(async () => {
+        try { await fetch("https://csp-probe.invalid/blocked"); return false; } catch { return true; }
+      }), true, "Unapproved connections must be refused");
+      await page.waitForFunction(() => window.__cspViolations.some(value => value.startsWith("connect-src:")));
+      assert.equal(offOriginRequests, 0, "CSP must block an unapproved connection before it reaches the network");
+    }
+    console.log(`Isolated browser flow passed${productionCsp ? " with compiled assets and enforced production CSP" : ""}`);
   } finally {
     await context?.close();
     await browser?.close();
-    await server.close();
+    if (productionCsp) {
+      await new Promise((resolve, reject) => server.httpServer.close(error => error ? reject(error) : resolve()));
+    } else {
+      await server.close();
+    }
+    if (outputDirectory) await rm(outputDirectory, { recursive: true, force: true });
   }
 }
 

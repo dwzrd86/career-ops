@@ -60,6 +60,39 @@ The worker currently scans a fixed public source catalog, retains at most 15
 reviewable jobs per feed, and checks at most 50 enabled profiles per cron run.
 This is an alpha capacity boundary, not a scalable discovery service. Work
 authorization remains unknown rather than inferred, so results need review.
-The source header check currently validates a report-only CSP; the live release
-smoke test requires an enforced CSP. Resolve that release-gate mismatch and
-verify the local bridge behavior before enforcing the policy in production.
+The report-only/enforced CSP mismatch was resolved in the release candidate;
+see the verification below. The hosted deployment still needs to be updated.
+
+## Enforced CSP release gate (2026-10-14)
+
+`netlify.toml` now sends an enforced Content-Security-Policy, matching the live
+release smoke gate. Resume Studio uses stylesheet classes for its fieldset,
+command, file input, and changed-line layout instead of inline style attributes.
+The policy permits only the configured Convex deployment and optional
+Cloudflare Turnstile integration. No loopback permission was added: the GLM
+runner is development-only, and the compiled hosted app keeps the existing
+brief-download and draft-import workflow.
+
+`npm run test:browser-csp` compiles the existing isolated account fixture into a
+disposable directory under ignored `agent/.local/`, then serves those assets
+with the actual policy from `netlify.toml`. It covers enrollment/privacy screens,
+Target Profile import/save/scan, discovery review and pipeline approval, saved
+resume bundles, text/Word exports, print layout, sign-out/sign-in, and mobile
+sizing. It asserts zero CSP violations throughout that flow, then proves an
+unapproved connection is blocked before reaching the network. It also confirms
+local generation controls are absent from the compiled hosted interface.
+Account persistence, job results, and Turnstile responses remain mocked; this
+does not establish real hosted sign-in or discovery.
+
+The nine-check security regression now includes this compiled browser check
+and the release-smoke regression tests. It passed under Node 24.19.0, including
+the guarded TypeScript/Vite build. Eight local runner/bridge tests and eight
+resume tests also passed. The live smoke command runs both the development
+workflow and compiled CSP workflow after checking the hosted release.
+
+Read-only inspection of `https://dmd-career-ops.netlify.app/` returned HTTP 200,
+but the response lacked CSP and the other configured security headers and used
+an older cache policy. It is reachable but does not pass the release gate.
+No deployment was performed. The security gate builds `web/dist` with a
+synthetic Convex URL; do not publish that output. Rebuild for the intended
+production deployment using [[RELEASE_RUNBOOK]] before publishing.

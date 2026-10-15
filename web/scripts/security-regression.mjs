@@ -38,6 +38,8 @@ const checks = [
     },
   },
   { name: "security headers and CSP checks", command: "npm", args: ["run", "test:security-headers"] },
+  { name: "compiled browser workflow under enforced CSP", command: "npm", args: ["run", "test:browser-csp"] },
+  { name: "release smoke regression", command: "npm", args: ["run", "test:release-smoke"] },
   { name: "isolated browser account and pipeline flow", command: "npm", args: ["run", "test:browser-flow"] },
 ];
 
@@ -70,5 +72,5 @@ if (failures.length > 0) {
   console.error(`Security regression failed: ${failures.join("; ")}`);
   process.exitCode = 1;
 } else {
-  console.log("Security regression passed: 7 checks");
+  console.log(`Security regression passed: ${checks.length} checks`);
 }

@@ -88,7 +88,21 @@ a failed release: stop and roll back.
 Run the release smoke test before marking the deploy ready. It validates the
 anonymous SPA shell, enforced security headers, entry-document and immutable
 asset caching, the single bundled Convex endpoint, an anonymous browser route,
-and the existing authenticated isolated-browser flow.
+and both isolated browser workflows. The compiled fixture runs with the actual
+enforced CSP from `netlify.toml` and proves that unauthorized connections are
+blocked. Account persistence and Turnstile responses in these workflows are
+mocked; verify real hosted sign-in and discovery separately.
+
+For a focused preflight without a release or provider call:
+
+```bash
+npm run test:browser-csp
+```
+
+This compiles disposable fixture assets under ignored `agent/.local/`; it does
+not replace `web/dist`. The full security regression does replace `web/dist`
+with a synthetic-endpoint build, so always run the production guarded build
+after that gate and before publishing.
 
 ```bash
 cd web

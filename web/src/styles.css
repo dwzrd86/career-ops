@@ -71,6 +71,10 @@ td span { color: #748077; font-size: 13px; }
 @media (max-width: 720px) { .app-shell { display: block; }.sidebar { min-height: auto; padding: 16px 20px; }.brand { padding: 0 0 14px; }.sidebar-note { display: none; }nav { display: flex; flex-wrap: wrap; }.workspace { padding: 26px 16px 42px; }.topbar { align-items: flex-start; gap: 18px; }.metric-grid, .discovery-details, .discovery-signals, .settings-grid, .target-role-row { grid-template-columns: 1fr; }.metric-grid { margin-top: 28px; }.panel-header { align-items: stretch; flex-direction: column; padding: 20px; }.settings-heading { padding: 16px 0; }.search-field { width: 100%; }.form-grid { grid-template-columns: 1fr; }.discovery-list { padding: 16px; }.discovery-card-heading { flex-direction: column; }.discovery-actions .button { width: 100%; }.settings-actions .button { flex: 1 1 auto; } }
 
 .resume-studio { margin-top: 28px; }
+.resume-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.resume-command { white-space: pre-wrap; overflow-wrap: anywhere; }
+.resume-import { max-width: 100%; }
+.resume-changes { overflow-wrap: anywhere; }
 .resume-studio-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 28px; padding: 24px; }
 .resume-studio label { display: grid; gap: 8px; font-size: 14px; font-weight: 650; }
 .resume-studio textarea, .resume-studio select { border: 1px solid #cdd5cc; border-radius: 6px; padding: 12px; width: 100%; color: #1c2420; background: #fff; }

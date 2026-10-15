@@ -101,8 +101,10 @@ async function main() {
   const result = await verifyLiveRelease({ site, expectedConvexUrl });
   if (!args.includes("--skip-browser")) {
     await verifyAnonymousBrowserRoute(result.site);
-    const run = spawnSync("npm", ["run", "test:browser-flow"], { cwd: fileURLToPath(new URL("..", import.meta.url)), stdio: "inherit" });
-    if (run.status !== 0) failure("authenticated isolated-browser flow failed");
+    for (const command of ["test:browser-flow", "test:browser-csp"]) {
+      const run = spawnSync("npm", ["run", command], { cwd: fileURLToPath(new URL("..", import.meta.url)), stdio: "inherit" });
+      if (run.status !== 0) failure(`${command} failed`);
+    }
   }
   console.log(`Release smoke test passed for ${result.site} (${result.bundles.join(", ")})`);
 }

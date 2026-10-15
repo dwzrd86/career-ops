@@ -177,7 +177,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
 
   return <section className="pipeline-panel resume-studio" id="resume-studio" aria-labelledby="resume-studio-title">
     <header className="panel-header"><div><p className="eyebrow">Application desk</p><h2 id="resume-studio-title">Resume Studio</h2><p>Prepare a clear, single-column resume for one specific role.</p></div><FileText size={24} aria-hidden="true" /></header>
-    <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+    <fieldset disabled={busy} className="resume-fieldset">
     <div className="resume-studio-body">
       <div className="resume-controls">
         <label>Target role<select aria-label="Resume target role" value={jobId} onChange={(event) => selectJob(event.target.value)}><option value="">Choose a pipeline role</option>{jobs.map((item) => <option key={item._id} value={item._id}>{item.company} · {item.title}</option>)}</select></label>
@@ -205,7 +205,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
           </> : <p>Download a brief, generate a draft with your local OpenCode Z.AI Coding Plan agent, then import the .txt file here to review and export it.</p>}
           <details><summary>Generate with the local runner</summary>
             <p>Sign in through <code>opencode auth login</code> and select Z.AI Coding Plan. Choose its model ID using <code>/models</code> in OpenCode. From the career-ops folder, run:</p>
-            <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>node web/scripts/tailor-resume.mjs --brief "path/to/downloaded-glm-brief.txt" --out "output/resume.txt" --model "zai-coding-plan/YOUR-MODEL-ID" --send-to-glm</pre>
+            <pre className="resume-command">node web/scripts/tailor-resume.mjs --brief "path/to/downloaded-glm-brief.txt" --out "output/resume.txt" --model "zai-coding-plan/YOUR-MODEL-ID" --send-to-glm</pre>
             <p>Omit <code>--send-to-glm</code> to validate without an AI call. Use a new output filename for each draft. OpenCode retains local session history separately from your dashboard account.</p>
             <p>For generation directly in this editor, start the web development server with <code>CAREER_OPS_GLM_MODEL=zai-coding-plan/YOUR-MODEL-ID npm run dev -- --host 127.0.0.1</code>. Open that local dashboard and acknowledge provider sharing above.</p>
           </details>
@@ -215,7 +215,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
             downloadFile(tailoringBrief({ company: job.company, title: job.title }, sourceResume, description), `${filename}-glm-brief.txt`);
             setMessage("Tailoring brief downloaded. Open it in your GLM agent; then import its plain text resume draft.");
           }}>Download GLM brief</button>
-          <label>Import tailored draft<input type="file" accept=".txt,text/plain" style={{ maxWidth: "100%" }} aria-label="Import tailored draft" disabled={!job || loading || !sourceResume.trim() || !description.trim()} onChange={event => {
+          <label>Import tailored draft<input type="file" accept=".txt,text/plain" className="resume-import" aria-label="Import tailored draft" disabled={!job || loading || !sourceResume.trim() || !description.trim()} onChange={event => {
             const file = event.target.files?.[0]; event.target.value = "";
             if (file) void importDraft(file);
           }} /></label>
@@ -235,7 +235,7 @@ export function ResumeStudio({ jobs }: { jobs: Job[] }) {
           <summary>Review {changes.length} changed or added lines against source</summary>
           <p>Check changed claims, dates, metrics, employers, and contact details against your original evidence. Wording changes can be valid; this comparison does not verify facts.</p>
           {newSkills.length > 0 && <p>Skills in the draft absent from source wording: {newSkills.join(", ")}. Verify supporting evidence or remove them.</p>}
-          <ol style={{ overflowWrap: "anywhere" }}>{changes.map((line, index) => <li key={index}>{line}</li>)}</ol>
+          <ol className="resume-changes">{changes.map((line, index) => <li key={index}>{line}</li>)}</ol>
         </details>}
         <p className="resume-session-note">Save stores your source resume, job description, draft, and review state in your private account. Unsaved edits are cleared on refresh or sign-out. GLM generation shares evidence with Z.AI only after you choose it. Exported briefs and OpenCode history remain outside dashboard account deletion.</p>
         <label className="resume-review"><input type="checkbox" checked={reviewed} disabled={!job || loading} onChange={(event) => { setReviewed(event.target.checked); setDirty(true); }} />I reviewed the facts, contact details, and relevance for this role.</label>
