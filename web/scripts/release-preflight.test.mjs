@@ -8,7 +8,7 @@ const expectedUrl = "https://beaming-bass-637.convex.cloud";
 const developmentUrl = "https://development-fixture.convex.cloud";
 const fixture = {
   expectedUrl, nodeVersion: "24.19.0", localDevelopmentUrl: developmentUrl,
-  env: { CONVEX_DEPLOY_KEY: "fixture-credential-do-not-print", CONVEX_DEV_DEPLOYMENT_URLS: developmentUrl,
+  env: { CONVEX_DEPLOY_KEY: "fixture", CONVEX_DEV_DEPLOYMENT_URLS: developmentUrl,
     VITE_TURNSTILE_SITE_KEY: "fixture-public-key", VITE_APP_DEPLOYMENT_VERSION: "fixture-version" },
   verify: () => {}, serverNames: new Set(requiredServerNames),
 };

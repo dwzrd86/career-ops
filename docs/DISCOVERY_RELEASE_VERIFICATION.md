@@ -188,3 +188,10 @@ confirmed blockers. Source secret scanning and `git diff --check` passed.
 No production configuration or deployment was changed, and no real-account
 journey was attempted. See [[RELEASE_RUNBOOK]] for remaining provider value/scope,
 budget/notification, deployment, and hosted discovery-to-export checks.
+
+The final tracked-source scan exposed a missing `relative` import on its
+credential-match path. Fixed that import and shortened the synthetic deploy-key
+fixture to avoid a false positive. A temporary synthetic credential confirmed
+the scanner exits nonzero without printing the value or throwing a runtime
+error; the fixture was restored afterward. The seven preflight tests and clean
+source scan passed again after this correction.
