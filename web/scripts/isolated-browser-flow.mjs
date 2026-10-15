@@ -74,6 +74,9 @@ async function main() {
       const data = route.request().postDataJSON();
       assert.equal(data.consent, true);
       assert.ok(data.brief.includes("Test Candidate: Built Python automation"));
+      const evidence = JSON.parse(data.brief.split("\nEVIDENCE JSON\n")[1]);
+      assert.deepEqual(Object.keys(evidence).sort(), ["jobDescription", "sourceResume", "targetRole"]);
+      assert.deepEqual(evidence.targetRole, { company: "Example Company", title: "Security regression role" }, "generation must exclude pipeline IDs, notes, and metadata");
       assert.equal(route.request().headers()["x-career-ops-local"], "1");
       await generationHold;
       return route.fulfill(generationFailure ? { status: 502, json: { error: "Test GLM failure. Editor retained." } } :
@@ -218,12 +221,26 @@ async function main() {
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
     const generate = studio.getByRole("button", { name: "Generate GLM draft", exact: true });
+    const sharingConsent = studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." });
     if (productionCsp) {
       assert.equal(await generate.count(), 0, "The hosted bundle must not expose local generation");
     } else {
       await expectVisible(page, generate, "connected local GLM generator");
       assert.equal(await generate.isEnabled(), false, "provider consent required");
-      await studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." }).check();
+      await sharingConsent.check();
+      const originalSource = await studio.getByLabel("Source resume", { exact: true }).inputValue();
+      await studio.getByLabel("Source resume", { exact: true }).fill(originalSource + "\nAdditional evidence");
+      assert.equal(await sharingConsent.isChecked(), false, "new source evidence requires new sharing consent");
+      assert.equal(await generate.isEnabled(), false);
+      await studio.getByLabel("Source resume", { exact: true }).fill(originalSource);
+      assert.equal(await sharingConsent.isChecked(), false, "restoring earlier evidence must not restore old consent");
+      await sharingConsent.check();
+      const originalPosting = await studio.getByLabel("Job description", { exact: true }).inputValue();
+      await studio.getByLabel("Job description", { exact: true }).fill(originalPosting + "\nUpdated requirements");
+      assert.equal(await sharingConsent.isChecked(), false, "new posting evidence requires new sharing consent");
+      assert.equal(await generate.isEnabled(), false);
+      await studio.getByLabel("Job description", { exact: true }).fill(originalPosting);
+      await sharingConsent.check();
       let releaseGeneration;
       generationHold = new Promise(resolve => { releaseGeneration = resolve; });
       const acceptedGeneration = new Promise(resolve => page.once("dialog", async dialog => { await dialog.accept(); resolve(); }));
@@ -274,6 +291,7 @@ async function main() {
     await expectVisible(page, studio.getByRole("button", { name: "Ready to export (1)", exact: true }), "reviewed resume appears in queue");
     await prepareDiscoveryResume.click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Source resume"]').disabled === false);
+    if (!productionCsp) assert.equal(await sharingConsent.isChecked(), false, "another role cannot inherit sharing permission");
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "", "another role does not inherit the saved draft");
     await prepareResume.click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Resume text"]').value.includes("Built Python automation"));

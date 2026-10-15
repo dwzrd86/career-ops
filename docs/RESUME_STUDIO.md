@@ -28,6 +28,17 @@ and posting, and a delayed read after a newer edit.
 
 The PDF layout contains only resume text in one column, with selectable text and standard typography. This does not guarantee acceptance or ranking by a particular ATS. Common-skills coverage is a literal checklist, not a match score or an exhaustive requirements analysis. Generated drafts still require human review against the original evidence.
 
+GLM briefs include only the target company/title, selected source resume, and
+pasted job description. The shared brief builder excludes pipeline notes,
+record IDs, scores, status, URLs, and other pipeline metadata even when its
+caller supplies a complete job record. This boundary applies to direct local
+generation and downloaded briefs. Text you include in the source or posting
+is still shared. Provider-sharing permission resets when the selected role,
+its company/title, source resume, or posting changes; restoring previous text
+does not restore consent. Editing only the generated draft leaves permission
+for the unchanged source evidence in place. Browser regression coverage checks
+the actual outgoing JSON and consent reset on evidence and role changes.
+
 Select a role to restore its saved bundle. The source resume is kept separately from the editable draft. Start draft from source copies that evidence into the editor; it does not generate qualifications. Save bundle stores source resume, pasted job description, draft, revision, and review timestamp in the signed-in owner's Convex account. Unsaved edits remain in memory and clear on refresh or sign-out. Switching roles with unsaved changes requires confirmation, and leaving the page raises the browser's unsaved-changes prompt.
 
 The pipeline shortcut uses the studio's existing role-switch behavior. Opening

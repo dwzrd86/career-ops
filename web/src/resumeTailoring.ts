@@ -17,7 +17,7 @@ Use only facts supported by sourceResume. Preserve the candidate's name, contact
 Return ONLY the resume as UTF-8 plain text, suitable for saving as resume.txt. Use a single column, ordinary section headings, and simple bullets. No tables, Markdown fences, commentary, invented placeholders, keyword stuffing, or ATS score. The candidate will review the draft before exporting it. Do not submit an application.
 
 EVIDENCE JSON
-${JSON.stringify({ targetRole: role, sourceResume, jobDescription: description }, null, 2)}
+${JSON.stringify({ targetRole: { company: role.company, title: role.title }, sourceResume, jobDescription: description }, null, 2)}
 `;
 }
 

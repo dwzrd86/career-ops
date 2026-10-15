@@ -39,6 +39,8 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
     return () => { controller.abort(); generationRequest.current?.abort(); };
   }, []);
   const job = jobs.find((item) => item._id === jobId);
+  // Consent applies to the selected evidence, not every future role or resume.
+  useEffect(() => { setProviderConsent(false); }, [jobId, job?.company, job?.title, sourceResume, description]);
   const shelf = (summaries ?? []).flatMap(summary => {
     const role = jobs.find(item => item._id === summary.jobId);
     return role && !["applied", "interview", "offer", "rejected", "discarded"].includes(role.status)
@@ -266,6 +268,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
           {localModel ? <>
             <p>Your local OpenCode agent is connected. Generate a tailored draft directly into this editor, then review the facts before exporting.</p>
             <label><input type="checkbox" checked={providerConsent} onChange={event => setProviderConsent(event.target.checked)} />Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent.</label>
+            <p>Sharing permission resets when you change the role, source resume, or posting. Pipeline notes and account metadata are excluded from the brief.</p>
             <button type="button" className="button primary" disabled={!job || loading || !sourceResume.trim() || !description.trim() || !providerConsent} onClick={generateDraft}>{generating ? "Generating GLM draft…" : "Generate GLM draft"}</button>
             <p>Model: {localModel}. OpenCode keeps local session history. Signing out discards the returning draft; an already-started provider request may finish.</p>
           </> : <p>Download a brief, generate a draft with your local OpenCode Z.AI Coding Plan agent, then import the .txt file here to review and export it.</p>}
