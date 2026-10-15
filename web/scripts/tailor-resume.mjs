@@ -80,37 +80,44 @@ export function draftFromSession(session, { sessionID, model, workspace }) {
   })).join("\n"));
 }
 
-async function recoverDraft({ events, executable, workspace, model, env, timeoutMs }) {
-  const sessionID = sessionFromEvents(events);
-  const file = join(workspace, "session.json");
+// OpenCode may exit before a pipe drains. Capture both run and export output
+// in a private regular file so completed events survive CLI teardown.
+async function captureOpenCode({ executable, args, workspace, env, timeoutMs, filename }) {
+  const file = join(workspace, filename);
   const handle = await open(file, "wx", 0o600);
   try {
     await new Promise((accept, reject) => {
-      // A regular file avoids OpenCode's stdout pipe truncation during teardown.
-      const child = spawn(executable, ["export", sessionID, "--pure"],
+      const child = spawn(executable, args,
         { cwd: workspace, env, stdio: ["ignore", handle.fd, "ignore"] });
       let failure;
       const timer = setTimeout(() => { failure = new ResumeGenerationError("timeout"); child.kill("SIGKILL"); }, timeoutMs);
       const limit = setInterval(async () => {
         try {
           if ((await handle.stat()).size > 1000000) {
-            failure = new ResumeGenerationError("incomplete"); child.kill("SIGKILL");
+            failure = new Error("OpenCode exceeded the output limit; no draft saved."); child.kill("SIGKILL");
           }
         } catch { /* close handler owns cleanup */ }
       }, 50);
       child.on("error", () => { clearTimeout(timer); clearInterval(limit); reject(new ResumeGenerationError("unavailable")); });
       child.on("close", code => {
         clearTimeout(timer); clearInterval(limit);
-        if (failure || code !== 0) reject(failure || new ResumeGenerationError("incomplete"));
+        if (failure || code !== 0) reject(failure || new ResumeGenerationError("failed"));
         else accept();
       });
     });
-    if ((await handle.stat()).size > 1000000) throw new ResumeGenerationError("incomplete");
-    let session;
-    try { session = JSON.parse(await readFile(file, "utf8")); }
-    catch { throw new ResumeGenerationError("incomplete"); }
-    return draftFromSession(session, { sessionID, model, workspace });
+    if ((await handle.stat()).size > 1000000) throw new Error("OpenCode exceeded the output limit; no draft saved.");
+    return await readFile(file, "utf8");
   } finally { await handle.close(); }
+}
+
+async function recoverDraft({ events, executable, workspace, model, env, timeoutMs }) {
+  const sessionID = sessionFromEvents(events);
+  const content = await captureOpenCode({ executable, args: ["export", sessionID, "--pure"],
+    workspace, env, timeoutMs, filename: "session.json" });
+  let session;
+  try { session = JSON.parse(content); }
+  catch { throw new ResumeGenerationError("incomplete"); }
+  return draftFromSession(session, { sessionID, model, workspace });
 }
 
 export async function runTailoring({ brief, out, model, send = false }, {
@@ -149,27 +156,10 @@ export async function runTailoring({ brief, out, model, send = false }, {
       OPENCODE_DISABLE_AUTOUPDATE: "true", OPENCODE_DISABLE_CLAUDE_CODE: "true",
       OPENCODE_DISABLE_PROJECT_CONFIG: "true" };
     const started = Date.now();
-    const events = await new Promise((accept, reject) => {
-      const child = spawn(executable, ["run", "--pure", "--dir", workspace, "--format", "json", "--model", model,
+    const events = await captureOpenCode({ executable,
+      args: ["run", "--pure", "--dir", workspace, "--format", "json", "--model", model,
         "--agent", "resume-tailor", "--file", attachment, "--", "Tailor the attached factual resume brief."],
-      { cwd: workspace, env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
-      let stdout = "", size = 0, failure;
-      const timer = setTimeout(() => { failure = new ResumeGenerationError("timeout"); child.kill("SIGKILL"); }, timeoutMs);
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", chunk => {
-        size += Buffer.byteLength(chunk);
-        if (size > 1000000) { failure = new Error("OpenCode exceeded the output limit; no draft saved."); child.kill("SIGKILL"); }
-        else stdout += chunk.toString();
-      });
-      // Never echo provider errors or logs: they may contain personal evidence or credentials.
-      child.stderr.resume();
-      child.on("error", () => { clearTimeout(timer); reject(new ResumeGenerationError("unavailable")); });
-      child.on("close", code => {
-        clearTimeout(timer);
-        if (failure || code !== 0) reject(failure || new ResumeGenerationError("failed"));
-        else accept(stdout);
-      });
-    });
+      workspace, env: childEnv, timeoutMs, filename: "events.jsonl" });
     let draft;
     try { draft = draftFromEvents(events); }
     catch (error) {

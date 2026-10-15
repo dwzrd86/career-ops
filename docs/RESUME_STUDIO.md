@@ -288,3 +288,34 @@ responses, tools, output limits, a large flushed export, cleanup, and unchanged
 failed-output behavior. GitHub account remains `dwzrd86` with origin
 `https://github.com/dwzrd86/career-ops`. Hosted release and live discovery-to-export
 verification remain outstanding; preserve the existing discovery/auth changes.
+
+## Live generation verification and output capture (2026-10-14)
+
+The local runner now captures both `opencode run` events and session exports in
+owner-only regular files instead of streaming the generation through a pipe.
+This avoids losing buffered events when the CLI exits. Both commands share the
+same bounded capture implementation: a one-megabyte acceptance limit, timeout,
+private temporary workspace, suppressed provider logs, and cleanup on success
+or failure. Session recovery retains its existing model, directory, completion,
+and tool-use validation.
+
+Verified a completed live request through `runTailoring` with the supported
+`zai-coding-plan/glm-4.7` provider and fictional SQL analyst evidence. The runner
+saved a 44-character plain-text draft; temporary inputs and output were removed
+after verification. No actual resume or job application was sent. Existing local
+OpenCode authentication was sufficient; no new key was required or exposed.
+This establishes a successful local generation, not hosted AI availability or
+reliability across all provider models. A direct probe still emitted only a
+start event despite its local session having a completed assistant response,
+so strict session-export recovery remains necessary.
+
+Eight runner/bridge tests and eight resume tests passed, along with TypeScript,
+the Vite production app build, and the isolated browser workflow. Regression
+coverage includes an immediate CLI exit after a 200 KB event stream, output
+above the limit, private file permissions, and cleanup. Runner tests now check
+only their own temporary workspaces, allowing unrelated live drafts to run
+without producing a false cleanup failure.
+
+The hosted frontend release and real-user discovery-to-download verification
+remain outstanding. Preserve the separate in-progress discovery/auth changes
+in the local checkout when preparing that release.

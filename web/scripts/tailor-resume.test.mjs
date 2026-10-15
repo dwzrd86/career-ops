@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile, rm, readdir, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { canonicalBrief, draftFromEvents, draftFromSession, sessionFromEvents, runTailoring } from "./tailor-resume.mjs";
@@ -74,6 +74,8 @@ test("runner validates without spawning, pins provider, and saves only successfu
     const executable = join(directory, "fake-opencode");
     await writeFile(executable, `#!/usr/bin/env node
 import fs from 'node:fs';
+fs.appendFileSync(${JSON.stringify(join(directory, 'workspaces.jsonl'))}, JSON.stringify(process.cwd()) + '\\n');
+if ((fs.fstatSync(1).mode & 0o777) !== 0o600) process.exit(5);
 const config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
 if (config.share !== 'disabled' || config.permission['*'] !== 'deny' ||
     config.agent['resume-tailor'].permission['*'] !== 'deny' ||
@@ -95,6 +97,14 @@ if (!args.includes('--pure') || !args.includes('--format') || !args.includes('--
 const brief = fs.readFileSync(args[args.indexOf('--file') + 1], 'utf8');
 if (!brief.includes('Zoë') || !brief.includes('Never borrow qualifications')) process.exit(4);
 console.error('SECRET PRIVATE PROVIDER LOG');
+if (process.env.FAKE_MODE === 'large-stream') {
+  // Reproduces CLI teardown before a stdout pipe finishes flushing.
+  console.log(JSON.stringify({type:'reasoning',part:{text:'x'.repeat(200000)}}));
+  console.log(${JSON.stringify(stream("Zoë Example\nSQL reporting"))}); process.exit(0);
+}
+if (process.env.FAKE_MODE === 'oversized-stream') {
+  console.log('x'.repeat(1100000)); process.exit(0);
+}
 if (process.env.FAKE_MODE === 'timeout') setTimeout(() => {}, 10000);
 else if (process.env.FAKE_MODE === 'error') process.exit(1);
 else if (['recover','wrong-session','unfinished','large-export'].includes(process.env.FAKE_MODE)) console.log(JSON.stringify({type:'step_start',sessionID:'ses_example'}));
@@ -110,6 +120,12 @@ else console.log(${JSON.stringify(stream("Zoë Example\nSQL reporting"))});
         env: { ...process.env, FAKE_MODE: mode } }), error => error.code === (mode === "timeout" ? "timeout" : "failed"));
       await assert.rejects(readFile(failed.out), /ENOENT/);
     }
+    const large = { ...options, out: join(directory, "large-stream.txt"), send: true };
+    assert.match(await runTailoring(large, { executable, env: { ...process.env, FAKE_MODE: "large-stream" } }), /Draft saved/);
+    assert.equal(await readFile(large.out, "utf8"), "Zoë Example\nSQL reporting\n");
+    const oversized = { ...options, out: join(directory, "oversized-stream.txt"), send: true };
+    await assert.rejects(runTailoring(oversized, { executable, env: { ...process.env, FAKE_MODE: "oversized-stream" } }), /output limit/);
+    await assert.rejects(readFile(oversized.out), /ENOENT/);
     const recovered = { ...options, out: join(directory, "recovered.txt"), send: true };
     assert.match(await runTailoring(recovered, { executable, env: { ...process.env, FAKE_MODE: "recover" } }), /Draft saved/);
     assert.equal(await readFile(recovered.out, "utf8"), "Zoë Example\nSQL reporting\n");
@@ -118,7 +134,10 @@ else console.log(${JSON.stringify(stream("Zoë Example\nSQL reporting"))});
       await assert.rejects(runTailoring(failed, { executable, env: { ...process.env, FAKE_MODE: mode } }));
       await assert.rejects(readFile(failed.out), /ENOENT/);
     }
-    assert.deepEqual(await readdir(join(local, "resume-runs")), []);
+    // Assert this test's workspaces are removed, without depending on unrelated
+    // live generations or browser bridge requests sharing the parent directory.
+    const workspaces = (await readFile(join(directory, "workspaces.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+    for (const workspace of new Set(workspaces)) await assert.rejects(stat(workspace), /ENOENT/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
