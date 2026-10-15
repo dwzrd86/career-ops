@@ -319,3 +319,35 @@ without producing a false cleanup failure.
 The hosted frontend release and real-user discovery-to-download verification
 remain outstanding. Preserve the separate in-progress discovery/auth changes
 in the local checkout when preparing that release.
+
+## Live Resume Studio browser verification (2026-10-14)
+
+Run the opt-in synthetic browser check from `web`:
+
+```bash
+CAREER_OPS_GLM_MODEL=zai-coding-plan/glm-4.7 node scripts/live-resume-flow.mjs --send-to-glm
+```
+
+This makes one real provider request through the actual Resume Studio component,
+loopback HTTP bridge, and OpenCode runner. It uses only hardcoded fictional
+candidate and posting evidence. Existing OpenCode Coding Plan authentication is
+required. The command refuses to start without an explicit model and
+`--send-to-glm`; it does not fall back to a general paid API. It uses a headless,
+isolated browser, mocks account persistence, and blocks off-origin browser
+requests. It neither signs into a hosted account nor submits an application.
+
+The check verifies consent gating, the actual generated draft appearing in the
+editor, omission of an unsupported preferred skill, factual-review export
+gating, exact text and single-column Word export contents, and review reset
+after edits. Download artifacts are kept in the disposable browser context;
+closing it removes them. The bridge removes its temporary evidence and output.
+OpenCode still retains its own session history. Output logs contain stage,
+model, and character count, without draft text or provider diagnostics.
+
+A live run passed with `zai-coding-plan/glm-4.7` and a 221-character draft.
+An earlier run failed before stage diagnostics were added; its cause was not
+established. This is a successful synthetic local check, not a reliability
+guarantee, verified hosted authentication, live discovery, or a public release.
+The normal isolated browser workflow, eight runner/bridge tests, eight resume
+tests, and app TypeScript/Vite build also passed. The substantial pre-existing
+discovery/auth changes still need release preparation.
