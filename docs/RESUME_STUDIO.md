@@ -418,3 +418,31 @@ GLM → Word/PDF export check and launch prerequisites in [[RELEASE_RUNBOOK]].
 Greenhouse feeds currently supply no description, so those roles still need a
 paste. Hosted AI generation remains unavailable. Rebuild a guarded production
 dist before any publication; the local app-build output uses the dev endpoint.
+
+## Browser Print review gate (2026-10-14, iteration 14)
+
+The browser's own Print command now follows the same factual-review eligibility
+as the PDF button. Previously, the button was disabled for an unreviewed draft,
+but browser Print could still render that draft. The print-only article now
+contains resume text only for an exportable, reviewed role. Otherwise it shows
+a reminder to select and review a role. Editing the draft resets eligibility.
+The print article no longer has `aria-hidden`, so reviewed resume text is
+available to the browser's accessible print output.
+
+Both isolated browser workflows check that unreviewed and subsequently edited
+drafts are absent from print output, reviewed print wording matches the text
+download, and source evidence, posting, controls, queue, and dashboard chrome
+are hidden. Chromium renders a PDF in memory from the reviewed layout; the
+check validates its PDF signature without retaining candidate artifacts. This
+does not establish PDF text extraction, pagination quality for every resume,
+or a real-account discovery-to-export journey. For manual export, choose Save
+as PDF and disable browser headers and footers.
+
+Verification passed under Node 24.19.0: all ten security-regression checks,
+including the guarded TypeScript/Vite build, backend authorization tests, and
+both browser workflows. The tracked-source secret scan and diff checks passed.
+
+The preceding Greenhouse limitation was resolved in iteration 13: approved
+Greenhouse feeds now retain inert posting descriptions for Studio prefill.
+Production release prerequisites and hosted account verification remain in
+[[RELEASE_RUNBOOK]] and [[DISCOVERY_RELEASE_VERIFICATION]].

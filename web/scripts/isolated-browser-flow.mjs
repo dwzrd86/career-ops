@@ -220,6 +220,10 @@ async function main() {
     assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"), "cancelled navigation preserves the draft");
     await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
+    await page.emulateMedia({ media: "print" });
+    assert.equal(await page.locator(".resume-print pre").count(), 0, "browser Print cannot bypass factual review");
+    assert.match(await page.locator(".resume-print").innerText(), /review its resume facts/);
+    await page.emulateMedia({ media: "screen" });
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
     const generate = studio.getByRole("button", { name: "Generate GLM draft", exact: true });
     const sharingConsent = studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." });
@@ -334,12 +338,20 @@ async function main() {
     await expectVisible(page, studio.getByText("Word document downloaded. Use the file format requested by the employer.", { exact: true }), "Word export confirmation");
     await page.emulateMedia({ media: "print" });
     assert.equal(await page.locator(".resume-print").isVisible(), true);
+    assert.equal(await page.locator(".resume-print pre").innerText(), downloaded.trim(), "PDF wording matches the reviewed text export");
     assert.equal(await page.locator(".sidebar").isVisible(), false);
     assert.equal(await page.locator(".topbar").isVisible(), false);
+    assert.equal(await studio.locator("fieldset").isVisible(), false, "PDF excludes source evidence, posting, controls, and queue");
+    const pdf = await page.pdf({ preferCSSPageSize: true, displayHeaderFooter: false });
+    assert.equal(pdf.subarray(0, 5).toString(), "%PDF-", "Chromium renders a real PDF from the reviewed print layout");
     await page.emulateMedia({ media: "screen" });
     await studio.getByLabel("Resume text", { exact: true }).fill("Updated draft");
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+    await page.emulateMedia({ media: "print" });
+    assert.equal(await page.locator(".resume-print pre").count(), 0, "editing invalidates browser Print as well as download buttons");
+    assert.ok(!(await page.locator(".resume-print").innerText()).includes("Updated draft"));
+    await page.emulateMedia({ media: "screen" });
 
     // Switching away from an unsaved edit must ask before losing it.
     page.once("dialog", dialog => dialog.dismiss());

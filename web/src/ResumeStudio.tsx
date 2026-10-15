@@ -316,6 +316,9 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
       </div>
     </div>
     </fieldset>
-    <article className="resume-print" aria-hidden="true"><pre>{resume.trim()}</pre></article>
+    <article className="resume-print">{canExport
+      ? <pre>{resume.trim()}</pre>
+      : <p>Select a role and review its resume facts in Resume Studio before printing or saving a PDF.</p>}
+    </article>
   </section>;
 }
