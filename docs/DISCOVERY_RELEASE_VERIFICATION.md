@@ -136,3 +136,26 @@ Production deployment consent is still required by the deployment guard; this
 iteration did not deploy or change production data. The security suite replaced
 `web/dist` with its synthetic-endpoint bundle: never publish that output.
 GLM generation remains available through the verified local development bridge.
+
+## Preserve release assets during verification (2026-10-14, iteration 6)
+
+The full security regression no longer overwrites `web/dist` with its synthetic
+backend. The existing production build guard accepts `--out-dir <directory>`
+for both build and verification. The suite uses a unique ignored directory
+under `agent/.local/` and removes it in a finally block, including when checks
+fail. Normal production commands continue to use `web/dist` by default.
+
+All nine security checks passed under Node 24.19.0, including the guarded
+TypeScript/Vite build and both browser workflows. A SHA-256 manifest comparison
+before and after the complete suite confirmed all five existing dist files
+were unchanged. The seven build-guard tests now include missing/mixed/stale
+bundle rejection and CLI selection of the isolated directory. The source
+secret-pattern scan and `git diff --check` passed. The temporary suite build
+directory was removed after the run.
+
+This preserves existing assets; it does not certify them for publication.
+The current `web/dist` still contains the prior iteration's synthetic endpoint
+and must be rebuilt for the intended production deployment. No provider
+configuration, production deployment, or real-account discovery was performed.
+Continue with the production preconditions in [[RELEASE_RUNBOOK]]; hosted
+sign-in and real discovery-to-resume-export verification remain outstanding.

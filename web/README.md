@@ -52,6 +52,10 @@ npx playwright install chromium
 npm run test:security-regression
 ```
 
+The guarded synthetic build uses a unique ignored directory under
+`agent/.local/` and removes it when the checks finish. The suite preserves
+`web/dist`; publish only a fresh guarded build for the intended deployment.
+
 The command audits production dependencies, runs the backend authorization
 tests, verifies the guarded production build and endpoint, checks Netlify
 headers/CSP, and renders the actual UI through registration, verification,

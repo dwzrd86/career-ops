@@ -76,34 +76,39 @@ export function verifyDist(expectedUrl, assetsDirectory = resolve(webDirectory, 
   }
 }
 
-function build() {
+function build(outputDirectory) {
   validateTurnstileSiteKey();
   const expectedUrl = validateProductionUrl({
     productionUrl: process.env.VITE_CONVEX_URL,
     developmentUrls: developmentDeploymentUrls(),
   });
 
-  execFileSync("npm", ["run", "build:app"], {
+  execFileSync("npm", ["run", "build:app", "--", "--outDir", outputDirectory], {
     cwd: webDirectory,
     env: process.env,
     stdio: "inherit",
   });
-  verifyDist(expectedUrl);
+  verifyDist(expectedUrl, resolve(outputDirectory, "assets"));
 }
 
-function verify() {
+function verify(outputDirectory) {
   validateTurnstileSiteKey();
   const expectedUrl = validateProductionUrl({
     productionUrl: process.env.VITE_CONVEX_URL,
     developmentUrls: developmentDeploymentUrls(),
   });
-  verifyDist(expectedUrl);
+  verifyDist(expectedUrl, resolve(outputDirectory, "assets"));
 }
 
 function main() {
   const command = process.argv[2];
-  if (command === "build") return build();
-  if (command === "verify") return verify();
+  const options = process.argv.slice(3);
+  if (options.length && (options.length !== 2 || options[0] !== "--out-dir" || !options[1])) {
+    fail("the only supported option is --out-dir <directory>.");
+  }
+  const outputDirectory = resolve(webDirectory, options[1] ?? "dist");
+  if (command === "build") return build(outputDirectory);
+  if (command === "verify") return verify(outputDirectory);
   fail("use either `build` or `verify`.");
 }
 

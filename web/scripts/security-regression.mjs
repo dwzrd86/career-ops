@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +9,15 @@ const productionUrl = "https://security-regression-production.convex.cloud";
 const developmentUrl = "https://security-regression-development.convex.cloud";
 const turnstileSiteKey = "1x00000000000000000000AA";
 const REQUIRED_NODE_MAJOR = 24;
+
+const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
+if (nodeMajor !== REQUIRED_NODE_MAJOR) {
+  console.error(`Security regression requires Node.js ${REQUIRED_NODE_MAJOR}.x (found v${process.versions.node}).`);
+  process.exit(1);
+}
+const scratchDirectory = resolve(webDirectory, "../agent/.local");
+mkdirSync(scratchDirectory, { recursive: true });
+const buildDirectory = mkdtempSync(resolve(scratchDirectory, "security-build-"));
 
 const checks = [
   {
@@ -20,7 +30,7 @@ const checks = [
   {
     name: "guarded production build and endpoint verification",
     command: "npm",
-    args: ["run", "build"],
+    args: ["run", "build", "--", "--out-dir", buildDirectory],
     env: {
       CONVEX_DEV_DEPLOYMENT_URLS: developmentUrl,
       VITE_CONVEX_URL: productionUrl,
@@ -30,7 +40,7 @@ const checks = [
   {
     name: "production bundle endpoint verification",
     command: "npm",
-    args: ["run", "verify:production-build"],
+    args: ["run", "verify:production-build", "--", "--out-dir", buildDirectory],
     env: {
       CONVEX_DEV_DEPLOYMENT_URLS: developmentUrl,
       VITE_CONVEX_URL: productionUrl,
@@ -46,26 +56,24 @@ const checks = [
 const failures = [];
 console.log("Security regression: starting");
 
-const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-if (nodeMajor !== REQUIRED_NODE_MAJOR) {
-  console.error(`Security regression requires Node.js ${REQUIRED_NODE_MAJOR}.x (found v${process.versions.node}).`);
-  process.exit(1);
-}
-
-for (const check of checks) {
-  const result = spawnSync(check.command, check.args, {
-    cwd: webDirectory,
-    encoding: "utf8",
-    env: { ...process.env, ...check.env },
-    stdio: "pipe",
-    timeout: 120_000,
-  });
-  if (result.status === 0) {
-    console.log(`PASS ${check.name}`);
-  } else {
-    failures.push(check.name);
-    console.log(`FAIL ${check.name}`);
+try {
+  for (const check of checks) {
+    const result = spawnSync(check.command, check.args, {
+      cwd: webDirectory,
+      encoding: "utf8",
+      env: { ...process.env, ...check.env },
+      stdio: "pipe",
+      timeout: 120_000,
+    });
+    if (result.status === 0) {
+      console.log(`PASS ${check.name}`);
+    } else {
+      failures.push(check.name);
+      console.log(`FAIL ${check.name}`);
+    }
   }
+} finally {
+  rmSync(buildDirectory, { recursive: true, force: true });
 }
 
 if (failures.length > 0) {

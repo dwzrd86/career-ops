@@ -104,9 +104,12 @@ npm run test:browser-csp
 ```
 
 This compiles disposable fixture assets under ignored `agent/.local/`; it does
-not replace `web/dist`. The full security regression does replace `web/dist`
-with a synthetic-endpoint build, so always run the production guarded build
-after that gate and before publishing.
+not replace `web/dist`. The full security regression also builds and verifies
+its synthetic endpoint in a unique directory under `agent/.local/`, then
+removes that directory even when a check fails. It preserves `web/dist`.
+An existing dist directory is not evidence of a valid release: older test runs
+may have left a synthetic build there. Always run the production guarded build
+for the intended deployment before publishing.
 
 ```bash
 cd web
