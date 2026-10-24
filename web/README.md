@@ -10,10 +10,43 @@ current privacy notice, save a bundle and explicitly consent to sharing that
 revision's source and posting. Requests expose private pending/succeeded/failed
 metadata; internal completion replaces only that exact bundle revision and
 clears review approval. Failed or stale output preserves saved content.
-This source stage has no dispatch, scheduler or provider calls: the admission
-ledger and provider adapter must be implemented before hosted generation can
-run. Its text/byte limits are transport bounds, not verified token/cost limits.
-The existing local generation workflow remains available.
+`convex/aiBudget.ts` supplies the separate durable admission ledger. Every new
+attempt atomically consumes a quota slot and reserves worst-case integer
+micro-USD against one shared $8 pool (including outstanding prior-month calls).
+Five explicitly admitted pilot owners, including test accounts, receive at most
+20 attempts per UTC month. Failure, timeout, browser cancellation and month
+rollover never automatically release reservations or refund attempt quota.
+Unknown bills retain their owner/global locks until trusted reconciliation;
+settlement is idempotent and charges the original month. Metadata-only warning
+levels are $5/$7; alert delivery remains release work.
+
+Admission defaults off. Both the internal operator control and the server-only
+`HOSTED_AI_EXECUTION_ENABLED=true` switch must be enabled, and an unexpired,
+operator-reviewed price/bounds evidence reference must exist. No live price or
+token proof is seeded by source. `approvePrice` must only be called after proof
+covers all serialized input, completion/reasoning and fees; transport byte caps
+are insufficient. Cutoff can be lowered below $8 for fee headroom. Changing a
+price/bound invalidates unclaimed permits. Unexpected bills above reservation
+are recorded and disable admission. These controls affect future dispatch;
+already sent work remains a possible charge.
+
+The future server provider adapter must reserve a request, then use the single
+successful `claimDispatch` result immediately before its one bounded provider
+call. It must enforce the returned ceilings, verify usage, and settle through
+the ledger. Redelivery after a claim returns no permit; ambiguous calls require
+reconciliation, never automatic inference retries. A retry uses a new request
+and reservation. Only a never-claimed reservation may be released at zero
+without provider billing evidence. All ledger controls are internal functions;
+there is no browser refund, billing exemption or provider fallback API.
+Conditional Claude pricing shares the same pool, but current public requests
+and consent remain pinned to Z.ai. Selecting Claude needs the separate explicit
+provider-choice implementation.
+
+This source stage has no provider action, scheduler or paid call. The provider
+adapter remains a later task, and hosted generation stays unavailable until
+that adapter and release-time token/billing proofs are complete. The existing
+local generation workflow remains available. Durable billing metadata has no
+career text; its account export/deletion and retention audit is a later task.
 
 For the current beta test path, saved-progress guide, feature limits and release
 status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is

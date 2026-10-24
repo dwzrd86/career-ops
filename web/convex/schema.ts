@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { attemptState, priceFields } from "./aiBudgetModel";
 import { targetProfileFields } from "./targetProfileModel";
 
 const jobStatus = v.union(
@@ -142,6 +143,31 @@ export default defineSchema({
       v.literal("unavailable"),
     )),
   }).index("by_owner_status", ["ownerId", "status"]),
+  // Durable billing metadata only. Never delete unresolved liabilities with
+  // career data; they remain chargeable to their original UTC month.
+  aiBudgetControl: defineTable({
+    key: v.literal("shared"), enabled: v.boolean(), cutoffMicroUsd: v.number(),
+    unresolvedMicroUsd: v.number(), pilotCount: v.number(),
+    activeAttemptId: v.optional(v.id("aiBudgetAttempts")),
+  }).index("by_key", ["key"]),
+  aiBudgetPrices: defineTable(priceFields).index("by_provider_model", ["provider", "model"]),
+  aiPilotOwners: defineTable({
+    ownerId: v.id("users"), active: v.boolean(), updatedAt: v.number(),
+    activeAttemptId: v.optional(v.id("aiBudgetAttempts")),
+  }).index("by_owner", ["ownerId"]),
+  aiBudgetMonths: defineTable({
+    month: v.string(), settledMicroUsd: v.number(), reservedMicroUsd: v.number(),
+  }).index("by_month", ["month"]),
+  aiOwnerMonths: defineTable({
+    ownerId: v.id("users"), month: v.string(), attempts: v.number(),
+  }).index("by_owner_month", ["ownerId", "month"]),
+  aiBudgetAttempts: defineTable({
+    ownerId: v.id("users"), requestId: v.id("hostedResumeRequests"), month: v.string(),
+    ...priceFields,
+    reservedMicroUsd: v.number(), state: attemptState, createdAt: v.number(),
+    dispatchedAt: v.optional(v.number()), settledAt: v.optional(v.number()),
+    billedMicroUsd: v.optional(v.number()),
+  }).index("by_request", ["requestId"]),
   // Local discovery records remain canonical. This is a deliberately narrow,
   // owner-scoped projection for the private review UI: no resume content,
   // browser data, local paths, or component-auth records are stored here.
