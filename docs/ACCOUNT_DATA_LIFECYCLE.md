@@ -110,11 +110,22 @@ and privacy acknowledgement before ingesting career records.
 
 ## Verification boundary
 
-The implementation task adds focused export-overflow and bounded-cleanup/ledger
-regressions and preserves the existing authenticated tests. The following
-playbook task separately exercises the full two-owner lifecycle, supported auth
-route/session cleanup and late provider completion. No production deployment,
-real account deletion or live inference is part of these source checks.
+The separate `accountLifecycle.test.ts` suite uses two fictional Better Auth
+owners and the actual public/backend functions. It checks every documented
+category at its exact export boundary and one row above, compares exported IDs
+with all owned records, preserves orphan discovery histories, drains bounded
+cleanup continuations, rejects foreign IDs, and preserves the second owner's
+export. Scheduled fake-provider cases cover queued and in-flight deletion of
+accounts, jobs and bundles, late known/unknown usage, detached billing settlement,
+redelivery, and old cleanup continuations after bundle replacement.
+
+`hostedAuth.test.ts` also calls the supported HTTP `delete-user` route with real
+in-memory credential accounts and multiple sessions. It checks wrong-password
+refusal, session revocation, credential/account removal, app cleanup and continued
+access for the second account. Mail/bot/provider transports are fake. These tests
+run with `npm run test:auth`; they do not certify external provider erasure,
+verification-record physical removal, production backup retention or a deployed
+account lifecycle. No real user or provider is involved.
 
 Schema compatibility: the new request/owner indexes are additive, while billing
 `ownerId` and privacy-event `userId` become optional without a backfill. Once

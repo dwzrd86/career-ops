@@ -181,6 +181,48 @@ describe("configured hosted auth HTTP lifecycle (in-memory component, fake mail/
     expect((await request(t, "/sign-in/email", { email, password })).status).toBe(200);
   });
 
+  test("supported delete-user route removes credentials, all sessions and app data while preserving another account", async () => {
+    const t = deployment();
+    expect((await signup(t, await invite(t))).status).toBe(200);
+    await verify(t);
+    const cookies = [];
+    const clients = [];
+    for (let i = 0; i < 2; i++) {
+      const cookie = cookieFrom(await request(t, "/sign-in/email", { email, password }));
+      cookies.push(cookie);
+      const session = await (await request(t, "/get-session", undefined, cookie)).json();
+      clients.push(t.withIdentity({ subject: session.user.id, sessionId: session.session.id } as any));
+    }
+    const [owner] = await users(t);
+    const otherEmail = "other@hosted-auth.example.test";
+    expect((await signup(t, await invite(t), otherEmail)).status).toBe(200);
+    const otherLink = new URL(deliveredEmails.findLast(item => item.to === otherEmail)!.text.trim().split("\n").at(-1)!);
+    expect((await request(t, `/verify-email${otherLink.search}`)).status).toBeLessThan(400);
+    const otherCookie = cookieFrom(await request(t, "/sign-in/email", { email: otherEmail, password }));
+    await clients[0].mutation(api.privacy.acknowledge, {});
+    await clients[0].mutation(api.jobs.create, { company: "Fictional Co", title: "Analyst", location: "Remote", source: "manual", url: "https://jobs.example.test/delete" });
+    // A failed password check cannot start cleanup or revoke either session.
+    expect((await request(t, "/delete-user", { password: "IncorrectPassword123" }, cookies[0])).status).toBeGreaterThanOrEqual(400);
+    expect(await users(t)).toHaveLength(2);
+    expect((await clients[0].query(api.jobs.list, {}))).toHaveLength(1);
+    expect((await request(t, "/delete-user", { password }, cookies[0])).status).toBe(200);
+    for (const cookie of cookies) expect(await (await request(t, "/get-session", undefined, cookie)).json()).toBeNull();
+    for (const client of clients) await expect(client.query(api.account.exportData, {})).rejects.toThrow("Authentication required");
+    expect((await request(t, "/sign-in/email", { email, password })).status).toBe(401);
+    expect((await (await request(t, "/get-session", undefined, otherCookie)).json()).user.email).toBe(otherEmail);
+    await t.run(async ctx => {
+      for (const model of ["user", "session", "account"] as const) {
+        expect(await ctx.runQuery(components.betterAuth.adapter.findOne, { model,
+          where: [{ field: model === "user" ? "_id" : "userId", value: owner.authId }] })).toBeNull();
+      }
+      expect(await ctx.db.get(owner._id)).toBeNull();
+      expect(await ctx.db.query("jobs").withIndex("by_owner_created_at", q => q.eq("ownerId", owner._id)).collect()).toEqual([]);
+      expect((await ctx.db.query("users").collect()).map(row => row.authId)).not.toContain(owner.authId);
+    });
+    // Verification/recovery records remain component-managed and expiry-bound;
+    // this test makes no assertion of physical removal from providers/backups.
+  });
+
   test("hosted local-owner action rejects even the correct operator credential before side effects", async () => {
     const t = deployment();
     for (const selected of ["", "prod:tests", "dev:tests"]) {

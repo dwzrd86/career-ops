@@ -300,3 +300,10 @@ schema inventory, explicit export limits, bounded cleanup, retained billing
 liabilities and the separate Better Auth/private-data boundary. Export v5
 includes hosted consent/request and owner-usage metadata; overflow fails instead
 of producing a silently truncated download. Cleanup tests run in `npm run test:auth`.
+
+For focused two-owner cleanup coverage, run
+`npx vitest run --config vitest.auth.config.ts convex/accountLifecycle.test.ts convex/hostedAuth.test.ts`.
+These in-memory tests exercise all export capacity boundaries, foreign IDs,
+bounded cleanup, queued/in-flight deletion, retained unknown billing liabilities,
+late provider output and Better Auth's supported deletion/session flow. Provider,
+mail and bot transports are fictional; no hosted certification is implied.
