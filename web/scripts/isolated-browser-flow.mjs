@@ -19,6 +19,28 @@ async function expectVisible(page, locator, label) {
   assert.ok(await locator.isVisible(), `${label} was not visible`);
 }
 
+// Check every export surface against the same review state, including browser Print.
+async function expectExportEligibility(page, studio, eligible, label) {
+  for (const name of ["Download Word", "Download text", "Print / Save PDF"]) {
+    assert.equal(await studio.getByRole("button", { name, exact: true }).isEnabled(), eligible, `${label}: ${name}`);
+  }
+  await page.emulateMedia({ media: "print" });
+  assert.equal(await page.locator(".resume-print pre").count(), eligible ? 1 : 0, `${label}: direct browser Print`);
+  await page.emulateMedia({ media: "screen" });
+}
+
+async function keyboardPreparationStep(page, preparation, action, destination) {
+  const button = preparation.getByRole("button", { name: action, exact: true });
+  // Start from the role selector and reach the action using actual keyboard tabs.
+  for (let tabs = 0; tabs < 60; tabs++) {
+    if (await button.evaluate(element => document.activeElement === element)) break;
+    await page.keyboard.press("Shift+Tab");
+  }
+  assert.equal(await button.evaluate(element => document.activeElement === element), true, `${action} is in keyboard order`);
+  await page.keyboard.press("Enter");
+  assert.equal(await destination.evaluate(element => document.activeElement === element), true, `${action} focuses its editor`);
+}
+
 async function main() {
   const productionCsp = process.argv.includes("--production-csp");
   let outputDirectory;
@@ -51,6 +73,14 @@ async function main() {
     context = await browser.newContext();
     const page = await context.newPage();
     const pageErrors = [];
+    const ownerEndpointRequests = [];
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith("/__career_ops/") ||
+        (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.origin !== new URL(baseUrl).origin)) {
+        ownerEndpointRequests.push(url.pathname);
+      }
+    });
     page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.addInitScript(() => {
       window.__cspViolations = [];
@@ -258,7 +288,10 @@ async function main() {
     assert.equal(await targetRole.evaluate(element => document.activeElement === element), true, "pipeline action moves keyboard focus into Resume Studio");
     const preparation = studio.getByRole("region", { name: "Prepare this application", exact: true });
     await expectVisible(page, preparation.getByText("Next: Add source resume.", { exact: true }), "first preparation step");
-    await preparation.getByRole("button", { name: "Add source resume", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectExportEligibility(page, studio, false, "empty mobile bundle");
+    await targetRole.focus();
+    await keyboardPreparationStep(page, preparation, "Add source resume", studio.getByLabel("Source resume", { exact: true }));
     assert.equal(await studio.getByLabel("Source resume", { exact: true }).evaluate(element => document.activeElement === element), true, "next step focuses source evidence");
     assert.equal(await preparation.getByRole("listitem").count(), 5);
     const sourceInput = studio.getByLabel("Import source resume", { exact: true });
@@ -267,7 +300,9 @@ async function main() {
     await sourceInput.setInputFiles({ name: "resume.TXT", mimeType: "text/plain", buffer: Buffer.from(`\uFEFF${sourceText}\r\n`) });
     await expectVisible(page, studio.getByText(/Source resume imported locally\./), "source import confirmation");
     assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), sourceText);
-    await preparation.getByRole("button", { name: "Add job description", exact: true }).click();
+    await targetRole.focus();
+    await keyboardPreparationStep(page, preparation, "Add job description", studio.getByLabel("Job description", { exact: true }));
+    await page.setViewportSize({ width: 1280, height: 900 });
     assert.equal(await studio.getByLabel("Job description", { exact: true }).evaluate(element => document.activeElement === element), true, "next step focuses the missing posting");
     for (const [name, contents, message] of [
       ["resume.pdf", "%PDF", "Choose a .txt or .md source resume saved as UTF-8 plain text."],
@@ -345,6 +380,16 @@ async function main() {
       await expectVisible(page, hostedGenerate, "hosted generator without local endpoint");
       assert.equal(await hostedGenerate.isEnabled(), false, "requires a saved revision and consent");
       await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
+      await expectExportEligibility(page, studio, false, "saved unreviewed bundle");
+      await hostedConsent.check();
+      const savedPosting = await studio.getByLabel("Job description", { exact: true }).inputValue();
+      await studio.getByLabel("Job description", { exact: true }).fill(savedPosting + "\nChanged requirement");
+      assert.equal(await hostedConsent.isChecked(), false, "hosted evidence edits clear sharing consent");
+      assert.equal(await hostedGenerate.isEnabled(), false, "unsaved evidence cannot generate");
+      await studio.getByLabel("Job description", { exact: true }).fill(savedPosting);
+      assert.equal(await hostedConsent.isChecked(), false, "restoring evidence cannot resurrect hosted consent");
+      assert.equal(await hostedGenerate.isEnabled(), false, "restored but unsaved evidence still requires save");
+      await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
       await hostedConsent.check();
       assert.equal(await hostedGenerate.isEnabled(), true);
       page.once("dialog", dialog => dialog.accept());
@@ -352,10 +397,12 @@ async function main() {
       await expectVisible(page, studio.getByRole("button", { name: "Generating hosted draft…", exact: true }), "hosted pending state");
       assert.equal(await studio.getByLabel("Source resume", { exact: true }).isEnabled(), false);
       assert.equal(await targetRole.isEnabled(), false);
+      await expectExportEligibility(page, studio, false, "pending hosted request");
       await page.evaluate(() => window.__completeHosted());
       await expectVisible(page, studio.getByText("Hosted GLM draft saved. Review changed lines and facts before approving and exporting.", { exact: true }), "hosted saved draft arrival");
       assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
       assert.equal(await hostedConsent.isChecked(), false, "fresh consent required for regeneration");
+      await expectExportEligibility(page, studio, false, "arrived hosted draft requires factual review");
       for (const [reason, text] of [["quota", "Monthly quota exhausted"], ["budget", "shared AI budget is exhausted"], ["unavailable", "Hosted generation is unavailable"]]) {
         await page.evaluate(reason => window.__hostedAvailability(reason), reason);
         await expectVisible(page, studio.getByText(text, { exact: false }), `${reason} availability`);
@@ -365,8 +412,14 @@ async function main() {
       await hostedConsent.check();
       page.once("dialog", dialog => dialog.accept());
       await hostedGenerate.click();
+      const retainedDraft = await studio.getByLabel("Resume text", { exact: true }).inputValue();
+      const retainedSource = await studio.getByLabel("Source resume", { exact: true }).inputValue();
       await page.evaluate(() => window.__completeHosted("providerTimeout"));
       await expectVisible(page, studio.getByText(/Provider timed out/), "safe timeout recovery");
+      assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), retainedDraft, "timeout preserves prior draft");
+      assert.equal(await studio.getByLabel("Source resume", { exact: true }).inputValue(), retainedSource, "timeout preserves source");
+      assert.equal(await hostedConsent.isChecked(), false, "retry requires fresh explicit consent");
+      await expectExportEligibility(page, studio, false, "failed hosted request retains unreviewed draft");
       await hostedConsent.check();
       page.once("dialog", dialog => dialog.accept());
       await hostedGenerate.click();
@@ -440,11 +493,16 @@ async function main() {
     await studio.locator("summary").filter({ hasText: /^Review \d+ changed or added lines/ }).click();
     await expectVisible(page, studio.getByText(/Skills in the draft absent from source wording: React/), "unsupported skill warning");
     await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).check();
+    await expectExportEligibility(page, studio, true, "reviewed unsaved draft may export");
+    await reviewFacts.uncheck();
+    await expectExportEligibility(page, studio, false, "revoking factual approval blocks all exports");
+    await reviewFacts.check();
     await preparation.getByRole("button", { name: "Save reviewed bundle", exact: true }).click();
     assert.equal(await studio.getByRole("button", { name: "Save bundle", exact: true }).evaluate(element => document.activeElement === element), true, "save navigation focuses the existing save control");
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
-    await expectVisible(page, studio.getByText(`Saved revision ${productionCsp ? 5 : 1}.`, { exact: true }), "saved bundle revision");
+    await expectVisible(page, studio.getByText(`Saved revision ${productionCsp ? 6 : 1}.`, { exact: true }), "saved bundle revision");
     await expectVisible(page, guide.getByText("4 of 4 steps complete", { exact: true }), "saved first application progress");
+    await expectExportEligibility(page, studio, true, "reviewed and saved bundle");
     if (process.env.CAREER_OPS_BETA_SCREENSHOT && !productionCsp) {
       await page.setViewportSize({ width: 1440, height: 1050 });
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -463,6 +521,7 @@ async function main() {
     await page.waitForFunction(() => document.querySelector('[aria-label="Source resume"]').disabled === false);
     if (!productionCsp) assert.equal(await sharingConsent.isChecked(), false, "another role cannot inherit sharing permission");
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "", "another role does not inherit the saved draft");
+    await expectExportEligibility(page, studio, false, "different role cannot export previous draft");
     await prepareResume.click();
     await page.waitForFunction(() => document.querySelector('[aria-label="Resume text"]').value.includes("Built Python automation"));
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), true, "pipeline navigation restores saved review state");
@@ -480,6 +539,7 @@ async function main() {
     assert.equal(await studio.getByLabel("Job description", { exact: true }).inputValue(), "SQL and AWS required.\nBuild reliable reporting.");
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+    await expectExportEligibility(page, studio, false, "source reuse cannot inherit review eligibility");
     page.once("dialog", dialog => dialog.accept());
     await discoveredTarget.selectOption(originalTarget);
     const downloadReady = page.waitForEvent("download");
@@ -511,6 +571,7 @@ async function main() {
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-", "Chromium renders a real PDF from the reviewed print layout");
     await page.emulateMedia({ media: "screen" });
     await studio.getByLabel("Resume text", { exact: true }).fill("Updated draft");
+    await expectExportEligibility(page, studio, false, "editing clears every export gate");
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
     assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
     await page.emulateMedia({ media: "print" });
@@ -524,7 +585,7 @@ async function main() {
     await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "Updated draft");
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
-    await expectVisible(page, studio.getByText(`Saved revision ${productionCsp ? 6 : 2}.`, { exact: true }), "updated unreviewed bundle");
+    await expectVisible(page, studio.getByText(`Saved revision ${productionCsp ? 7 : 2}.`, { exact: true }), "updated unreviewed bundle");
 
     await expectVisible(page, studio.getByRole("button", { name: "Ready to export (0)", exact: true }), "editing clears queue readiness after saving");
     await studio.getByRole("button", { name: "Needs review (1)", exact: true }).click();
@@ -549,6 +610,8 @@ async function main() {
     await expectVisible(page, page.locator("h1").filter({ hasText: "Pipeline" }), "signed-in dashboard");
     assert.equal(await page.locator("#resume-studio").getByLabel("Resume text", { exact: true }).inputValue(), "");
     await expectVisible(page, page.getByText("Security regression role", { exact: true }), "persisted role");
+    assert.equal(await settings.getByRole("textbox", { name: "Target role", exact: true }).inputValue(), "Security Architect", "saved target survives a fresh authenticated render");
+    assert.equal(await settings.getByLabel("Enable discovery").isChecked(), true);
     await studio.getByLabel("Resume target role", { exact: true }).selectOption({ label: "Example Company · Security regression role" });
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "Updated draft");
     assert.equal(await studio.getByRole("checkbox", { name: "I reviewed the facts, contact details, and relevance for this role." }).isChecked(), false);
@@ -582,6 +645,7 @@ async function main() {
     assert.equal(mobileWidth.page <= mobileWidth.viewport, true, `mobile dashboard has horizontal overflow: ${JSON.stringify(mobileWidth)}`);
     assert.deepEqual(pageErrors, [], "The workflow must have no browser runtime errors");
     if (productionCsp) {
+      assert.deepEqual(ownerEndpointRequests, [], "hosted signup through exports must never contact an owner-machine endpoint");
       assert.deepEqual(await page.evaluate(() => window.__cspViolations), [], "The workflow must have no CSP violations");
       // Prove enforcement rather than merely checking the header is present.
       let offOriginRequests = 0;
@@ -606,6 +670,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error.message);
+  console.error(error);
   process.exitCode = 1;
 });

@@ -178,6 +178,14 @@ fixtures). `convex/hostedAuth.test.ts` covers invite expiry/reuse, bot and missi
 configuration failures, verification gates, password reset expiry/reuse and
 session revocation, and hosted rejection of local-owner credentials. Browser
 checks cover safe error/recovery messages and the compiled local-owner gate.
+Both browser workflows reuse the existing account fixture for target-profile save,
+discovery approval/posting prefill, source reuse, review/reset/save and exact
+Word/text/PDF eligibility (including direct browser Print). At 390px, keyboard
+navigation reaches the first incomplete preparation action and focuses its editor.
+The compiled-CSP workflow also checks saved-evidence/consent resets, hosted draft
+arrival, timeout preservation, conflicting saves and zero owner-machine endpoint
+requests across signup through exports. The development workflow retains local
+agent coverage. Word XML, downloaded text and rendered PDF wording remain checked.
 These fixtures do not certify live email, Turnstile, or deployed accounts.
 
 ## Data and secret handling
