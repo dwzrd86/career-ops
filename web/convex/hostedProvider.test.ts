@@ -189,3 +189,20 @@ for (const [code, failureCode] of [["1113", "providerBalance"], ["1302", "provid
     expect(JSON.stringify(state.request)).not.toContain("private diagnostics");
   });
 }
+
+// A valid-looking draft cannot turn incomplete/inconsistent billing into a refund.
+test.each([
+  { prompt_tokens: -1, completion_tokens: 100, total_tokens: 99 },
+  { prompt_tokens: 2000.5, completion_tokens: 100, total_tokens: 2100.5 },
+  { prompt_tokens: 2000, completion_tokens: 100, total_tokens: 2000 },
+  { prompt_tokens: 2000, completion_tokens: 100 },
+  { prompt_tokens: "2000", completion_tokens: 100, total_tokens: 2100 },
+])("malformed billed usage retains the full reservation: %j", async usage => {
+  const f = await fixture();
+  network.mockResolvedValue(Response.json({ ...completion(), usage }));
+  await f.run(); await f.run();
+  expect(network).toHaveBeenCalledTimes(1);
+  expect((await f.state()).attempt).toMatchObject({ state: "unknown", reservedMicroUsd: 9200 });
+  expect((await f.state()).request?.status).toBe("failed");
+  expect((await f.state()).bundle).toMatchObject({ resume: "Existing reviewed draft", revision: 1 });
+});

@@ -263,4 +263,41 @@ describe("durable hosted AI admission (fictional data, no provider/network)", ()
     await t.mutation(internal.aiBudget.approvePrice, { ...price, inputMicroUsdPerMillion: 500_000_000, outputMicroUsdPerMillion: 1_000_000_000 });
     await expect(reserve(t, r)).rejects.toThrow("budget exhausted");
   });
+
+  test("duplicate late settlement across UTC rollover releases liability exactly once", async () => {
+    const t = fixture(); await setup(t);
+    vi.setSystemTime(Date.UTC(2026, 9, 31, 23, 59, 59, 999));
+    const id = await reserve(t, await request(t, await owner(t))); await claim(t, id);
+    await settle(t, id, null);
+    vi.setSystemTime(Date.UTC(2026, 10, 1));
+    expect(await Promise.all([settle(t, id, 6_000), settle(t, id, 6_000)])).toEqual([true, false]);
+    expect(await summary(t)).toMatchObject({ settledMicroUsd: 0, unresolvedMicroUsd: 0 });
+    expect(await t.run(ctx => ctx.db.query("aiBudgetMonths").unique()))
+      .toMatchObject({ month: "2026-10", settledMicroUsd: 6_000, reservedMicroUsd: 0 });
+    expect(await t.run(ctx => ctx.db.query("aiOwnerMonths").unique()))
+      .toMatchObject({ month: "2026-10", attempts: 1 });
+  });
+
+  test("a late over-reservation bill disables the new month too", async () => {
+    const t = fixture(); await setup(t);
+    const a = await owner(t, "a"), b = await owner(t, "b");
+    const id = await reserve(t, await request(t, a)); await claim(t, id); await settle(t, id, null);
+    vi.setSystemTime(Date.UTC(2026, 10, 1));
+    await settle(t, id, 9_000);
+    expect(await summary(t)).toMatchObject({ enabled: false, settledMicroUsd: 0, unresolvedMicroUsd: 0 });
+    await expect(reserve(t, await request(t, b))).rejects.toThrow("disabled");
+  });
+
+  test("re-enrollment cannot reset the same owner's 20-attempt quota", async () => {
+    const t = fixture(); await setup(t);
+    const a = await owner(t);
+    for (let i = 0; i < 20; i++) {
+      const id = await reserve(t, await request(t, a)); await claim(t, id); await settle(t, id, 1);
+    }
+    await t.mutation(internal.aiBudget.setPilotOwner, { ownerId: a, active: false });
+    await t.mutation(internal.aiBudget.setPilotOwner, { ownerId: a, active: true });
+    await expect(reserve(t, await request(t, a))).rejects.toThrow("quota exhausted");
+    expect(await summary(t)).toMatchObject({ pilotCount: 1, settledMicroUsd: 20, unresolvedMicroUsd: 0 });
+  });
+
 });

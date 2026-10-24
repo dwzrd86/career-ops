@@ -90,6 +90,17 @@ delivery, exhausted quota, timeout, invalid output and stale completions; failed
 generation keeps the previous draft and clears approval for export. All accounts,
 evidence and billing bounds in these tests are fictional.
 
+The same suite covers adversarial posting/resume instructions, unsupported
+credentials and metrics, wrong-provider/refusal/tool output, per-retry charges,
+and interrupted dispatch. Ledger tests use fake UTC clocks for rollover and late
+billing, duplicate settlement, the shared $8 ceiling, five pilot slots and the
+20-attempt quota (including re-enrollment). Provider usage-shape failures retain
+reservations. These tests verify capability boundaries and mandatory review;
+plain-text acceptance and literal evidence checks do not verify factual truth.
+Run the focused group with
+`npx vitest run --config vitest.auth.config.ts convex/aiBudget.test.ts convex/hostedProvider.test.ts convex/authorization.test.ts`.
+
+
 For the current beta test path, saved-progress guide, feature limits and release
 status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is
 implemented in the UI; publishing the hosted beta remains a separate release.
