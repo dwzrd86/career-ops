@@ -101,6 +101,16 @@ Run the focused group with
 `npx vitest run --config vitest.auth.config.ts convex/aiBudget.test.ts convex/hostedProvider.test.ts convex/authorization.test.ts`.
 
 
+Run the synthetic identity cutover rehearsal with
+`npm run test:auth -- convex/identityMigration.test.ts` (also part of `test:auth`).
+It uses a test-only transitional schema, actual signup/verification/reset routes,
+and `scripts/identity-migration-rehearsal.ts` inside a disposable transaction.
+The procedure preserves existing owner/job/bundle IDs and rejects ambiguous
+contacts, unverified identities and already-used replacement accounts. It is not
+a deployed migration endpoint or production cutover runner. Current required
+`users.authId` and legacy auth-table compatibility still need an approved expand
+schema, real occupancy evidence and backup/recovery verification before release.
+
 For the current beta test path, saved-progress guide, feature limits and release
 status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is
 implemented in the UI; publishing the hosted beta remains a separate release.
