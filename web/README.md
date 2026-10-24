@@ -83,6 +83,13 @@ frontend boundary, build into a disposable directory with
 `HOSTED_PROVIDER_BUILD_DIR=/absolute/disposable/build node --test scripts/hosted-provider-build.test.mjs`.
 Preserve release `dist`; use the production build guard for publishable artifacts.
 
+`npm run test:authorization` also exercises authenticated hosted requests through
+the actual scheduled worker with intercepted provider fetches. The integration
+cases cover cross-account isolation, queued access/evidence changes, duplicate
+delivery, exhausted quota, timeout, invalid output and stale completions; failed
+generation keeps the previous draft and clears approval for export. All accounts,
+evidence and billing bounds in these tests are fictional.
+
 For the current beta test path, saved-progress guide, feature limits and release
 status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is
 implemented in the UI; publishing the hosted beta remains a separate release.

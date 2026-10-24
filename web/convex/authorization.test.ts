@@ -1,6 +1,8 @@
 import betterAuthTest from "@convex-dev/better-auth/test";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { HOSTED_CONSENT_VERSION } from "./hostedResumes";
+import { PROVIDER_TIMEOUT_MS, ZAI_ENDPOINT } from "./hostedProvider";
 import { api, components, internal } from "./_generated/api";
 import { reservationEmailHash } from "./enrollmentCore";
 import schema from "./schema";
@@ -354,7 +356,7 @@ test("discovery approval creates a private resume target once and preserves trac
 
 
 describe("hosted resume request boundaries (fake deployment)", () => {
-  const consent = { provider: "zai", model: "glm-4.7", version: "2026-10-24-zai-selected-evidence-v1", shareSelectedEvidence: true } as const;
+  const consent = { provider: "zai", model: "glm-4.7", version: HOSTED_CONSENT_VERSION, shareSelectedEvidence: true } as const;
   async function fixture() {
     const deployment = createIsolatedDeployment();
     const a = await provisionDisposableAccount(deployment, "hosted-a");
@@ -496,4 +498,202 @@ describe("hosted resume request boundaries (fake deployment)", () => {
       expect(bundle).toMatchObject({ resume: saved.resume, revision: 1 });
     });
   });
+
+  describe("public intent through scheduled worker (fictional provider)", () => {
+    const price = { provider: "zai", model: "glm-4.7", inputMicroUsdPerMillion: 600_000,
+      outputMicroUsdPerMillion: 2_200_000, maxInputTokens: 8_000, maxTotalOutputTokens: 2_000,
+      evidence: "fictional-integration-bounds", validUntil: Date.UTC(2027, 0, 1) };
+    const response = () => ({ model: "glm-4.7", choices: [{ finish_reason: "stop",
+      message: { role: "assistant", content: "Fictional Candidate\nSQL reporting" } }],
+      usage: { prompt_tokens: 2000, completion_tokens: 100, total_tokens: 2100 } });
+    let network = vi.fn<typeof fetch>();
+    beforeEach(() => {
+      vi.useFakeTimers(); vi.setSystemTime(Date.UTC(2026, 9, 24, 12));
+      vi.stubEnv("HOSTED_AI_EXECUTION_ENABLED", "true");
+      vi.stubEnv("HOSTED_AI_ZAI_API_KEY", "fictional-integration-key");
+      vi.stubEnv("HOSTED_AI_ZAI_BOUND_EVIDENCE", price.evidence);
+      network = vi.fn(async () => Response.json(response()));
+      vi.stubGlobal("fetch", network);
+    });
+    afterEach(() => {
+      vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
+    });
+    // Compose the existing real-auth fixture; never mock authorization or worker mutations.
+    async function ready() {
+      const f = await fixture();
+      await f.deployment.mutation(internal.aiBudget.configure, { enabled: true, cutoffMicroUsd: 8_000_000 });
+      await f.deployment.mutation(internal.aiBudget.approvePrice, price);
+      await f.deployment.mutation(internal.aiBudget.setPilotOwner, { ownerId: f.a.userId as any, active: true });
+      return { ...f,
+        drain: () => f.deployment.finishAllScheduledFunctions(() => vi.runOnlyPendingTimers()),
+        bundle: () => f.a.client.query(api.resumeBundles.get, { jobId: f.jobId }),
+        rows: () => f.deployment.run(async ctx => ({
+          requests: await ctx.db.query("hostedResumeRequests").collect(),
+          attempts: await ctx.db.query("aiBudgetAttempts").collect(),
+        })),
+      };
+    }
+    async function revokeEnrollment(f: Awaited<ReturnType<typeof ready>>) {
+      await f.deployment.run(async ctx => {
+        const invite = await ctx.db.query("alphaInvites").withIndex("by_claimed_by", q => q.eq("claimedBy", f.a.userId as any)).unique();
+        await ctx.db.patch(invite!._id, { expiredAt: Date.now() });
+      });
+    }
+
+    test.each(["anonymous", "foreignJob", "noConsent", "oldConsent", "privacy", "enrollment", "revision", "unsavedJob"])(
+      "%s denial creates no intent, schedule, reservation or provider call", async boundary => {
+        const f = await ready();
+        let client = f.a.client, input = f.input;
+        if (boundary === "anonymous") client = f.deployment;
+        if (boundary === "foreignJob") client = f.b.client;
+        if (boundary === "noConsent") input = { ...input, consent: { ...consent, shareSelectedEvidence: false } } as any;
+        if (boundary === "oldConsent") input = { ...input, consent: { ...consent, version: "obsolete" } } as any;
+        if (boundary === "privacy") await f.deployment.run(ctx => ctx.db.patch(f.a.userId as any, { privacyPolicyVersion: "obsolete" }));
+        if (boundary === "enrollment") await revokeEnrollment(f);
+        if (boundary === "revision") input = { ...input, expectedRevision: 2 };
+        if (boundary === "unsavedJob") input = { ...input, jobId: await f.a.client.mutation(api.jobs.create, jobInput("unsaved-worker")) };
+        await expect(client.mutation(api.hostedResumes.request, input)).rejects.toThrow();
+        await f.drain();
+        expect(network).not.toHaveBeenCalled();
+        expect(await f.rows()).toEqual({ requests: [], attempts: [] });
+        expect(await f.deployment.run(ctx => ctx.db.system.query("_scheduled_functions").collect())).toEqual([]);
+        // A rejected request must not even clear the previously saved approval.
+        expect(await f.deployment.run(ctx => ctx.db.query("resumeBundles").collect())).toEqual([
+          expect.objectContaining({ resume: f.saved.resume, revision: 1, reviewedAt: expect.any(Number) }),
+        ]);
+      });
+
+    test.each(["consent", "privacy", "enrollment", "foreignBundle", "wrongJob", "revision", "role"])(
+      "%s changed while queued prevents the scheduled provider call", async boundary => {
+        const f = await ready();
+        const requestId = await f.a.client.mutation(api.hostedResumes.request, f.input);
+        if (boundary === "consent") await f.deployment.run(ctx => ctx.db.patch(requestId, { consentVersion: "obsolete" }));
+        if (boundary === "privacy") await f.deployment.run(ctx => ctx.db.patch(f.a.userId as any, { privacyPolicyVersion: "obsolete" }));
+        if (boundary === "enrollment") await revokeEnrollment(f);
+        if (boundary === "revision") await f.a.client.mutation(api.resumeBundles.save, { ...f.saved, expectedRevision: 1, reviewed: false });
+        if (boundary === "role") await f.deployment.run(ctx => ctx.db.patch(f.jobId, { title: "Changed role" }));
+        if (boundary === "foreignBundle" || boundary === "wrongJob") {
+          const client = boundary === "foreignBundle" ? f.b.client : f.a.client;
+          const jobId = await client.mutation(api.jobs.create, jobInput("different-role"));
+          await client.mutation(api.resumeBundles.save, { ...f.saved, jobId });
+          await f.deployment.run(async ctx => {
+            const bundle = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", (boundary === "foreignBundle" ? f.b : f.a).userId as any).eq("jobId", jobId)).unique();
+            await ctx.db.patch(requestId, { bundleId: bundle!._id });
+          });
+        }
+        const before = await f.deployment.run(ctx => ctx.db.query("resumeBundles").collect());
+        await f.drain();
+        expect(network).not.toHaveBeenCalled();
+        expect((await f.rows()).requests).toEqual([expect.objectContaining({ status: "failed" })]);
+        expect((await f.rows()).attempts).toEqual([]);
+        expect(await f.deployment.run(ctx => ctx.db.query("resumeBundles").collect())).toEqual(before);
+      });
+
+    test("concurrent public intents, scheduled delivery and worker redelivery produce one private, unreviewed result", async () => {
+      const f = await ready();
+      const outcomes = await Promise.allSettled([
+        f.a.client.mutation(api.hostedResumes.request, f.input),
+        f.a.client.mutation(api.hostedResumes.request, f.input),
+      ]);
+      expect(outcomes.filter(item => item.status === "fulfilled")).toHaveLength(1);
+      expect(outcomes.filter(item => item.status === "rejected")).toHaveLength(1);
+      const requestId = (await f.rows()).requests[0]._id;
+      expect(await f.bundle()).toMatchObject({ revision: 1, reviewedAt: null });
+      await expect(f.b.client.mutation(api.resumeBundles.save, { ...f.saved, expectedRevision: 1 })).rejects.toThrow("Job not found");
+      await expect(f.b.client.mutation(api.resumeBundles.remove, { jobId: f.jobId, expectedRevision: 1 })).rejects.toThrow("Job not found");
+      expect(await f.b.client.query(api.hostedResumes.status, { requestId })).toBeNull();
+      await f.drain();
+      await Promise.all([f.deployment.action(internal.hostedResumeWorker.execute, { requestId }),
+        f.deployment.action(internal.hostedResumeWorker.execute, { requestId })]);
+      expect(network).toHaveBeenCalledTimes(1);
+      expect(network.mock.calls[0][0]).toBe(ZAI_ENDPOINT);
+      expect((await f.rows()).attempts).toEqual([expect.objectContaining({ state: "settled" })]);
+      expect(await f.a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "succeeded" });
+      expect(await f.bundle()).toMatchObject({ resume: response().choices[0].message.content, revision: 2, reviewedAt: null });
+      expect(await f.b.client.query(api.hostedResumes.status, { requestId })).toBeNull();
+      expect(await f.b.client.query(api.resumeBundles.get, { jobId: f.jobId })).toBeNull();
+      expect(await f.b.client.query(api.resumeBundles.sources, {})).toEqual([]);
+      expect(await f.b.client.query(api.resumeBundles.summaries, {})).toEqual([]);
+    });
+
+    test("exhausted monthly quota fails queued intent without invoking the provider or changing draft", async () => {
+      const f = await ready();
+      await f.deployment.run(ctx => ctx.db.insert("aiOwnerMonths", { ownerId: f.a.userId as any, month: "2026-10", attempts: 20 }));
+      await f.a.client.mutation(api.hostedResumes.request, f.input);
+      await f.drain();
+      expect(network).not.toHaveBeenCalled();
+      expect((await f.rows()).attempts).toEqual([]);
+      expect((await f.rows()).requests[0].status).toBe("failed");
+      expect(await f.bundle()).toMatchObject({ resume: f.saved.resume, revision: 1, reviewedAt: null });
+      expect(await f.a.client.query(api.hostedResumes.availability, {})).toMatchObject({ reason: "quota", remaining: 0 });
+    });
+
+    test.each(["http", "transport", "malformedJson", "partial", "empty", "invalidText"])(
+      "%s response never marks partial output ready and redelivery never retries", async kind => {
+        const f = await ready();
+        network.mockImplementation(async () => {
+          if (kind === "http") return new Response("fictional private error", { status: 503 });
+          if (kind === "transport") throw new Error("fictional private error");
+          if (kind === "malformedJson") return new Response('{"choices":[');
+          const result = response();
+          if (kind === "partial") result.choices[0].finish_reason = "length";
+          if (kind === "empty") result.choices[0].message.content = "";
+          if (kind === "invalidText") result.choices[0].message.content = "\u0000partial";
+          return Response.json(result);
+        });
+        const requestId = await f.a.client.mutation(api.hostedResumes.request, f.input);
+        await f.drain();
+        await f.deployment.action(internal.hostedResumeWorker.execute, { requestId });
+        expect(network).toHaveBeenCalledTimes(1);
+        expect(await f.a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "failed" });
+        expect(await f.bundle()).toMatchObject({ resume: f.saved.resume, revision: 1, reviewedAt: null });
+        expect(JSON.stringify((await f.rows()).requests)).not.toContain("fictional private error");
+      });
+
+    test("scheduled transport timeout leaves review cleared and prevents a second provider call", async () => {
+      const f = await ready();
+      let entered!: () => void;
+      const started = new Promise<void>(resolve => { entered = resolve; });
+      network.mockImplementation(() => { entered(); return new Promise(() => {}); });
+      const requestId = await f.a.client.mutation(api.hostedResumes.request, f.input);
+      vi.advanceTimersByTime(0);
+      await started;
+      await vi.advanceTimersByTimeAsync(PROVIDER_TIMEOUT_MS);
+      await f.deployment.finishInProgressScheduledFunctions();
+      await f.deployment.action(internal.hostedResumeWorker.execute, { requestId });
+      expect(network).toHaveBeenCalledTimes(1);
+      expect(await f.a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "failed", failureCode: "providerTimeout" });
+      expect((await f.rows()).attempts[0].state).toBe("unknown");
+      expect(await f.bundle()).toMatchObject({ resume: f.saved.resume, revision: 1, reviewedAt: null });
+    });
+
+    test.each(["edit", "privacy", "enrollment", "foreignBundle"])(
+      "%s changed during inference rejects late provider output", async boundary => {
+        const f = await ready();
+        const foreignJob = await f.b.client.mutation(api.jobs.create, jobInput("late-foreign"));
+        await f.b.client.mutation(api.resumeBundles.save, { ...f.saved, jobId: foreignJob });
+        network.mockImplementation(async () => {
+          if (boundary === "edit") await f.a.client.mutation(api.resumeBundles.save, { ...f.saved, resume: "New human edit", expectedRevision: 1 });
+          if (boundary === "privacy") await f.deployment.run(ctx => ctx.db.patch(f.a.userId as any, { privacyPolicyVersion: "obsolete" }));
+          if (boundary === "enrollment") await revokeEnrollment(f);
+          if (boundary === "foreignBundle") await f.deployment.run(async ctx => {
+            const request = (await ctx.db.query("hostedResumeRequests").collect())[0];
+            const bundle = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", f.b.userId as any).eq("jobId", foreignJob)).unique();
+            await ctx.db.patch(request._id, { bundleId: bundle!._id });
+          });
+          return Response.json(response());
+        });
+        await f.a.client.mutation(api.hostedResumes.request, f.input);
+        await f.drain();
+        expect(network).toHaveBeenCalledTimes(1);
+        const rows = await f.rows();
+        expect(rows.requests[0]).toMatchObject({ status: "failed", failureCode: ["privacy", "enrollment"].includes(boundary) ? "accessRevoked" : "staleEvidence" });
+        expect(rows.attempts[0].state).toBe("settled");
+        expect(await f.deployment.run(ctx => ctx.db.query("resumeBundles").collect())).toEqual(expect.arrayContaining([
+          expect.objectContaining({ jobId: f.jobId, resume: boundary === "edit" ? "New human edit" : f.saved.resume, revision: boundary === "edit" ? 2 : 1 }),
+          expect.objectContaining({ jobId: foreignJob, resume: f.saved.resume, revision: 1 }),
+        ]));
+      });
+  });
+
 });
