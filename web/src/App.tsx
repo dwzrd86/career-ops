@@ -393,13 +393,16 @@ function DiscoveryReviewQueue() {
 
 function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   const reportError = useSafeErrorReporter();
-  const resetToken = new URLSearchParams(window.location.search).get("token");
+  const callbackParameters = new URLSearchParams(window.location.search);
+  const resetToken = callbackParameters.get("token");
   const [mode, setMode] = useState<"signIn" | "signUp" | "verify" | "reset" | "resetVerification">(
     resetToken ? "resetVerification" : initialMode,
   );
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(callbackParameters.has("error")
+    ? "That verification or reset link is invalid or expired. Request a new link below."
+    : "");
   const [notice, setNotice] = useState("");
   const [botProtectionToken, setBotProtectionToken] = useState("");
   const [botProtectionError, setBotProtectionError] = useState("");
@@ -471,6 +474,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   }
 
   function startOver(nextMode: "signIn" | "signUp" | "reset") {
+    window.history.replaceState({}, "", window.location.pathname);
     setMode(nextMode);
     clearMessages();
   }
@@ -498,22 +502,22 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
       if (mode === "reset") {
         // This response is intentionally identical for known and unknown addresses.
         const result = await authClient.requestPasswordReset({ email: submittedEmail, redirectTo: window.location.origin });
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) throw result.error;
         setEmail(submittedEmail);
-        setNotice("If an account matches that address, a reset link is on its way.");
+        setNotice("If an account matches that address, check your inbox for a reset link. If no email arrives, retry later or contact your beta host.");
       } else if (mode === "verify") {
         const result = await authClient.sendVerificationEmail({ email, callbackURL: window.location.origin });
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) throw result.error;
         setNotice("If the address is eligible for verification, a new link is on its way.");
       } else if (isResetVerification) {
         if (!resetToken) throw new Error("Missing reset token");
         const result = await authClient.resetPassword({ newPassword: password, token: resetToken });
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) throw result.error;
         window.history.replaceState({}, "", window.location.pathname);
         setMode("signIn");
         setNotice("Password reset. Sign in with your new password.");
       } else if (mode === "signUp") {
-        if (localOwnerSetup) {
+        if (import.meta.env.DEV && localOwnerSetup) {
           const response = await fetch("/__career_ops/local-owner", { method: "POST",
             headers: { "Content-Type": "application/json", "X-Career-Ops-Local": "1" },
             body: JSON.stringify({ email: submittedEmail, password }) });
@@ -531,21 +535,33 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           name: submittedEmail.split("@")[0] || "Meritwake user",
           password,
         } as Parameters<typeof authClient.signUp.email>[0]);
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) throw result.error;
         setEmail(submittedEmail);
         setMode("verify");
         setNotice("Check your inbox for a verification link before accessing your pipeline.");
       } else {
         const result = await authClient.signIn.email({ email: submittedEmail, password, rememberMe: true });
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) throw result.error;
       }
-    } catch {
+    } catch (failure) {
       reportError("auth.submit", "authenticationFailed");
-      if (mode === "reset") {
+      const code = typeof failure === "object" && failure !== null && "code" in failure ? failure.code : undefined;
+      if (code === "EMAIL_NOT_VERIFIED" && mode === "signIn") {
         setEmail(submittedEmail);
-        setNotice("If an account matches that address, a reset link is on its way.");
+        setMode("verify");
+        setNotice("Verify your email before signing in. You can request a new link below.");
+      } else if (code === "AUTH_CONFIGURATION_UNAVAILABLE") {
+        setError("Authentication is not configured for this workspace. Contact your beta host.");
+      } else if (mode === "reset") {
+        // Delivery failures must not reveal whether the address has an account.
+        setEmail(submittedEmail);
+        setNotice("If an account matches that address, check your inbox for a reset link. If no email arrives, retry later or contact your beta host.");
+      } else if (code === "AUTH_SERVICE_UNAVAILABLE") {
+        setError("Email or authentication service is temporarily unavailable. Contact your beta host or try again later.");
+      } else if (code === "BOT_VERIFICATION_FAILED") {
+        setError("The bot check failed. Complete a fresh check and try again.");
       } else {
-        setError(mode === "verify" || isResetVerification ? "We could not complete that request. Request a new link and try again." : "Authentication failed. Check your details and try again.");
+        setError(mode === "verify" || isResetVerification ? "We could not complete that request. Request a new link and try again." : mode === "signUp" ? "Account creation could not finish. Check your invite and details, retry the bot check, or contact your beta host. If you just tried this invite, its reservation may take 10 minutes to clear." : "Sign-in could not finish. Check your details or contact your beta host if the problem continues.");
       }
     } finally {
       // Turnstile tokens are single-use, so each server-side signup attempt needs a fresh one.
@@ -562,11 +578,11 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
     setIsSubmitting(true);
     try {
       const result = await authClient.sendVerificationEmail({ email, callbackURL: window.location.origin });
-      if (result.error) throw new Error(result.error.message);
+      if (result.error) throw result.error;
       setNotice("If the address is eligible for verification, a new link is on its way.");
     } catch {
       reportError("auth.resend-verification", "authenticationFailed");
-      setNotice("If the address is eligible for verification, a new link is on its way.");
+      setError("Verification email could not be requested. Contact your beta host or try again later.");
     } finally {
       setIsSubmitting(false);
     }
@@ -596,13 +612,13 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           {isPasswordMode || isResetVerification ? (
             <label>
               {isResetVerification ? "New password" : "Password"}
-              <input autoComplete={mode === "signIn" ? "current-password" : "new-password"} minLength={12} name="password" required type="password" />
+              <input autoComplete={mode === "signIn" ? "current-password" : "new-password"} maxLength={128} minLength={12} name="password" required type="password" />
             </label>
           ) : null}
           {mode === "signUp" || isResetVerification ? (
             <label>
               Confirm password
-              <input autoComplete="new-password" minLength={12} name="confirmation" required type="password" />
+              <input autoComplete="new-password" maxLength={128} minLength={12} name="confirmation" required type="password" />
             </label>
           ) : null}
           {mode === "signUp" && !localOwnerSetup ? (
@@ -621,7 +637,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           }}>Retry bot check</button></div>}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {notice ? <p className="access-notice" role="status">{notice}</p> : null}
-          {mode === "signUp" && localOwnerSetup && <p className="access-notice">Create your first local owner account. No invite or email verification is needed. Use an email as your sign-in name; keep your password safe.</p>}
+          {mode === "signUp" && import.meta.env.DEV && localOwnerSetup && <p className="access-notice">Create your first local owner account. No invite or email verification is needed. Use an email as your sign-in name; keep your password safe.</p>}
           <button className="button primary access-submit" disabled={isSubmitting || (mode === "signUp" && !localOwnerSetup && !botProtectionToken)} type="submit">
             {isSubmitting ? <LoaderCircle className="spin" size={16} /> : <LockKeyhole size={16} />}
             {submitLabel}

@@ -128,6 +128,58 @@ Set browser values in Netlify and server values in Convex. Never copy a server s
 
 Missing account-lifecycle configuration fails closed. Configure a real verified Resend sender and a production Turnstile hostname before a production cutover.
 
+### Meritwake beta signup and recovery configuration
+
+The October 24 inventory has **no approved isolated beta pair**. The existing
+candidate is Netlify `dmd-career-ops` and Convex `beaming-bass-637`; existing
+account/data impact remains unknown. The following are required values **if
+that pair is approved**, not permission to configure or replace its auth.
+An isolated pair must substitute its own exact origins throughout before release.
+
+| Store | Setting | Candidate value / requirement |
+| --- | --- | --- |
+| Convex | `SITE_URL` | `https://dmd-career-ops.netlify.app` (exact frontend origin; no preview wildcard). |
+| Convex platform | `CONVEX_SITE_URL` | Built-in `https://beaming-bass-637.convex.site`; do not override it. |
+| Convex secret | `BETTER_AUTH_SECRET` | Dedicated high-entropy Better Auth secret, never a browser value. |
+| Convex | `AUTH_RESEND_FROM` | `Meritwake <meritwake@dmdtechnologies.net>`. Verify `dmdtechnologies.net` and the sender in the existing Resend account; a sender identity does not establish a receiving support mailbox. |
+| Convex secret | `AUTH_RESEND_KEY` | Resend sending credential authorized for the verified domain; no real email sent during source preparation. |
+| Convex | `AUTH_TURNSTILE_HOSTNAME` | `dmd-career-ops.netlify.app` (hostname only, no scheme/path). |
+| Convex secret | `AUTH_TURNSTILE_SECRET` | Server credential for the same Turnstile widget as the public site key. |
+| Convex secrets | `AUTH_ABUSE_KEY`, `ENROLLMENT_INVITE_KEY`, `ENROLLMENT_ADMIN_KEY` | Separate high-entropy HMAC/administration credentials; preserve rate limits and single-use invite issuance. |
+| Convex | `APP_DEPLOYMENT_VERSION` | Reviewed release identifier for metadata-only diagnostics. |
+| Netlify public build settings | `VITE_CONVEX_URL`, `VITE_CONVEX_SITE_URL` | `https://beaming-bass-637.convex.cloud` and `https://beaming-bass-637.convex.site`. |
+| Netlify public build settings | `VITE_TURNSTILE_SITE_KEY` | Public key for a production widget allowing exactly `dmd-career-ops.netlify.app`; never use test keys for the pilot. |
+| Netlify public build settings | `VITE_APP_VERSION`, `NODE_VERSION`, `CONVEX_DEV_DEPLOYMENT_URLS` | Release identifier, `24`, and known development cloud endpoints for the build guard. |
+| Netlify build secret | `CONVEX_DEPLOY_KEY` | Exact approved beta deployment only; not the personal development deployment. |
+
+The browser uses `https://beaming-bass-637.convex.site/api/auth` for Better
+Auth. Signup and resend verification send `callbackURL` equal to
+`https://dmd-career-ops.netlify.app`; recovery sends the same origin as
+`redirectTo`. Backend email links use `/api/auth/verify-email` or
+`/api/auth/reset-password/<opaque-token>` on the Convex site. Better Auth
+validates these redirects against `SITE_URL`; the frontend handles the returned
+`token` or a safe fixed error notice without displaying query values. Both
+verification and password-reset links expire after 15 minutes. Reset revokes
+existing sessions. Do not record actual email links or tokens in reports.
+
+Missing signup settings fail before invite reservation; missing bot site keys
+and bot timeout/retry errors have visible UI notices. Missing server
+configuration returns a fixed configuration error without exposing names or
+values. A sign-in rejected for unverified email offers resend verification.
+Reset responses remain account-neutral, including delivery failures. Turnstile
+and Resend calls have a 10-second timeout and no automatic retries; after an
+ambiguous signup failure, check verification/sign-in before reusing its invite,
+or allow its 10-minute reservation to expire.
+
+Never configure `AUTH_LOCAL_OWNER_SETUP`, copy its operator credentials, or
+publish the loopback bootstrap bridge on a hosted target. The browser's local
+setup probe and signup path require Vite development mode; the backend also
+requires matching `dev:` selection, loopback `SITE_URL`, and operator key.
+`third-wolverine-369` and `career-ops-local.service` remain excluded and unchanged.
+Real sender delivery, widget hostname and multi-account lifecycle certification
+remain release checks; local fixtures cannot establish them. See [[RELEASE_RUNBOOK]]
+and [[LOCAL_OWNER_SETUP]].
+
 ### Provider configuration audit and rotation ownership
 
 The technical owner performs this audit by **name and scope only**. Never

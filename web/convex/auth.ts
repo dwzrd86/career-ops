@@ -2,7 +2,7 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { requireActionCtx } from "@convex-dev/better-auth/utils";
 import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { DataModel } from "./_generated/dataModel";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -17,14 +17,23 @@ type SecurityEnvironment =
   | "AUTH_RESEND_KEY"
   | "AUTH_TURNSTILE_HOSTNAME"
   | "AUTH_TURNSTILE_SECRET"
+  | "ENROLLMENT_INVITE_KEY"
   | "CONVEX_SITE_URL"
   | "SITE_URL";
 
-const reservationDurationMs = 10 * 60 * 1000;
+function authenticationUnavailable() {
+  return new APIError("SERVICE_UNAVAILABLE", {
+    code: "AUTH_SERVICE_UNAVAILABLE",
+    message: "Authentication is temporarily unavailable. Contact your beta host or try again later.",
+  });
+}
 
 function requiredSecurityEnvironment(name: SecurityEnvironment) {
   const value = process.env[name];
-  if (!value) throw new Error("Authentication temporarily unavailable. Please try again later.");
+  if (!value?.trim()) throw new APIError("SERVICE_UNAVAILABLE", {
+    code: "AUTH_CONFIGURATION_UNAVAILABLE",
+    message: "Authentication is not configured. Contact your beta host.",
+  });
   return value;
 }
 
@@ -47,6 +56,7 @@ function requireAccountLifecycleConfiguration(flow: "signUp" | "passwordReset" |
   if (flow === "signUp") {
     requiredSecurityEnvironment("AUTH_TURNSTILE_HOSTNAME");
     requiredSecurityEnvironment("AUTH_TURNSTILE_SECRET");
+    requiredSecurityEnvironment("ENROLLMENT_INVITE_KEY");
   }
 }
 
@@ -64,21 +74,22 @@ async function privacyPreservingKey(email: string) {
 
 async function verifySignupBotToken(token: unknown) {
   if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
-    throw new Error("Authentication temporarily unavailable. Please try again later.");
+    throw new APIError("BAD_REQUEST", { code: "BOT_VERIFICATION_FAILED", message: "Complete a fresh bot check and try again." });
   }
   const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({ response: token, secret: requiredSecurityEnvironment("AUTH_TURNSTILE_SECRET") }),
     headers: { "Content-Type": "application/json" },
     method: "POST",
-  });
+  }).catch(() => { throw authenticationUnavailable(); });
   const result: unknown = await response.json().catch(() => null);
   if (!response.ok || typeof result !== "object" || result === null || (result as { success?: unknown }).success !== true) {
-    throw new Error("Authentication temporarily unavailable. Please try again later.");
+    throw new APIError("BAD_REQUEST", { code: "BOT_VERIFICATION_FAILED", message: "Complete a fresh bot check and try again." });
   }
   const expectedHostname = requiredSecurityEnvironment("AUTH_TURNSTILE_HOSTNAME");
   const { action, hostname } = result as { action?: unknown; hostname?: unknown };
   if (hostname !== expectedHostname || (action !== undefined && action !== "signup")) {
-    throw new Error("Authentication temporarily unavailable. Please try again later.");
+    throw new APIError("BAD_REQUEST", { code: "BOT_VERIFICATION_FAILED", message: "Complete a fresh bot check and try again." });
   }
 }
 
@@ -90,14 +101,15 @@ async function sendAuthenticationEmail(ctx: GenericCtx<DataModel>, to: string, s
   requireAccountLifecycleConfiguration("verification");
   requireActionCtx(ctx);
   const response = await fetch("https://api.resend.com/emails", {
+    signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({ from: requiredSecurityEnvironment("AUTH_RESEND_FROM"), subject, text, to: [to] }),
     headers: {
       Authorization: `Bearer ${requiredSecurityEnvironment("AUTH_RESEND_KEY")}`,
       "Content-Type": "application/json",
     },
     method: "POST",
-  });
-  if (!response.ok) throw new Error("Could not send authentication email");
+  }).catch(() => { throw authenticationUnavailable(); });
+  if (!response.ok) throw authenticationUnavailable();
 }
 
 async function claimReservedInvite(ctx: MutationCtx, email: string, userId: Id<"users">) {
@@ -204,6 +216,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       minPasswordLength: 12,
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,
+      resetPasswordTokenExpiresIn: 15 * 60,
       sendResetPassword: async ({ user, url }) => {
         await sendAuthenticationEmail(ctx, user.email, "Reset your Meritwake password", `Use this link to reset your Meritwake password. It expires in 15 minutes:\n${url}`);
       },

@@ -101,6 +101,8 @@ Netlify build setting, client code, ticket, or email body.
 Set the required Better Auth, Resend, Turnstile, and callback configuration
 before deployment. The exact value-free names and secret-store boundaries are
 documented in [the security policy](../docs/SECURITY.md#required-deployment-configuration).
+The [Meritwake beta auth handoff](../docs/SECURITY.md#meritwake-beta-signup-and-recovery-configuration)
+specifies the candidate sender, hostname, callback URLs, and secret-store boundaries.
 Do not store job-board passwords, browser cookies, real resumes, or application
 answers in Netlify environment variables.
 
