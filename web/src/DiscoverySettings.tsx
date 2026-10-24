@@ -48,7 +48,7 @@ export function DiscoverySettings() {
     try {
       if (file.size > 100_000) throw new Error("Target Profile file is too large.");
       change(importLocalProfile(await file.text()));
-      setNotice("Profile loaded. Review it, then save to start web discovery.");
+      setNotice("Profile loaded. Review it, enable discovery if wanted, then save.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not read that profile.");
     } finally { event.target.value = ""; }
@@ -90,6 +90,7 @@ export function DiscoverySettings() {
           <button className="button secondary" disabled={!saved?.enabled || dirty || pending !== null} onClick={() => void runNow()} type="button">{pending === "scan" ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}Run now</button>
         </div>
       </header>
+      <p className="settings-description">Start with role titles and location. Discovery checks a limited catalog of public employer feeds; it does not search every job board or verify professional licenses. You can also add a posting from any employer directly to your pipeline. Scans run only after you enable discovery and save.</p>
       <form className="settings-form" onSubmit={(event) => void submit(event)}>
         <fieldset>
           <legend>Roles</legend>
@@ -115,6 +116,7 @@ export function DiscoverySettings() {
           <div className="settings-checks" role="group" aria-label="Workplace modes">{(["remote", "hybrid", "onsite"] as const).map((mode) => <label key={mode}><input checked={draft.workplaceModes.includes(mode)} onChange={(event) => change({ workplaceModes: event.target.checked ? [...draft.workplaceModes, mode] : draft.workplaceModes.filter((value) => value !== mode) })} type="checkbox" />{mode[0].toUpperCase() + mode.slice(1)}</label>)}</div>
         </fieldset>
 
+        <details className="settings-advanced"><summary>Optional preferences and eligibility</summary>
         <fieldset>
           <legend>Compensation and eligibility</legend>
           <div className="settings-grid">
@@ -129,8 +131,9 @@ export function DiscoverySettings() {
 
         <fieldset>
           <legend>Focus and exclusions</legend>
-          <div className="settings-grid">{listField("frameworks", "Frameworks")}{listField("cloudPlatforms", "Cloud platforms")}{listField("excludedCompanies", "Excluded companies")}{listField("excludedIndustries", "Excluded industries")}</div>
+          <div className="settings-grid">{listField("frameworks", "Tools, methods or frameworks")}{listField("cloudPlatforms", "Cloud platforms (optional)")}{listField("excludedCompanies", "Excluded companies")}{listField("excludedIndustries", "Excluded industries")}</div>
         </fieldset>
+        </details>
 
         <fieldset>
           <legend>Discovery</legend>
@@ -144,6 +147,7 @@ export function DiscoverySettings() {
         {notice ? <p className="access-notice" role="status">{notice}</p> : null}
         <div className="settings-footer"><span>{saved ? `Saved version ${saved.profileVersion}` : "No web profile saved"}{latest ? ` · Last scan: ${latest.status}, ${latest.reviewable} to review` : ""}</span><button className="button primary" disabled={saved === undefined || pending !== null || !dirty && !!saved} type="submit">{pending === "save" ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Save Target Profile</button></div>
       </form>
+      {latest?.status === "succeeded" && latest.reviewable === 0 && <p className="settings-description" role="status">This scan found no new reviewable matches in the selected feeds. Try another target title or location, or add a job directly. No matches here does not mean there are no suitable jobs elsewhere.</p>}
       {runs && runs.length > 0 ? <div className="scan-history"><h3>Recent scans</h3><div className="table-wrap"><table><thead><tr><th>When</th><th>Status</th><th>Feeds</th><th>New</th><th>For review</th><th>Rejected</th></tr></thead><tbody>{runs.slice(0, 5).map((run) => <tr key={run._id}><td>{new Date(run.queuedAt).toLocaleString()}</td><td>{run.status}{run.errorCode ? ` · ${run.errorCode.replaceAll("_", " ").toLowerCase()}` : ""}</td><td>{run.feedsSucceeded} ok{run.feedsFailed ? `, ${run.feedsFailed} failed` : ""}</td><td>{run.discovered}</td><td>{run.reviewable}</td><td>{run.rejected}</td></tr>)}</tbody></table></div></div> : null}
     </section>
   );

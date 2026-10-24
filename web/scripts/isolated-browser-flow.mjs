@@ -63,7 +63,7 @@ async function main() {
     await page.route("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", async (route) => {
       await route.fulfill({
         contentType: "application/javascript",
-        body: `window.turnstile={render:(_element,options)=>{setTimeout(()=>options.callback("isolated-browser-token"),0);return "isolated-widget";},remove:()=>{},reset:()=>{}};`,
+        body: `window.turnstile={render:(_element,options)=>{window.__betaTurnstileOptions=options;setTimeout(()=>options.callback("isolated-browser-token"),0);return "isolated-widget";},remove:()=>{},reset:()=>{}};`,
       });
     });
 
@@ -88,24 +88,56 @@ async function main() {
     await page.getByLabel("Email").fill("security-flow@example.test");
     await page.getByLabel("Password", { exact: true }).fill("SecurityFlow123");
     await page.getByLabel("Confirm password").fill("SecurityFlow123");
-    await page.getByLabel("Alpha invite code").fill("isolated-invite");
+    await page.getByLabel("Beta invite code").fill("isolated-invite");
     const createAccount = page.getByRole("button", { name: "Create account" });
     await createAccount.waitFor({ state: "visible" });
     await createAccount.waitFor({ state: "attached" });
     await page.waitForFunction((button) => !(button instanceof HTMLButtonElement) || !button.disabled, await createAccount.elementHandle());
+    await page.evaluate(() => window.__betaTurnstileOptions["error-callback"]());
+    assert.equal(await createAccount.isEnabled(), false, "failed bot checks disable signup explicitly");
+    await expectVisible(page, page.getByText("The bot check could not load. Check your connection or browser blocker, then retry.", { exact: true }), "actionable bot check failure");
+    await page.getByRole("button", { name: "Retry bot check", exact: true }).click();
+    await page.waitForFunction(button => !button.disabled, await createAccount.elementHandle());
+    assert.equal(await page.getByLabel("Email").inputValue(), "security-flow@example.test", "bot retry preserves form input");
     await createAccount.click();
 
     await expectVisible(page, page.getByRole("heading", { name: "Verify your email." }), "verification screen");
     await page.getByRole("button", { name: "Resend verification link" }).first().click();
-    await expectVisible(page, page.getByRole("heading", { name: "Review the alpha privacy notice." }), "privacy acknowledgement");
+    await expectVisible(page, page.getByRole("heading", { name: "Review the beta privacy notice." }), "privacy acknowledgement");
+    await page.getByRole("button", { name: /Privacy notice \(version/ }).click();
+    const policy = page.getByRole("dialog", { name: "Privacy notice", exact: true });
+    await expectVisible(page, policy, "bundled current privacy policy");
+    assert.ok((await policy.textContent()).includes("2026-10-24-meritwake-beta"));
+    assert.ok(!(await policy.textContent()).includes("hi@santifer.io"));
+    await page.keyboard.press("Escape");
+    assert.equal(await policy.count(), 0);
+    await page.getByRole("button", { name: "Beta terms of use", exact: true }).click();
+    const terms = page.getByRole("dialog", { name: "Beta terms of use", exact: true });
+    await expectVisible(page, terms, "bundled beta terms");
+    assert.ok((await terms.textContent()).includes("saved resume bundles"));
+    await page.keyboard.press("Escape");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Acknowledge and continue" }).click();
     await expectVisible(page, page.locator("h1").filter({ hasText: "Pipeline" }), "pipeline dashboard");
 
+    const guide = page.getByRole("region", { name: "A clear next move." });
+    await expectVisible(page, guide, "first application guide");
+    await guide.getByRole("button", { name: "Set my job targets" }).click();
+    assert.equal(await page.getByRole("textbox", { name: "Target role", exact: true }).evaluate(el => document.activeElement === el), true);
+    await page.getByRole("button", { name: "Beta guide & feedback" }).click();
+    const betaHelp = page.getByRole("dialog", { name: "A quick guide to Meritwake" });
+    await expectVisible(page, betaHelp, "beta help dialog");
+    assert.ok((await betaHelp.getByLabel("Beta feedback template").inputValue()).includes("Please omit resumes"));
+    await page.keyboard.press("Escape");
+    assert.equal(await betaHelp.count(), 0);
+
     const settings = page.locator("#discovery-settings");
     await expectVisible(page, settings.getByRole("heading", { name: "Target Profile" }), "Target Profile editor");
+    assert.equal(await settings.getByRole("combobox", { name: /Schedule/ }).inputValue(), "manual");
+    assert.equal(await settings.getByLabel("Enable discovery").isChecked(), false);
+    await settings.locator("summary").filter({ hasText: "Optional preferences and eligibility" }).click();
     await settings.locator('input[type="file"]').setInputFiles({ name: "target-profile.yml", mimeType: "text/yaml", buffer: Buffer.from("targetRoles:\n  - title: Security Architect\n    aliases: [Cloud Security Architect]\nlocation:\n  home: Nashville\n  allowedRegions: [United States]\ncompensation:\n  floor: 150000\nevidenceReferences:\n  - localPath: secret-resume.pdf\n") });
-    await expectVisible(page, settings.getByText("Profile loaded. Review it, then save to start web discovery."), "profile import confirmation");
+    await expectVisible(page, settings.getByText("Profile loaded. Review it, enable discovery if wanted, then save."), "profile import confirmation");
     assert.equal(await settings.getByRole("textbox", { name: "Target role", exact: true }).inputValue(), "Security Architect");
     assert.equal(await settings.getByLabel("Minimum annual salary").inputValue(), "150000");
     await settings.getByLabel("Home location").fill("Nashville");
@@ -228,6 +260,11 @@ async function main() {
     assert.equal(await targetRole.locator("option:checked").textContent(), "Example Company · Security regression role");
     assert.ok((await studio.getByLabel("Resume text", { exact: true }).inputValue()).includes("Built Python automation"), "cancelled navigation preserves the draft");
     await expectVisible(page, studio.getByText("Review: React", { exact: true }), "missing keyword evidence");
+    await studio.getByLabel("Role-specific terms", { exact: true }).fill("patient care\nRN");
+    await expectVisible(page, studio.getByText("Review: patient care", { exact: true }), "profession-specific keyword evidence");
+    await studio.getByLabel("Role-specific terms", { exact: true }).fill("x".repeat(81));
+    await expectVisible(page, studio.getByText("Use up to 40 terms, with no more than 80 characters per line.", { exact: true }), "checklist limit");
+    await studio.getByLabel("Role-specific terms", { exact: true }).fill("");
     assert.equal(await studio.getByRole("button", { name: "Download text" }).isEnabled(), false);
     await page.emulateMedia({ media: "print" });
     assert.equal(await page.locator(".resume-print pre").count(), 0, "browser Print cannot bypass factual review");
@@ -307,6 +344,17 @@ async function main() {
     assert.equal(await studio.getByRole("button", { name: "Save bundle", exact: true }).evaluate(element => document.activeElement === element), true, "save navigation focuses the existing save control");
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
     await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
+    await expectVisible(page, guide.getByText("4 of 4 steps complete", { exact: true }), "saved first application progress");
+    if (process.env.CAREER_OPS_BETA_SCREENSHOT && !productionCsp) {
+      await page.setViewportSize({ width: 1440, height: 1050 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: process.env.CAREER_OPS_BETA_SCREENSHOT });
+    }
+    const roleSearch = page.getByRole("textbox", { name: "Search roles", exact: true });
+    await roleSearch.fill("no-matching-role-for-this-beta-test");
+    await expectVisible(page, page.getByRole("heading", { name: "No roles match this search." }), "filtered empty pipeline");
+    await page.getByRole("button", { name: "Clear search", exact: true }).click();
+    assert.equal(await roleSearch.inputValue(), "");
     await expectVisible(page, preparation.getByText("Reviewed and saved. Your resume is ready to export.", { exact: true }), "preparation complete");
     await preparation.getByRole("button", { name: "Export reviewed resume", exact: true }).click();
     assert.equal(await studio.getByRole("button", { name: "Download Word", exact: true }).evaluate(element => document.activeElement === element), true, "export navigation focuses Word without downloading");
@@ -420,6 +468,9 @@ async function main() {
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("Update status for Security regression role").inputValue(), "applied", "updated role status did not persist after sign-in");
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Beta help", exact: true }).click();
+    await expectVisible(page, page.getByRole("dialog", { name: "A quick guide to Meritwake" }), "mobile beta help");
+    await page.keyboard.press("Escape");
     await expectVisible(page, page.locator("#discovery-settings"), "mobile Target Profile editor");
     const mobileWidth = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: window.innerWidth, outside: [...document.querySelectorAll("body *")].filter((element) => element.getBoundingClientRect().right > innerWidth + 1 && !element.closest(".table-wrap")).slice(0, 20).map((element) => `${element.tagName}.${element.className} ${Math.round(element.getBoundingClientRect().right)}`) }));
     assert.equal(mobileWidth.page <= mobileWidth.viewport, true, `mobile dashboard has horizontal overflow: ${JSON.stringify(mobileWidth)}`);

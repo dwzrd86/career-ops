@@ -465,3 +465,19 @@ The preceding Greenhouse limitation was resolved in iteration 13: approved
 Greenhouse feeds now retain inert posting descriptions for Studio prefill.
 Production release prerequisites and hosted account verification remain in
 [[RELEASE_RUNBOOK]] and [[DISCOVERY_RELEASE_VERIFICATION]].
+
+## Meritwake beta usability update — 2026-10-24
+
+The live web UI now uses the Meritwake/Fieldnotes identity. See [[BETA_TESTING]]
+for the first-application guide, beta help, bundled policies, verification, and
+remaining hosted-release prerequisites. No paid hosted AI was enabled.
+
+Keyword evidence accepts an optional profession-specific checklist: up to 40
+case-insensitively deduplicated terms, at most 80 characters per line. With an
+empty custom list it falls back to the established common-skills checklist.
+Terms are temporary, reset on role change/refresh, and excluded from saved
+bundles and AI briefs. Changing them clears an existing factual approval.
+Their presence is a literal text match, never credential/license verification
+or a job-fit/ATS score. Existing source/draft comparison and export review
+gates remain in force. Missing local AI configuration is now shown explicitly;
+manual editing, source reuse, and importing a completed draft remain available.

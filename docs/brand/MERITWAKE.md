@@ -23,9 +23,10 @@ Tagline: **Your next move. Backed by proof.**
 Product description: A career workspace that helps you find suitable roles,
 prepare factual tailored resumes, and keep your applications moving.
 
-This is the selected identity, not a completed application-wide rebrand. The
-existing application, account data, infrastructure IDs, URLs, and agent identity
-remain unchanged until implementation. The static interactive board at
+The Fieldnotes identity was applied to the actual web UI on 2026-10-24, including
+the wordmark, palette, access screens, page title, favicon and export metadata.
+Account data, infrastructure IDs, URLs and agent identity remain unchanged.
+See [[BETA_TESTING]] for verification and hosted-release limits. The static board at
 `docs/brand/meritwake-identity.html` uses fictional evidence and makes no AI calls.
 
 ## Design collection — Fieldnotes

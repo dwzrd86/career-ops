@@ -3,7 +3,7 @@ import { Download, FileText, Printer } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { functions, type Job } from "./convex";
 
-import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges, unsupportedDetails } from "./resumeTailoring";
+import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges, unsupportedDetails, parseChecklistTerms } from "./resumeTailoring";
 
 export type ResumeStudioHandle = { openJob: (jobId: string) => void };
 
@@ -31,6 +31,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   const removeBundle = useMutation(functions.removeResumeBundle);
   const [reviewed, setReviewed] = useState(false);
   const [message, setMessage] = useState("");
+  const [checklistText, setChecklistText] = useState("");
   const [localModel, setLocalModel] = useState<string | null>(null);
   const [providerConsent, setProviderConsent] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -73,6 +74,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
     setLoadedJob("");
     setJobId(next);
     setResume(""); setDescription(""); setSourceResume("");
+    setChecklistText("");
     setRevision(null); setReviewed(false); setDirty(false); setMessage("");
     return true;
   }
@@ -114,7 +116,11 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  const requested = useMemo(() => resumeTerms.filter((term) => containsTerm(description, term)), [description]);
+  const checklist = useMemo(() => {
+    try { return { terms: parseChecklistTerms(checklistText), error: "" }; }
+    catch (error) { return { terms: [] as string[], error: error instanceof Error ? error.message : "Check the terms." }; }
+  }, [checklistText]);
+  const requested = useMemo(() => checklistText.trim() ? checklist.terms : resumeTerms.filter(term => containsTerm(description, term)), [checklistText, checklist.terms, description]);
   const covered = requested.filter((term) => containsTerm(resume, term));
   const missing = requested.filter((term) => !containsTerm(resume, term));
   const canExport = Boolean(job && resume.trim() && reviewed && !loading && !busy);
@@ -174,7 +180,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   useEffect(() => () => { importContext.current = null; }, []);
   const changes = useMemo(() => draftChanges(sourceResume, resume), [sourceResume, resume]);
   const details = useMemo(() => unsupportedDetails(sourceResume, resume), [sourceResume, resume]);
-  const newSkills = resumeTerms.filter(term => containsTerm(resume, term) && !containsTerm(sourceResume, term));
+  const newSkills = [...new Set([...resumeTerms, ...requested])].filter(term => containsTerm(resume, term) && !containsTerm(sourceResume, term));
 
   async function generateDraft() {
     if (!job || !localModel || !providerConsent || busy || loading) return;
@@ -293,6 +299,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
         <label>Job description<textarea ref={postingEditor} aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <div ref={tailoringPanel} tabIndex={-1} className="resume-evidence">
           <h3>Tailor with GLM</h3>
+          {!localModel && <p className="resume-connection-note">AI generation is not connected in this workspace. You can start from your source, edit a draft, or import one below. Export works after your factual review. Hosted AI and its usage budget still need setup.</p>}
           {localModel ? <>
             <p>Your local OpenCode agent is connected. Generate a tailored draft directly into this editor, then review the facts before exporting.</p>
             <label><input type="checkbox" checked={providerConsent} onChange={event => setProviderConsent(event.target.checked)} />Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent.</label>
@@ -318,7 +325,14 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
           }} /></label>
           <a href="https://docs.z.ai/devpack/tool/opencode" target="_blank" rel="noreferrer">OpenCode Coding Plan setup ↗</a>
         </div>
-        <div className="resume-evidence" aria-live="polite"><h3>Keyword evidence</h3>{!description.trim() ? <p>Paste a job description to check common skills.</p> : !requested.length ? <p>No terms from the common-skills checklist found. Review this role’s requirements manually.</p> : <><p>{covered.length} of {requested.length} common skills appear in your resume. This is a literal text check, not an ATS score.</p><div className="resume-tags">{covered.map((term) => <span className="covered" key={term}>✓ {term}</span>)}{missing.map((term) => <span key={term}>Review: {term}</span>)}</div><p>Only add a missing skill when your experience supports it.</p></>}</div>
+        <div className="resume-evidence"><h3>Keyword evidence</h3>
+          <label>Role-specific terms (one per line)<textarea aria-label="Role-specific terms" rows={3} maxLength={3200} disabled={!job || loading} placeholder={"Examples: patient care, forklift operation, classroom planning. Put each term on a separate line."} value={checklistText} onChange={event => {
+            setChecklistText(event.target.value);
+            if (reviewed) { setReviewed(false); setDirty(true); }
+          }} /></label>
+          <p>Use terms from this posting for any profession. Up to 40 terms, 80 characters each. This temporary checklist resets on role change or refresh; it is not included in saved bundles or AI briefs.</p>
+          <div aria-live="polite">{checklist.error ? <p className="form-error" role="alert">{checklist.error}</p> : !description.trim() ? <p>Paste a job description to check common skills.</p> : !requested.length ? <p>No terms from the common-skills checklist found. Add role-specific terms or review this role’s requirements manually.</p> : <><p>{covered.length} of {requested.length} {checklistText.trim() ? "selected terms" : "common skills"} appear in your resume. This is a literal text check, not an ATS score.</p><div className="resume-tags">{covered.map((term) => <span className="covered" key={term}>✓ {term}</span>)}{missing.map((term) => <span key={term}>Review: {term}</span>)}</div><p>A text match does not verify a license, certification, eligibility, or skill. Only add claims your original evidence supports.</p></>}</div>
+        </div>
       </div>
       <div className="resume-draft">
         <label>Resume text<textarea ref={draftEditor} aria-label="Resume text" disabled={!job || loading} rows={20} maxLength={40000} placeholder={"YOUR NAME\nEmail · Phone · Location\n\nSUMMARY\n\nEXPERIENCE\n\nEDUCATION\n\nSKILLS"} value={resume} onChange={(event) => { setResume(event.target.value); setReviewed(false); setDirty(true); setMessage(""); }} /></label>

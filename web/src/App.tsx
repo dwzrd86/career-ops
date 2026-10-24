@@ -8,11 +8,11 @@ import {
   ClipboardList,
   LockKeyhole,
   LoaderCircle,
+  CircleHelp,
   LogOut,
   MapPin,
   Search,
   ShieldCheck,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -22,6 +22,9 @@ import { authClient } from "./auth-client";
 import { ResumeStudio, type ResumeStudioHandle } from "./ResumeStudio";
 import { DiscoverySettings } from "./DiscoverySettings";
 import { useSafeErrorReporter, useUnhandledErrorReporting } from "./errorReporting";
+import { Brand } from "./Brand";
+import { BetaGuide, BetaHelp } from "./BetaGuide";
+import { PolicyLinks } from "./PolicyLinks";
 
 const statusLabels: Record<JobStatus, string> = {
   discovered: "Discovered",
@@ -34,12 +37,6 @@ const statusLabels: Record<JobStatus, string> = {
 };
 
 const activeStatuses: JobStatus[] = ["discovered", "evaluated", "applied", "interview", "offer"];
-
-const policyLinks = {
-  privacy: "https://github.com/dwzrd86/career-ops/blob/main/docs/PRIVACY.md",
-  security: "https://github.com/dwzrd86/career-ops/blob/main/docs/SECURITY_CONTACT.md",
-  terms: "https://github.com/dwzrd86/career-ops/blob/main/docs/TERMS.md",
-};
 
 function passwordMeetsRequirements(password: string) {
   return password.length >= 12 && /[a-z]/i.test(password) && /\d/.test(password);
@@ -405,6 +402,8 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [botProtectionToken, setBotProtectionToken] = useState("");
+  const [botProtectionError, setBotProtectionError] = useState("");
+  const [botAttempt, setBotAttempt] = useState(0);
   const [localOwnerSetup, setLocalOwnerSetup] = useState(false);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -424,14 +423,19 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   useEffect(() => {
     const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
     if (localOwnerSetup || mode !== "signUp" || !siteKey || !botProtectionElement.current) return;
+    let completed = false;
+    const timeout = window.setTimeout(() => {
+      if (!completed) setBotProtectionError("The bot check has not completed. Complete the check below or retry if it is not loading.");
+    }, 15000);
+    const failed = () => { setBotProtectionToken(""); setBotProtectionError("The bot check could not load. Check your connection or browser blocker, then retry."); };
 
     const render = () => {
       if (!window.turnstile || !botProtectionElement.current || botProtectionWidgetId.current) return;
       botProtectionWidgetId.current = window.turnstile.render(botProtectionElement.current, {
         action: "signup",
-        callback: setBotProtectionToken,
-        "error-callback": () => setBotProtectionToken(""),
-        "expired-callback": () => setBotProtectionToken(""),
+        callback: (token: string) => { completed = true; setBotProtectionToken(token); setBotProtectionError(""); },
+        "error-callback": failed,
+        "expired-callback": () => { setBotProtectionToken(""); setBotProtectionError("The bot check expired. Retry it before creating your account."); },
         sitekey: siteKey,
         theme: "light",
       });
@@ -439,21 +443,27 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
     const existing = document.querySelector<HTMLScriptElement>('script[src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"]');
     if (existing) {
       existing.addEventListener("load", render);
+      existing.addEventListener("error", failed);
       render();
     } else {
       const script = document.createElement("script");
       script.async = true;
       script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
       script.addEventListener("load", render);
+      script.addEventListener("error", failed);
       document.head.append(script);
     }
 
     return () => {
+      window.clearTimeout(timeout);
+      const script = document.querySelector<HTMLScriptElement>('script[src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"]');
+      script?.removeEventListener("load", render);
+      script?.removeEventListener("error", failed);
       if (botProtectionWidgetId.current && window.turnstile) window.turnstile.remove(botProtectionWidgetId.current);
       botProtectionWidgetId.current = undefined;
       setBotProtectionToken("");
     };
-  }, [mode, localOwnerSetup]);
+  }, [mode, localOwnerSetup, botAttempt]);
 
   function clearMessages() {
     setError("");
@@ -518,7 +528,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           callbackURL: window.location.origin,
           email: submittedEmail,
           inviteToken,
-          name: submittedEmail.split("@")[0] || "Jobbie user",
+          name: submittedEmail.split("@")[0] || "Meritwake user",
           password,
         } as Parameters<typeof authClient.signUp.email>[0]);
         if (result.error) throw new Error(result.error.message);
@@ -568,7 +578,9 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
   return (
     <main className="access-screen">
       <section className="access-panel">
-        <div className="access-mark"><LockKeyhole size={22} /></div>
+        <Brand />
+        <p className="brand-tagline">Your next move. Backed by proof.</p>
+        <PolicyLinks />
         <p className="eyebrow">Private career workspace</p>
         <h1>{heading}</h1>
         <p className="access-copy">
@@ -595,13 +607,18 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
           ) : null}
           {mode === "signUp" && !localOwnerSetup ? (
             <label>
-              Alpha invite code
+              Beta invite code
               <input autoComplete="off" name="inviteToken" required />
             </label>
           ) : null}
           {mode === "signUp" && !localOwnerSetup ? (
             <div aria-label="Bot protection" ref={botProtectionElement} />
           ) : null}
+          {mode === "signUp" && !localOwnerSetup && !import.meta.env.VITE_TURNSTILE_SITE_KEY && <p className="form-error" role="alert">Registration is not configured for this workspace yet. Existing users can still sign in. Contact your beta host for access.</p>}
+          {mode === "signUp" && !localOwnerSetup && botProtectionError && <div><p className="form-error" role="alert">{botProtectionError}</p><button className="text-button" type="button" onClick={() => {
+            if (!window.turnstile) document.querySelector('script[src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"]')?.remove();
+            setBotProtectionError(""); setBotAttempt(value => value + 1);
+          }}>Retry bot check</button></div>}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {notice ? <p className="access-notice" role="status">{notice}</p> : null}
           {mode === "signUp" && localOwnerSetup && <p className="access-notice">Create your first local owner account. No invite or email verification is needed. Use an email as your sign-in name; keep your password safe.</p>}
@@ -610,7 +627,7 @@ function AccessScreen({ initialMode }: { initialMode: "signIn" | "reset" }) {
             {submitLabel}
           </button>
         </form>
-        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" && !localOwnerSetup ? " A valid alpha invite code is also required." : ""}{mode === "signUp" && !localOwnerSetup && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
+        {mode === "signUp" || isResetVerification ? <p className="access-hint">Use at least 12 characters, including a letter and a number.{mode === "signUp" && !localOwnerSetup ? " A valid beta invite code is also required." : ""}{mode === "signUp" && !localOwnerSetup && !import.meta.env.VITE_TURNSTILE_SITE_KEY ? " Registration is temporarily unavailable." : ""}</p> : null}
         {mode === "verify" ? <>
           <button className="text-button" disabled={isSubmitting} onClick={() => void resendVerification()} type="button">Resend verification link</button>
           <button className="text-button" onClick={() => startOver("signIn")} type="button">Back to sign in</button>
@@ -635,7 +652,7 @@ function EnrollmentGate({
   const enrollmentStatus = useQuery(functions.getEnrollmentStatus, {});
 
   if (enrollmentStatus === undefined) {
-    return <main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Checking alpha enrollment</main>;
+    return <main className="loading-state full-screen"><LoaderCircle className="spin" size={22} />Checking beta enrollment</main>;
   }
   if (enrollmentStatus.enrolled) {
     return <PrivacyAcknowledgement onRecovery={onRecovery} onSignOut={onSignOut} />;
@@ -645,9 +662,9 @@ function EnrollmentGate({
     <main className="access-screen">
       <section aria-labelledby="enrollment-title" className="access-panel privacy-panel">
         <div className="access-mark"><LockKeyhole size={22} /></div>
-        <p className="eyebrow">Closed alpha</p>
+        <p className="eyebrow">Closed beta</p>
         <h1 id="enrollment-title">This account is not enrolled.</h1>
-        <p className="access-copy">This workspace is available only through a single-use alpha invite. Contact the person who invited you if you need access.</p>
+        <p className="access-copy">This workspace is available only through a single-use beta invite. Contact the person who invited you if you need access.</p>
         <button className="button primary access-submit" onClick={() => void onSignOut()} type="button"><LogOut size={16} />Sign out</button>
       </section>
     </main>
@@ -694,16 +711,12 @@ function PrivacyAcknowledgement({
       <section aria-labelledby="privacy-notice-title" className="access-panel privacy-panel">
         <div className="access-mark"><ShieldCheck size={22} /></div>
         <p className="eyebrow">Before you add career data</p>
-        <h1 id="privacy-notice-title">Review the alpha privacy notice.</h1>
-        <p className="access-copy">Jobbie stores your private pipeline, Target Profile, and job-discovery review metadata. When enabled, scheduled scans check approved public job feeds. Please read the current policies before saving that information.</p>
-        <ul className="policy-links">
-          <li><a href={policyLinks.privacy} rel="noreferrer" target="_blank">Privacy notice (version {privacyStatus.currentVersion})</a></li>
-          <li><a href={policyLinks.terms} rel="noreferrer" target="_blank">Alpha terms of use</a></li>
-          <li><a href={policyLinks.security} rel="noreferrer" target="_blank">Security contact</a></li>
-        </ul>
+        <h1 id="privacy-notice-title">Review the beta privacy notice.</h1>
+        <p className="access-copy">Meritwake stores your private pipeline, Target Profile, and job-discovery review metadata. When enabled, scheduled scans check approved public job feeds. Please read the current policies before saving that information.</p>
+        <PolicyLinks version={privacyStatus.currentVersion} />
         <label className="acknowledgement-check">
           <input checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} type="checkbox" />
-          <span>I have reviewed the privacy notice and understand this alpha stores the career data I choose to add.</span>
+          <span>I have reviewed the privacy notice and understand this beta stores the career data I choose to add.</span>
         </label>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <button className="button primary access-submit" disabled={!confirmed || isSaving} onClick={() => void acknowledge()} type="button">
@@ -738,7 +751,7 @@ function AccountSecurityDialog({
     const blob = new Blob([JSON.stringify(accountExport, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.download = "jobbie-account-export.json";
+    link.download = "meritwake-account-export.json";
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
@@ -835,7 +848,7 @@ function AccountSecurityDialog({
             <button className="button secondary" disabled={accountExport === undefined || isSubmitting} onClick={() => void downloadExport()} type="button">Download data export</button>
             <button className="button secondary" disabled={isSubmitting} onClick={() => void deleteAccount()} type="button">Delete account</button>
           </div>
-          <p className="account-policy-links"><a href={policyLinks.privacy} rel="noreferrer" target="_blank">Privacy notice</a><span aria-hidden="true">·</span><a href={policyLinks.terms} rel="noreferrer" target="_blank">Terms</a><span aria-hidden="true">·</span><a href={policyLinks.security} rel="noreferrer" target="_blank">Security contact</a></p>
+          <PolicyLinks />
         </section>
       </section>
     </div>
@@ -853,6 +866,7 @@ function PipelineDashboard({
   const [query, setQuery] = useState("");
   const [showNewJob, setShowNewJob] = useState(false);
   const [showAccountSecurity, setShowAccountSecurity] = useState(false);
+  const [showBetaHelp, setShowBetaHelp] = useState(false);
   const resumeStudio = useRef<ResumeStudioHandle>(null);
 
   const filteredJobs = useMemo(() => {
@@ -867,8 +881,9 @@ function PipelineDashboard({
 
   return (
     <main className="app-shell">
+      <a className="skip-link" href="#pipeline">Skip to workspace</a>
       <aside className="sidebar">
-        <div className="brand"><Sparkles size={20} /><span>Career Ops</span></div>
+        <div className="brand"><Brand /></div>
         <nav aria-label="Primary navigation">
           <a aria-current="page" href="#pipeline"><ClipboardList size={18} />Pipeline</a>
           <a href="#discovery-settings"><ShieldCheck size={18} />Target Profile</a>
@@ -876,18 +891,20 @@ function PipelineDashboard({
           <a href="#resume-studio"><ClipboardList size={18} />Resume Studio</a>
         </nav>
         <div className="sidebar-note">
-          <span>Precision mode</span>
-          <p>Only high-fit roles enter the active pipeline.</p>
+          <span>Fieldnotes / Beta</span>
+          <p>Your experience is the source. You make the final call.</p>
+          <button className="sidebar-help" type="button" onClick={() => setShowBetaHelp(true)}><CircleHelp size={16} />Beta guide & feedback</button>
         </div>
       </aside>
 
-      <section className="workspace" id="pipeline">
+      <section className="workspace" id="pipeline" tabIndex={-1}>
         <header className="topbar">
           <div>
-            <p className="eyebrow">Job search operations</p>
+            <p className="eyebrow">Your next move / Meritwake beta</p>
             <h1>Pipeline</h1>
           </div>
           <div className="topbar-actions">
+            <button aria-label="Beta help" className="icon-button" onClick={() => setShowBetaHelp(true)} title="Beta guide and feedback" type="button"><CircleHelp size={17} /></button>
             <button aria-label="Account security" className="icon-button" onClick={() => setShowAccountSecurity(true)} title="Account security" type="button"><ShieldCheck size={17} /></button>
             <button aria-label="Sign out" className="icon-button" onClick={() => void onSignOut()} title="Sign out" type="button"><LogOut size={17} /></button>
             <button className="button primary" onClick={() => setShowNewJob(true)} type="button">
@@ -896,6 +913,8 @@ function PipelineDashboard({
             </button>
           </div>
         </header>
+
+        <BetaGuide jobs={jobs} onAdd={() => setShowNewJob(true)} onPrepare={id => resumeStudio.current?.openJob(id)} />
 
         <section className="metric-grid" aria-label="Pipeline summary">
           <article><span>Active roles</span><strong>{activeCount}</strong></article>
@@ -918,6 +937,8 @@ function PipelineDashboard({
 
           {jobs === undefined ? (
             <div className="loading-state"><LoaderCircle className="spin" size={20} />Loading pipeline</div>
+          ) : jobs.length > 0 && filteredJobs.length === 0 ? (
+            <div className="empty-state"><Search size={24} /><h2>No roles match this search.</h2><p>Your saved roles are still here. Try a different title, company, or location.</p><button className="button secondary" type="button" onClick={() => setQuery("")}>Clear search</button></div>
           ) : filteredJobs.length === 0 ? (
             <EmptyPipeline onAdd={() => setShowNewJob(true)} />
           ) : (
@@ -947,6 +968,7 @@ function PipelineDashboard({
 
       {showNewJob ? <NewJobDialog onClose={() => setShowNewJob(false)} /> : null}
       {showAccountSecurity ? <AccountSecurityDialog onClose={() => setShowAccountSecurity(false)} onRecovery={onRecovery} onSignOut={onSignOut} /> : null}
+      {showBetaHelp ? <BetaHelp onClose={() => setShowBetaHelp(false)} /> : null}
     </main>
   );
 }

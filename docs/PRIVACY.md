@@ -1,10 +1,10 @@
 ---
 type: reference
-title: Jobbie Alpha Privacy Notice
+title: Meritwake Beta Privacy Notice
 created: 2026-08-01
 tags:
   - privacy
-  - alpha
+  - beta
   - web
 related:
   - '[[TERMS]]'
@@ -13,15 +13,15 @@ related:
   - '[[RELEASE_RUNBOOK]]'
 ---
 
-# Jobbie alpha privacy notice
+# Meritwake beta privacy notice
 
-**Effective date:** 2026-10-14
-**Version:** 2026-10-14-discovery-postings
-**Applies to:** the hosted Jobbie/Career-Ops web alpha in `web/`. This notice
+**Effective date:** 2026-10-24
+**Version:** 2026-10-24-meritwake-beta
+**Applies to:** the hosted Meritwake/Career-Ops web beta in `web/`. This notice
 does not change how the separately installed, local Career-Ops CLI handles
 files on a user's computer.
 
-This is a product notice for an invited alpha, not legal advice. It must be
+This is a product notice for an invited beta, not legal advice. It must be
 reviewed by qualified counsel before public use or before the data practices
 change.
 
@@ -30,7 +30,7 @@ change.
 The separately installed local discovery tools keep their discovered-job
 workspace on the user's device. This may include locally retained job-detail
 snapshots, Target Profile form values, and generated review materials. The
-hosted alpha neither receives nor manages that workspace, so deleting a hosted
+hosted beta neither receives nor manages that workspace, so deleting a hosted
 account does not delete local records, local backups, or local exports.
 
 Local discovery data has no automatic retention period: the local owner must
@@ -40,9 +40,9 @@ backup should use an encrypted local destination, keep the backup key separate,
 and never include a browser profile, cookies, tokens, passwords, or provider
 credentials. See [[SECURITY]] and `DATA_CONTRACT.md` for the local boundary.
 
-## What the alpha does
+## What the beta does
 
-The hosted alpha provides verified email/password accounts, a private manual
+The hosted beta provides verified email/password accounts, a private manual
 job pipeline, saved per-role resume bundles, a saved Target Profile, and an owner-scoped discovery review queue.
 When discovery is enabled, a scheduled server worker requests public Greenhouse
 and Ashby job-board feeds, compares listings with the saved profile, and stores
@@ -59,7 +59,7 @@ are supported, with each text field limited to 40,000 characters. The hosted fro
 generation sends the selected source resume and posting through OpenCode to
 Z.AI. Exported GLM briefs also contain this evidence. OpenCode history and
 downloaded files are outside dashboard account deletion. See [[RESUME_STUDIO]]. Unsaved editor text is
-cleared on refresh or sign-out. The hosted alpha does **not** store browser
+cleared on refresh or sign-out. The hosted beta does **not** store browser
 credentials, local file paths, raw captured source content,
 application answers, or application forms. It does
 not fill application forms or automatically submit applications to employers.
@@ -79,8 +79,8 @@ The local Career-Ops tools remain separate from this hosted dataset.
 | Discovered-role projection: company, title, optional location, canonical HTTPS role URL, safe local record identifier, source label/provider, discovery and freshness timestamps/status, and review status | Show the private discovery review queue without copying the local discovery record | The owner-scoped `discoveredJobs` table in the configured Convex deployment. The identifier is validated as a path-free record key; no local path or raw local posting content is accepted by the projection API. The internal public-feed worker may separately retain bounded plain-text posting content, copied to new pipeline roles on approval. |
 | Match and review metadata: profile version, score, decision outcome, hard-filter and explanation codes, reviewer override outcome/reason, and decision/review timestamps | Explain a projected match and record the user's review decisions | Owner-scoped `discoveryMatchDecisions`, `discoveryReviewerOverrides`, and `discoveryStatusHistory` tables in the configured Convex deployment. These tables contain metadata and reviewer-entered reasons only; they do not contain resumes, job-description contents, browser state, or captured page data. |
 | HMAC-derived email rate-limit key, action type, attempt count, and rate-limit-window start time | Rate-limit signup, reset, and verification resend attempts | The `authAbuseLimits` table in the configured Convex deployment. It deliberately stores an HMAC-derived key instead of the email address. |
-| Alpha-invite HMAC digest, issuance/expiry/claim timestamps, a claimed account ID, and limited event category/timestamp records | Limit this early alpha to invited users and investigate invitation lifecycle failures | The `alphaInvites` and `enrollmentAuditEvents` tables in the configured Convex deployment. The application does not store a raw invite token, invitee email, IP address, or career content in its enrollment audit records. |
-| Error-report metadata: deployment version, route path without query data, fixed operation type, fixed error category, and timestamp | Diagnose application failures during the alpha | Browser reports are stored in the `errorReports` table in the configured Convex deployment; backend failures use the same metadata-only structured Convex runtime log. Both deliberately exclude form values, job notes, resume files, application answers, auth tokens, passwords, email bodies, error messages, stack traces, account IDs, and full URLs or query strings. |
+| Beta-invite HMAC digest, issuance/expiry/claim timestamps, a claimed account ID, and limited event category/timestamp records | Limit this early beta to invited users and investigate invitation lifecycle failures | The `betaInvites` and `enrollmentAuditEvents` tables in the configured Convex deployment. The application does not store a raw invite token, invitee email, IP address, or career content in its enrollment audit records. |
+| Error-report metadata: deployment version, route path without query data, fixed operation type, fixed error category, and timestamp | Diagnose application failures during the beta | Browser reports are stored in the `errorReports` table in the configured Convex deployment; backend failures use the same metadata-only structured Convex runtime log. Both deliberately exclude form values, job notes, resume files, application answers, auth tokens, passwords, email bodies, error messages, stack traces, account IDs, and full URLs or query strings. |
 
 The public ATS feed operators receive a normal server request for their feed;
 the request does not include the user's Target Profile or account identity.
@@ -96,7 +96,7 @@ not put sensitive career content in a support request or an email subject line.
 ## Where data is stored
 
 Application records and account-supporting records are stored in the Convex
-deployment configured for the alpha. Verification and password-reset delivery
+deployment configured for the beta. Verification and password-reset delivery
 uses Resend; signup bot checks use Cloudflare Turnstile. The static web client
 is published through Netlify. The deployment configuration does not guarantee
 a particular geographic region, and this notice makes no encryption or
@@ -104,17 +104,17 @@ certification claim.
 
 ## Retention and deletion
 
-| Data | Retention in the current alpha | How to delete it |
+| Data | Retention in the current beta | How to delete it |
 | --- | --- | --- |
-| A job-pipeline entry | Until the user removes that entry, deletes the account, or the alpha is retired. There is no automatic job-record expiry. | Select the entry's remove control in the pipeline, or delete the account from Account security. |
-| Saved resume bundle | Until the user deletes the bundle, removes its pipeline role, deletes the account, or the alpha is retired. There is no automatic expiry. | Use Delete saved bundle in Resume Studio, remove the role, or delete the account. Downloaded exports and unsaved editor text are separate copies. |
-| Target Profile | Until the user deletes the account or the alpha is retired. Disabling discovery stops future scheduled scans but does not delete the profile. | Delete the account from Account security. |
-| Scan run history | The 30 most recent runs per account, until account deletion or alpha retirement. | Delete the account from Account security. |
-| A discovered-role projection and its match decisions, reviewer overrides, review-status history, and material review metadata (state, timestamp, profile version, and artifact-ready flags only) | Until the user deletes the account or the alpha is retired. Archiving changes review status but does not delete the metadata; there is no automatic expiry. | Delete the account from Account security. |
-| Account and authentication records | Until the user deletes the account or the alpha is retired. | Use the Account security control and enter the current password to permanently delete the account and associated pipeline data. |
+| A job-pipeline entry | Until the user removes that entry, deletes the account, or the beta is retired. There is no automatic job-record expiry. | Select the entry's remove control in the pipeline, or delete the account from Account security. |
+| Saved resume bundle | Until the user deletes the bundle, removes its pipeline role, deletes the account, or the beta is retired. There is no automatic expiry. | Use Delete saved bundle in Resume Studio, remove the role, or delete the account. Downloaded exports and unsaved editor text are separate copies. |
+| Target Profile | Until the user deletes the account or the beta is retired. Disabling discovery stops future scheduled scans but does not delete the profile. | Delete the account from Account security. |
+| Scan run history | The 30 most recent runs per account, until account deletion or beta retirement. | Delete the account from Account security. |
+| A discovered-role projection and its match decisions, reviewer overrides, review-status history, and material review metadata (state, timestamp, profile version, and artifact-ready flags only) | Until the user deletes the account or the beta is retired. Archiving changes review status but does not delete the metadata; there is no automatic expiry. | Delete the account from Account security. |
+| Account and authentication records | Until the user deletes the account or the beta is retired. | Use the Account security control and enter the current password to permanently delete the account and associated pipeline data. |
 | Verification and reset links | 15 minutes, as configured in the application. | They expire automatically; no user action is needed. |
-| HMAC-derived rate-limit records | The current alpha has no automated expiry job for these records; they are retained until the operator removes them or retires the alpha. | These keyed anti-abuse records are not linked to a readable account profile and may be retained temporarily for fraud prevention. |
-| Alpha invite and privacy-safe audit entries | Unused invites expire; digest and event records remain until the operator removes them or retires the alpha. | Invite tokens are not tied to an email before redemption. Deletion expires a redeemed invite and retains only the privacy-safe event record. |
+| HMAC-derived rate-limit records | The current beta has no automated expiry job for these records; they are retained until the operator removes them or retires the beta. | These keyed anti-abuse records are not linked to a readable account profile and may be retained temporarily for fraud prevention. |
+| Beta invite and privacy-safe audit entries | Unused invites expire; digest and event records remain until the operator removes them or retires the beta. | Invite tokens are not tied to an email before redemption. Deletion expires a redeemed invite and retains only the privacy-safe event record. |
 
 The Account security control downloads a portable JSON export containing only
 the signed-in user's manual pipeline records, saved resume bundles (including
@@ -131,7 +131,7 @@ password, authentication link, resume, or job notes in a support email.
 
 ## Your choices and responsibilities
 
-- Do not enter information you are not comfortable storing in this early alpha.
+- Do not enter information you are not comfortable storing in this early beta.
 - You can sign out, change your password, use email recovery, remove individual
   pipeline entries, or stop using the service at any time.
 - Keep your password and verification links private. The service will not ask
@@ -144,13 +144,16 @@ password, authentication link, resume, or job notes in a support email.
 We will publish material changes in the repository release notes and update
 the effective date and versioned source document before the changed practice
 takes effect, except where an urgent security or legal requirement requires a
-faster change. During the alpha, users will also be notified through the
+faster change. During the beta, users will also be notified through the
 in-product notice before they save new career data after a material policy
-change. Continued use after that acknowledgement is the requested alpha
+change. Continued use after that acknowledgement is the requested beta
 consent; it is not a substitute for any consent required by applicable law.
 
 ## Contact
 
-For a privacy or account-data request, email **hi@santifer.io** with the
-subject `Jobbie alpha data request`. For vulnerabilities or suspected security
-incidents, follow [[SECURITY_CONTACT]].
+For a privacy or account-data request, contact the person who invited you
+through the private channel used for your invitation. You can also export
+your data or delete your account through Account security in the app. No
+public support mailbox has been configured for this beta yet. Do not send
+passwords, verification links, resumes or other sensitive data in a support
+message. For suspected security incidents, follow [[SECURITY_CONTACT]].

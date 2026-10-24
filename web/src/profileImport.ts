@@ -17,8 +17,8 @@ export const emptyDiscoveryProfile: TargetProfileInput = {
   workAuthorization: [],
   clearanceLevels: [],
   sources: ["greenhouse", "ashby"],
-  schedule: "daily",
-  enabled: true,
+  schedule: "manual",
+  enabled: false,
 };
 
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim()) : [];
@@ -51,7 +51,7 @@ export function importLocalProfile(contents: string): TargetProfileInput {
     maxTravelPercent: optionalNumber(raw.criteria?.maxTravelPercent),
     maxOfficeDaysPerWeek: optionalNumber(raw.criteria?.maxOfficeDaysPerWeek),
     sources: ["greenhouse", "ashby"],
-    schedule: "daily",
-    enabled: true,
+    schedule: "manual",
+    enabled: false,
   };
 }

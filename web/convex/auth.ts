@@ -205,7 +205,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {
-        await sendAuthenticationEmail(ctx, user.email, "Reset your Jobbie password", `Use this link to reset your Jobbie password. It expires in 15 minutes:\n${url}`);
+        await sendAuthenticationEmail(ctx, user.email, "Reset your Meritwake password", `Use this link to reset your Meritwake password. It expires in 15 minutes:\n${url}`);
       },
     },
     emailVerification: {
@@ -213,7 +213,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       expiresIn: 15 * 60,
       sendOnSignUp: true,
       sendVerificationEmail: async ({ user, url }) => {
-        await sendAuthenticationEmail(ctx, user.email, "Verify your Jobbie email", `Verify your Jobbie email address within 15 minutes:\n${url}`);
+        await sendAuthenticationEmail(ctx, user.email, "Verify your Meritwake email", `Verify your Meritwake email address within 15 minutes:\n${url}`);
       },
     },
     user: { deleteUser: { enabled: true } },

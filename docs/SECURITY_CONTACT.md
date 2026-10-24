@@ -1,22 +1,24 @@
 ---
 type: reference
-title: Jobbie Security Contact and Vulnerability Reporting
+title: Meritwake Security Contact and Vulnerability Reporting
 created: 2026-08-01
 tags:
   - security
   - vulnerability-disclosure
-  - alpha
+  - beta
 related:
   - '[[SECURITY]]'
   - '[[PRIVACY]]'
   - '[[INCIDENT_RESPONSE]]'
 ---
 
-# Jobbie security contact
+# Meritwake security contact
 
 ## Report a vulnerability or suspected compromise privately
 
-Email **hi@santifer.io** with the subject `Jobbie security report`. Do **not**
+Contact the person who invited you through the private channel used for your
+invitation and label the message `Meritwake security report`. A monitored public
+security mailbox has not been configured for this beta. Do **not**
 open a public GitHub issue, discussion, or pull request for a vulnerability,
 suspected exposed credential, account compromise, or potential unauthorized
 data access.
@@ -35,16 +37,15 @@ minimum safe way to share it.
 
 ## What to expect
 
-The maintainer aims to acknowledge security reports within 72 hours, assess the
-report privately, and coordinate a fix before public disclosure. A response
-target is not a promise of resolution time or a guarantee of a reward. The
-current coordinated-disclosure policy is also published in the repository's
-root `SECURITY.md`.
+Beta reports are handled by the person who supplied the invitation. Response
+coverage and a monitored contact must be established before broad public
+registration. No acknowledgement deadline or reward is promised. Reports
+should be assessed privately and a fix coordinated before public disclosure.
 
 ## Account and privacy requests are different
 
-For an export or deletion request about your own alpha account, follow the
-manual process in [[PRIVACY]] and use the subject `Jobbie alpha data request`.
+For an export or deletion request about your own beta account, follow the
+account controls and private contact process in [[PRIVACY]] and use the subject `Meritwake beta data request`.
 Security reports should use the subject above so they can be triaged without
 mixing sensitive incident details with ordinary support.
 
@@ -53,5 +54,4 @@ mixing sensitive incident details with ordinary support.
 Do not access, alter, delete, or retain data that is not yours; do not disrupt
 the service; and do not attempt to bypass account isolation beyond the minimum
 needed to demonstrate an issue. Stop if you encounter personal data and report
-the exposure. The incident owner will use [[INCIDENT_RESPONSE]] when that
-procedure is added for the alpha.
+the exposure. The beta owner can use [[INCIDENT_RESPONSE]] to triage the exposure.

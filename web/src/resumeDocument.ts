@@ -5,7 +5,7 @@ import { parseResumeDraft } from "./resumeTailoring";
 export async function resumeDocument(text: string): Promise<Blob> {
   const lines = parseResumeDraft(text).split("\n");
   const document = new Document({
-    creator: "Career Ops",
+    creator: "Meritwake",
     title: "Resume",
     description: "",
     styles: { default: { document: { run: { font: "Arial", size: 22, color: "000000" } } } },

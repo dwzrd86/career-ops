@@ -15,7 +15,7 @@ createRoot(document.getElementById("root")!).render(
   ) : (
     <main className="setup-screen">
       <section>
-        <p className="eyebrow">Career Ops</p>
+        <p className="eyebrow">Meritwake</p>
         <h1>Connect a Convex deployment to start the dashboard.</h1>
         <p>
           Add <code>VITE_CONVEX_URL</code> to <code>web/.env.local</code> for local

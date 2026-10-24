@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { containsTerm, draftChanges, parseResumeDraft, tailoringBrief, unsupportedDetails } from "../src/resumeTailoring";
+import { containsTerm, draftChanges, parseResumeDraft, tailoringBrief, unsupportedDetails, parseChecklistTerms } from "../src/resumeTailoring";
 
 describe("factual tailoring handoff", () => {
+  it("supports bounded profession-specific checklists without credential inference", () => {
+    const terms = parseChecklistTerms(" patient care\r\nRN\nforklift operation\nPatient care\n\n");
+    expect(terms).toEqual(["Patient care", "RN", "forklift operation"]);
+    expect(containsTerm("Performed patient care and forklift operation", terms[0])).toBe(true);
+    expect(containsTerm("learning and reporting", "RN")).toBe(false);
+    expect(parseChecklistTerms("   ")).toEqual([]);
+    for (const text of ["x".repeat(81), Array.from({ length: 41 }, (_, index) => `Term ${index}`).join("\n"), "bad\u0000term", "x".repeat(3201)]) {
+      expect(() => parseChecklistTerms(text)).toThrow();
+    }
+  });
   it("only shares role identity and selected evidence even when passed a full pipeline record", () => {
     const role = { company: "Acme", title: "Analyst", _id: "private-job-id",
       ownerId: "private-account-id", notes: "Private salary negotiation", score: 99,

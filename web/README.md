@@ -1,8 +1,12 @@
-# Career Ops Web
+# Meritwake Web
 
-This is the Netlify-hosted dashboard for Career-Ops. Its Convex worker can
+This is the Meritwake dashboard built on Career-Ops. Its Convex worker can
 discover roles from approved public ATS feeds using a saved Target Profile.
 The local CLI and scanner remain separate for browser-assisted workflows.
+
+For the current beta test path, saved-progress guide, feature limits and release
+status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is
+implemented in the UI; publishing the hosted beta remains a separate release.
 
 ## Local development
 

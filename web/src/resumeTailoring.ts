@@ -6,6 +6,14 @@ export function containsTerm(text: string, term: string) {
   return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "i").test(text);
 }
 
+// A user-selected checklist can cover any profession without claiming to verify credentials.
+export function parseChecklistTerms(text: string) {
+  if (text.length > 3200 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(text)) throw new Error("Use plain text with up to 40 checklist terms.");
+  const terms = [...new Map(text.split(/\r?\n/).map(term => term.trim()).filter(Boolean).map(term => [term.toLowerCase(), term])).values()];
+  if (terms.length > 40 || terms.some(term => term.length > 80)) throw new Error("Use up to 40 terms, with no more than 80 characters per line.");
+  return terms;
+}
+
 export function tailoringBrief(role: { company: string; title: string }, sourceResume: string, description: string) {
   if (!sourceResume.trim() || !description.trim()) throw new Error("A source resume and job description are required.");
   return `CAREER-OPS FACTUAL RESUME TAILORING BRIEF
