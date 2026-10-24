@@ -9,6 +9,7 @@
  * Usage:
  *   node test-all.mjs           # Run all tests
  *   node test-all.mjs --quick   # Skip dashboard build (faster)
+ *   node test-all.mjs --policies-only # Check policy contracts without the full suite
  */
 
 import { execSync, execFileSync } from 'child_process';
@@ -51,6 +52,66 @@ function filesMatching(directory, predicate) {
     if (entry.isDirectory()) return filesMatching(relativePath, predicate);
     return predicate(relativePath) ? [relativePath] : [];
   });
+}
+
+function checkPolicyDocuments() {
+  const policyDocuments = [
+    {
+      path: 'docs/PRIVACY.md',
+      required: ['# Meritwake beta privacy notice', '**Version:** 2026-10-24-meritwake-beta', 'Data collected and why', 'Where data is stored', 'Retention and deletion', 'does not fill application forms or automatically submit applications to employers', 'metadata-only error reporting', 'portable JSON export', 'permanent account deletion', 'private channel used for your invitation', '[[SECURITY_CONTACT]]'],
+    },
+    {
+      path: 'docs/TERMS.md',
+      required: ['# Meritwake beta terms of use', '**Version:** 2026-10-24-meritwake-beta', 'does not automatically submit job applications', 'with explicit sharing consent', 'require your factual review', 'responsible for the accuracy', 'Material changes', '[[PRIVACY]]', 'private reporting channel in [[SECURITY_CONTACT]]'],
+    },
+    {
+      path: 'docs/SECURITY_CONTACT.md',
+      required: ['# Meritwake security contact', 'Report a vulnerability or suspected compromise privately', 'private channel used for your invitation', 'Meritwake security report', 'Do **not** open a public GitHub issue', 'Do not send passwords', 'No acknowledgement deadline or reward is promised', 'Stop if you encounter personal data and report', '[[PRIVACY]]', '[[INCIDENT_RESPONSE]]'],
+    },
+    {
+      path: 'docs/INCIDENT_RESPONSE.md',
+      required: ['# Jobbie alpha incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Local discovery data or context loss', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
+    },
+    {
+      path: 'docs/SECURITY.md',
+      required: ['# Security and data handling', 'Local-agent output audit', 'Local discovery retention and recovery', 'worker credential exists in this release'],
+    },
+    {
+      path: 'docs/RELEASE_RUNBOOK.md',
+      required: ['# Career-Ops web release runbook', 'Local scheduler emergency stop', 'data/autodiscovery-backups/', 'This release has no worker token.'],
+    },
+    {
+      path: 'docs/ALPHA_OPERATIONS.md',
+      required: ['# Jobbie closed alpha operations', 'Production data export request', 'Production account-data deletion request', '[[INCIDENT_RESPONSE]]', 'does **not** automatically submit job applications'],
+    },
+  ];
+
+  for (const { path, required } of policyDocuments) {
+    if (!fileExists(path)) {
+      fail(`Missing policy document: ${path}`);
+      continue;
+    }
+    const policy = readFile(path).replace(/\s+/g, ' ');
+    if (['docs/PRIVACY.md', 'docs/TERMS.md', 'docs/SECURITY_CONTACT.md'].includes(path)) {
+      if (/santifer(?:\.io)?|Santiago Fern[aá]ndez|688[\s-]*921[\s-]*377/i.test(policy)) {
+        fail(`Active product policy contains an inherited contact: ${path}`);
+      } else {
+        pass(`Active product policy excludes inherited contacts: ${path}`);
+      }
+    }
+    const missing = required.filter(fragment => !policy.includes(fragment));
+    if (missing.length === 0) {
+      pass(`Policy document is complete: ${path}`);
+    } else {
+      fail(`Policy document is missing required content: ${path} (${missing.join(', ')})`);
+    }
+  }
+}
+
+if (process.argv.includes('--policies-only')) {
+  checkPolicyDocuments();
+  console.log(`Policy contracts: ${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 console.log('\n🧪 career-ops test suite\n');
@@ -222,50 +283,7 @@ for (const f of systemFiles) {
   }
 }
 
-const alphaPolicyDocuments = [
-  {
-    path: 'docs/PRIVACY.md',
-    required: ['# Jobbie alpha privacy notice', '**Version:** 2026-08-01', 'Data collected and why', 'Retention and deletion', 'automatically submit applications', 'Jobbie alpha data request'],
-  },
-  {
-    path: 'docs/TERMS.md',
-    required: ['# Jobbie alpha terms of use', 'does **not** automatically submit job applications', 'Material changes'],
-  },
-  {
-    path: 'docs/SECURITY_CONTACT.md',
-    required: ['# Jobbie security contact', 'hi@santifer.io', 'Do **not**', '72 hours'],
-  },
-  {
-    path: 'docs/INCIDENT_RESPONSE.md',
-    required: ['# Jobbie alpha incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Local discovery data or context loss', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
-  },
-  {
-    path: 'docs/SECURITY.md',
-    required: ['# Security and data handling', 'Local-agent output audit', 'Local discovery retention and recovery', 'worker credential exists in this release'],
-  },
-  {
-    path: 'docs/RELEASE_RUNBOOK.md',
-    required: ['# Career-Ops web release runbook', 'Local scheduler emergency stop', 'data/autodiscovery-backups/', 'This release has no worker token.'],
-  },
-  {
-    path: 'docs/ALPHA_OPERATIONS.md',
-    required: ['# Jobbie closed alpha operations', 'Production data export request', 'Production account-data deletion request', '[[INCIDENT_RESPONSE]]', 'does **not** automatically submit job applications'],
-  },
-];
-
-for (const { path, required } of alphaPolicyDocuments) {
-  if (!fileExists(path)) {
-    fail(`Missing alpha policy document: ${path}`);
-    continue;
-  }
-  const policy = readFile(path);
-  const missing = required.filter(fragment => !policy.includes(fragment));
-  if (missing.length === 0) {
-    pass(`Alpha policy document is complete: ${path}`);
-  } else {
-    fail(`Alpha policy document is missing required content: ${path} (${missing.join(', ')})`);
-  }
-}
+checkPolicyDocuments();
 
 // User-specific and local-agent state must both be ignored, including browser
 // context and raw job-detail storage.
@@ -304,8 +322,7 @@ const allowedFiles = [
   // Community / governance files (added in v1.3.0, all legitimately reference the maintainer)
   'CODE_OF_CONDUCT.md', 'GOVERNANCE.md', 'SECURITY.md', 'SUPPORT.md',
   '.github/SECURITY.md',
-  // Published alpha policies intentionally provide the public security contact.
-  'docs/PRIVACY.md', 'docs/TERMS.md', 'docs/SECURITY_CONTACT.md',
+  // Historical operations docs retain the original maintainer reference until release review.
   'docs/INCIDENT_RESPONSE.md', 'docs/ALPHA_OPERATIONS.md',
   // Dashboard credit string
   'dashboard/internal/ui/screens/pipeline.go',
