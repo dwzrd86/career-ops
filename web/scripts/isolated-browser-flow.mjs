@@ -185,6 +185,8 @@ async function main() {
 
     const settings = page.locator("#discovery-settings");
     await expectVisible(page, settings.getByRole("heading", { name: "Target Profile" }), "Target Profile editor");
+    await expectVisible(page, settings.getByText(/current catalog focuses on technology/), "discovery profession and capacity limits");
+    await expectVisible(page, settings.getByText(/fresh feed entry is not a live vacancy check/), "discovery freshness and eligibility limits");
     assert.equal(await settings.getByRole("combobox", { name: /Schedule/ }).inputValue(), "manual");
     assert.equal(await settings.getByLabel("Enable discovery").isChecked(), false);
     await settings.locator("summary").filter({ hasText: "Optional preferences and eligibility" }).click();
@@ -199,6 +201,14 @@ async function main() {
     await settings.getByRole("button", { name: "Run now" }).click();
     await expectVisible(page, settings.getByText("Scan queued. Results will appear in the review queue."), "scan confirmation");
     await expectVisible(page, settings.getByText("Recent scans"), "scan history");
+    for (const [status, message] of [
+      ["partial", /Some employer feeds could not be read/],
+      ["failed", /This scan could not complete/],
+      ["succeeded", /This scan found no new reviewable matches/],
+    ]) {
+      await page.evaluate(status => window.__discoveryScan(status), status);
+      await expectVisible(page, settings.getByText(message), `${status} discovery guidance`);
+    }
 
     await expectVisible(page, page.getByRole("heading", { name: "Discovery review queue" }), "discovery review queue");
     await expectVisible(page, page.getByText("Review target role", { exact: true }), "projected discovery role");

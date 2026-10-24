@@ -51,6 +51,9 @@ export const save = mutation({
     if (!/^[A-Z]{3}$/.test(profile.currency)) throw new Error("Currency must be a three-letter code");
     if (profile.workplaceModes.length === 0) throw new Error("Choose at least one workplace mode");
     if (profile.sources.length === 0) throw new Error("Choose at least one job source");
+    if (profile.enabled && !profile.sources.some(source => source === "greenhouse" || source === "ashby")) {
+      throw new Error("Hosted discovery supports Greenhouse and Ashby; choose at least one before enabling discovery");
+    }
     const clean = {
       ...profile,
       targetRoles,

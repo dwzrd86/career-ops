@@ -307,3 +307,22 @@ These in-memory tests exercise all export capacity boundaries, foreign IDs,
 bounded cleanup, queued/in-flight deletion, retained unknown billing liabilities,
 late provider output and Better Auth's supported deletion/session flow. Provider,
 mail and bot transports are fictional; no hosted certification is implied.
+
+
+Hosted discovery uses the fixed Greenhouse/Ashby catalog in `convex/atsSources.ts`,
+primarily technology, cybersecurity and entertainment employers. Enabling a
+profile requires one of those sources; a Lever-only profile may be saved with
+discovery disabled. General-profession manual role/posting entry and resume
+preparation remain available. Scans retain at most 15 matches per employer in
+feed order, and the review queue shows the latest 100 saved discoveries. Repeated
+scans can include previously saved matches in the “For review” counter. Feed
+freshness is not a live vacancy check; verify the employer posting, compensation,
+licenses and eligibility yourself. Radius and seniority are saved preferences,
+not enforced filters. Partial and failed scans show recovery guidance.
+
+Discovery regression coverage is included in `npm run test:auth`, or run
+`npx vitest run --config vitest.auth.config.ts convex/autoDiscovery.test.ts convex/discovery.test.ts`.
+It covers fictional targets in five professions, empty/partial/failed feeds,
+per-employer and queue limits, duplicate approval and unknown eligibility.
+The development and compiled-CSP browser fixtures also assert limitation and
+scan-recovery guidance. These tests do not certify current public-source coverage.

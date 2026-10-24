@@ -90,7 +90,9 @@ export function DiscoverySettings() {
           <button className="button secondary" disabled={!saved?.enabled || dirty || pending !== null} onClick={() => void runNow()} type="button">{pending === "scan" ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}Run now</button>
         </div>
       </header>
-      <p className="settings-description">Start with role titles and location. Discovery checks a limited catalog of public employer feeds; it does not search every job board or verify professional licenses. You can also add a posting from any employer directly to your pipeline. Scans run only after you enable discovery and save.</p>
+      <p className="settings-description">Start with role titles and location. Hosted discovery supports Greenhouse and Ashby. Discovery checks a limited catalog of public employer feeds; it does not search every job board or verify professional licenses. You can also add a posting from any employer directly to your pipeline. Scans run only after you enable discovery and save.</p>
+      <p className="settings-description">The current catalog focuses on technology, cybersecurity and entertainment employers. Healthcare, trades and education coverage is limited; for any profession, add a role and paste its posting directly to prepare a resume. Each scan keeps at most 15 matching postings per employer, in feed order, and the review queue shows the latest 100 saved discoveries, so results are not exhaustive.</p>
+      <p className="settings-description">A fresh feed entry is not a live vacancy check. Open the employer posting before proceeding. Confirm pay, licenses, credentials and work authorization yourself; radius and seniority are saved preferences, not enforced filters.</p>
       <form className="settings-form" onSubmit={(event) => void submit(event)}>
         <fieldset>
           <legend>Roles</legend>
@@ -147,6 +149,8 @@ export function DiscoverySettings() {
         {notice ? <p className="access-notice" role="status">{notice}</p> : null}
         <div className="settings-footer"><span>{saved ? `Saved version ${saved.profileVersion}` : "No web profile saved"}{latest ? ` · Last scan: ${latest.status}, ${latest.reviewable} to review` : ""}</span><button className="button primary" disabled={saved === undefined || pending !== null || !dirty && !!saved} type="submit">{pending === "save" ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Save Target Profile</button></div>
       </form>
+      {latest?.status === "partial" && <p className="settings-description" role="status">Some employer feeds could not be read. Available results cover only the successful feeds; retry later or add a posting directly.</p>}
+      {latest?.status === "failed" && <p className="form-error" role="alert">This scan could not complete. Check the scan history for the reason, confirm your saved Target Profile and retry. You can still add a posting directly.</p>}
       {latest?.status === "succeeded" && latest.reviewable === 0 && <p className="settings-description" role="status">This scan found no new reviewable matches in the selected feeds. Try another target title or location, or add a job directly. No matches here does not mean there are no suitable jobs elsewhere.</p>}
       {runs && runs.length > 0 ? <div className="scan-history"><h3>Recent scans</h3><div className="table-wrap"><table><thead><tr><th>When</th><th>Status</th><th>Feeds</th><th>New</th><th>For review</th><th>Rejected</th></tr></thead><tbody>{runs.slice(0, 5).map((run) => <tr key={run._id}><td>{new Date(run.queuedAt).toLocaleString()}</td><td>{run.status}{run.errorCode ? ` · ${run.errorCode.replaceAll("_", " ").toLowerCase()}` : ""}</td><td>{run.feedsSucceeded} ok{run.feedsFailed ? `, ${run.feedsFailed} failed` : ""}</td><td>{run.discovered}</td><td>{run.reviewable}</td><td>{run.rejected}</td></tr>)}</tbody></table></div></div> : null}
     </section>

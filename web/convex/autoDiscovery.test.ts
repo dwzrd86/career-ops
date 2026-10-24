@@ -1,6 +1,6 @@
 import betterAuthTest from "@convex-dev/better-auth/test";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { api, components, internal } from "./_generated/api";
 import { evaluateCandidate, isRelevantTitle, parseFeed, ATS_SOURCES } from "./atsSources";
 import { reservationEmailHash } from "./enrollmentCore";
@@ -59,6 +59,16 @@ describe("web auto discovery", () => {
     await expect(alice.query(api.targetProfile.get, {})).resolves.toMatchObject({ targetRoles: profile.targetRoles, profileVersion: 1 });
     await expect(bob.query(api.targetProfile.get, {})).resolves.toBeNull();
     await expect(bob.query(api.autoDiscovery.listRuns, {})).resolves.toEqual([]);
+  });
+
+  test("enabled profiles need a hosted catalog source while manual professions remain valid", async () => {
+    const deployment = createDeployment();
+    const alice = await account(deployment, "source-validation");
+    await alice.mutation(api.privacy.acknowledge, {});
+    await expect(alice.mutation(api.targetProfile.save, { profile: { ...profile, sources: ["lever"] } }))
+      .rejects.toThrow("Hosted discovery supports Greenhouse and Ashby");
+    await expect(alice.mutation(api.targetProfile.save, { profile: { ...profile, targetRoles: [{ title: "Registered Nurse", aliases: [], seniority: [] }], enabled: false, sources: ["lever"] } }))
+      .resolves.toBe(1);
   });
 
   test("manual scan queues once and ingestion deduplicates while preserving review state", async () => {
@@ -137,6 +147,45 @@ describe("web auto discovery", () => {
     const exported = await alice.query(api.account.exportData, {});
     expect(exported.jobs[0].postingText).toBe(candidate.description);
     expect(exported.discovery[0].postingText).toBe("Updated feed posting");
+  });
+
+  test.each(["empty", "partial", "failed", "capacity"] as const)("worker records %s feeds with bounded results", async (scenario) => {
+    const deployment = createDeployment();
+    const alice = await account(deployment, `worker-${scenario}`);
+    await alice.mutation(api.privacy.acknowledge, {});
+    await alice.mutation(api.targetProfile.save, { profile });
+    const runId = await alice.mutation(api.autoDiscovery.requestScan, {});
+    const fetchMock = vi.fn(async (url: string) => {
+      const source = ATS_SOURCES.find(source => source.url === url)!;
+      if (scenario === "failed" || scenario === "partial" && source.company !== "Vanta") throw new Error("fixture feed failure");
+      const jobs = scenario === "empty" ? [] : Array.from({ length: scenario === "capacity" ? 20 : 1 }, (_, index) => ({
+        id: `${source.company}-${index}`, title: "Security Architect",
+        absolute_url: `https://jobs.example.test/${source.company}/${index}`,
+        jobUrl: `https://jobs.example.test/${source.company}/${index}`,
+        location: source.provider === "ashby" ? "Remote - United States" : { name: "Remote - United States" },
+        isRemote: true,
+      }));
+      return new Response(JSON.stringify({ jobs }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await deployment.action(internal.autoDiscoveryWorker.runForOwner, { runId });
+      expect(fetchMock).toHaveBeenCalledTimes(ATS_SOURCES.length);
+      const [run] = await alice.query(api.autoDiscovery.listRuns, {});
+      const count = scenario === "capacity" ? ATS_SOURCES.length * 15 : scenario === "partial" ? 1 : 0;
+      expect(run).toMatchObject({
+        status: scenario === "partial" ? "partial" : scenario === "failed" ? "failed" : "succeeded",
+        feedsSucceeded: scenario === "failed" ? 0 : scenario === "partial" ? 1 : ATS_SOURCES.length,
+        feedsFailed: scenario === "failed" ? ATS_SOURCES.length : scenario === "partial" ? ATS_SOURCES.length - 1 : 0,
+        discovered: count, reviewable: count,
+      });
+      expect(await alice.query(api.discovery.list, {})).toHaveLength(Math.min(count, 100));
+      const stored = await deployment.run(async ctx => {
+        const scan = (await ctx.db.get(runId))!;
+        return await ctx.db.query("discoveredJobs").withIndex("by_owner_discovered_at", q => q.eq("ownerId", scan.ownerId)).take(196);
+      });
+      expect(stored).toHaveLength(count);
+    } finally { vi.unstubAllGlobals(); }
   });
 
   test("a duplicate worker leaves the winning scan and its counters alone", async () => {
@@ -234,6 +283,31 @@ describe("approved feed matching", () => {
     const decision = evaluateCandidate(profile, jobs[0]);
     expect(decision.outcome).toBe("rejected");
     expect(decision.hardFilters.filter((entry) => entry.outcome === "fail").map((entry) => entry.ruleId)).toEqual(expect.arrayContaining(["SALARY_FLOOR", "CLEARANCE", "TRAVEL"]));
+  });
+
+  test.each(["Software Engineer", "Registered Nurse", "Electrician", "Administrative Assistant", "Teacher"])("%s supports fictional title matching without certifying credentials", (title) => {
+    const target = { ...profile, targetRoles: [{ title, aliases: [], seniority: [] }] };
+    const [candidate] = parseFeed(ATS_SOURCES[0], { jobs: [{ id: "fictional", title,
+      absolute_url: "https://jobs.example.test/fictional", location: { name: "Remote - United States" },
+      content: "Professional license and certification required.",
+    }] });
+    expect(isRelevantTitle(target, candidate.title)).toBe(true);
+    const decision = evaluateCandidate(target, candidate);
+    expect(decision.outcome).toBe("needsReview");
+    expect(decision.explanationCodes).toEqual(expect.arrayContaining(["SALARY_UNKNOWN", "WORK_AUTHORIZATION_UNKNOWN"]));
+    expect(isRelevantTitle(target, "Unrelated Position")).toBe(false);
+  });
+
+  test("feed absence does not certify closure and published age does not imply liveness", () => {
+    const source = ATS_SOURCES.find(source => source.provider === "ashby")!;
+    expect(parseFeed(source, { jobs: [] })).toEqual([]);
+    expect(() => parseFeed(source, {})).toThrow("INVALID_FEED");
+    const [candidate] = parseFeed(source, { jobs: [{ id: "old", title: "Security Architect",
+      jobUrl: "https://jobs.example.test/old", location: "Remote - United States", isRemote: true,
+      publishedAt: "2020-01-01T00:00:00Z",
+    }] });
+    expect(candidate.postedAt).toBe(Date.parse("2020-01-01T00:00:00Z"));
+    expect(evaluateCandidate(profile, candidate).outcome).toBe("needsReview");
   });
 
   test("does not auto-accept uncertain commutes or missing compensation", () => {

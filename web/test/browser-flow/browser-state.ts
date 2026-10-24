@@ -194,6 +194,14 @@ export function requestBrowserFlowHostedResume(args: any) {
 }
 // Test-only controls exercise real Studio rendering; they never invoke a provider.
 Object.assign(window, {
+  __discoveryScan(status: "succeeded" | "partial" | "failed") {
+    const latest = state.scanRuns[0];
+    publish({ scanRuns: [{ ...latest, status, reviewable: 0,
+      feedsSucceeded: status === "failed" ? 0 : 1,
+      feedsFailed: status === "succeeded" ? 0 : 1,
+      errorCode: status === "succeeded" ? undefined : "FEED_PARTIAL",
+    }, ...state.scanRuns.slice(1)] });
+  },
   __completeHosted(failureCode?: string, conflict = false) {
     const request = state.hostedRequest!;
     const bundle = state.resumeBundles[request.jobId];
