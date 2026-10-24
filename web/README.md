@@ -4,6 +4,17 @@ This is the Meritwake dashboard built on Career-Ops. Its Convex worker can
 discover roles from approved public ATS feeds using a saved Target Profile.
 The local CLI and scanner remain separate for browser-assisted workflows.
 
+`convex/hostedResumes.ts` now defines the hosted request/state boundary for the
+selected Z.ai `glm-4.7` provider. An enrolled, verified owner must acknowledge the
+current privacy notice, save a bundle and explicitly consent to sharing that
+revision's source and posting. Requests expose private pending/succeeded/failed
+metadata; internal completion replaces only that exact bundle revision and
+clears review approval. Failed or stale output preserves saved content.
+This source stage has no dispatch, scheduler or provider calls: the admission
+ledger and provider adapter must be implemented before hosted generation can
+run. Its text/byte limits are transport bounds, not verified token/cost limits.
+The existing local generation workflow remains available.
+
 For the current beta test path, saved-progress guide, feature limits and release
 status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is
 implemented in the UI; publishing the hosted beta remains a separate release.

@@ -351,3 +351,133 @@ test("discovery approval creates a private resume target once and preserves trac
   expect(await alice.client.query(api.jobs.list, {})).toHaveLength(2);
   expect((await alice.client.query(api.jobs.list, {})).find(item => item._id === manualId)?.source).toBe("Manual entry");
 });
+
+
+describe("hosted resume request boundaries (no provider dispatch)", () => {
+  const consent = { provider: "zai", model: "glm-4.7", version: "2026-10-24-zai-selected-evidence-v1", shareSelectedEvidence: true } as const;
+  async function fixture() {
+    const deployment = createIsolatedDeployment();
+    const a = await provisionDisposableAccount(deployment, "hosted-a");
+    const b = await provisionDisposableAccount(deployment, "hosted-b");
+    const jobId = await a.client.mutation(api.jobs.create, jobInput("hosted-role"));
+    const saved = { jobId, sourceResume: "Fictional Candidate\nSQL reporting", description: "SQL reporting role",
+      resume: "Existing reviewed resume", reviewed: true, expectedRevision: null };
+    await a.client.mutation(api.resumeBundles.save, saved);
+    const input = { jobId, expectedRevision: 1, consent };
+    return { deployment, a, b, jobId, saved, input };
+  }
+
+  test("requires authentication, owned saved evidence, current privacy, and matching explicit consent", async () => {
+    const { deployment, a, b, jobId, input } = await fixture();
+    await expect(deployment.mutation(api.hostedResumes.request, input)).rejects.toThrow("Authentication required");
+    await expect(b.client.mutation(api.hostedResumes.request, input)).rejects.toThrow("Job not found");
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, consent: { ...consent, shareSelectedEvidence: false } })).rejects.toThrow("Explicit consent");
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, consent: { ...consent, version: "old" } })).rejects.toThrow("Explicit consent");
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, consent: { ...consent, provider: "claude" } } as any)).rejects.toThrow();
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, expectedRevision: 2 })).rejects.toThrow("current bundle");
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, expectedRevision: 1.5 })).rejects.toThrow("current bundle");
+    const unsaved = await a.client.mutation(api.jobs.create, jobInput("unsaved"));
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, jobId: unsaved })).rejects.toThrow("current bundle");
+    await deployment.run(ctx => ctx.db.patch(a.userId as any, { privacyPolicyVersion: "old" }));
+    await expect(a.client.mutation(api.hostedResumes.request, input)).rejects.toThrow("Privacy acknowledgement");
+    await a.client.mutation(api.privacy.acknowledge, {});
+    await deployment.run(async ctx => {
+      const invite = await ctx.db.query("alphaInvites").withIndex("by_claimed_by", q => q.eq("claimedBy", a.userId as any)).unique();
+      await ctx.db.patch(invite!._id, { expiredAt: Date.now() });
+    });
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, jobId })).rejects.toThrow("Alpha enrollment");
+  });
+
+  test("pending intent is private, one per owner, and has no scheduled or paid side effect", async () => {
+    const { deployment, a, b, saved, input } = await fixture();
+    const requestId = await a.client.mutation(api.hostedResumes.request, input);
+    expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ requestId, status: "pending", provider: "zai", model: "glm-4.7", bundleRevision: 1 });
+    expect(await b.client.query(api.hostedResumes.status, { requestId })).toBeNull();
+    await expect(deployment.query(api.hostedResumes.status, { requestId })).rejects.toThrow("Authentication required");
+    const otherJob = await a.client.mutation(api.jobs.create, jobInput("other-role"));
+    await a.client.mutation(api.resumeBundles.save, { ...saved, jobId: otherJob });
+    await expect(a.client.mutation(api.hostedResumes.request, { ...input, jobId: otherJob })).rejects.toThrow("already pending");
+    await deployment.run(async ctx => {
+      const item = await ctx.db.get(requestId);
+      expect(item).not.toHaveProperty("sourceResume");
+      expect(item).not.toHaveProperty("description");
+      expect(await ctx.db.system.query("_scheduled_functions").collect()).toEqual([]);
+    });
+    expect(await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "unavailable" })).toBe(true);
+    expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "failed", failureCode: "unavailable", finishedAt: expect.any(Number) });
+    expect(await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "providerFailed" })).toBe(false);
+    expect(await a.client.mutation(api.hostedResumes.request, input)).not.toBe(requestId);
+  });
+
+  test.each(["\u0000binary", "bad\uFFFDencoding", "x".repeat(40001), "界".repeat(33000)])("rejects invalid or oversized saved evidence (%#)", async sourceResume => {
+    const { deployment, a, input, jobId } = await fixture();
+    // Legacy data can predate the request validator; validate at the boundary.
+    await deployment.run(async ctx => {
+      const bundle = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", a.userId as any).eq("jobId", jobId)).unique();
+      await ctx.db.patch(bundle!._id, { sourceResume });
+    });
+    await expect(a.client.mutation(api.hostedResumes.request, input)).rejects.toThrow();
+    expect(await deployment.run(ctx => ctx.db.query("hostedResumeRequests").collect())).toEqual([]);
+  });
+
+  test("completion updates only the bound bundle, clears review and is idempotent", async () => {
+    const { deployment, a, jobId, input } = await fixture();
+    const requestId = await a.client.mutation(api.hostedResumes.request, input);
+    expect(await deployment.mutation(internal.hostedResumes.complete, { requestId, draft: "\uFEFFFictional Candidate\r\nSQL reporting\n" })).toBe(true);
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: "Fictional Candidate\nSQL reporting", reviewedAt: null, revision: 2 });
+    expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "succeeded", finishedAt: expect.any(Number) });
+    expect(await deployment.mutation(internal.hostedResumes.complete, { requestId, draft: "Redelivery must not overwrite" })).toBe(false);
+    expect(await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "providerFailed" })).toBe(false);
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: "Fictional Candidate\nSQL reporting", revision: 2 });
+  });
+
+  test("newer edits reject stale completion and preserve the reviewed draft", async () => {
+    const { deployment, a, jobId, saved, input } = await fixture();
+    const requestId = await a.client.mutation(api.hostedResumes.request, input);
+    await a.client.mutation(api.resumeBundles.save, { ...saved, resume: "Newer human edit", expectedRevision: 1 });
+    expect(await deployment.mutation(internal.hostedResumes.complete, { requestId, draft: "Stale output" })).toBe(false);
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: "Newer human edit", revision: 2, reviewedAt: expect.any(Number) });
+    expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "failed", failureCode: "staleEvidence" });
+  });
+
+  test("delete/recreate at the same revision rejects the old request", async () => {
+    const { deployment, a, saved, input, jobId } = await fixture();
+    const requestId = await a.client.mutation(api.hostedResumes.request, input);
+    await a.client.mutation(api.resumeBundles.remove, { jobId, expectedRevision: 1 });
+    await a.client.mutation(api.resumeBundles.save, saved);
+    expect(await deployment.mutation(internal.hostedResumes.complete, { requestId, draft: "Old callback" })).toBe(false);
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: saved.resume, revision: 1 });
+  });
+
+  test("invalid completion and safe provider failure preserve existing content", async () => {
+    const { deployment, a, saved, input, jobId } = await fixture();
+    for (const draft of [" ", "bad\uFFFD", "\u0000binary", "x".repeat(40001)]) {
+      const requestId = await a.client.mutation(api.hostedResumes.request, input);
+      expect(await deployment.mutation(internal.hostedResumes.complete, { requestId, draft })).toBe(false);
+      expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "failed", failureCode: "invalidDraft" });
+    }
+    const requestId = await a.client.mutation(api.hostedResumes.request, input);
+    await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "providerFailed" });
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: saved.resume, reviewedAt: expect.any(Number), revision: 1 });
+  });
+
+  test.each(["privacy", "enrollment", "owner", "role"])("completion rechecks %s before accepting output", async boundary => {
+    const { deployment, a, jobId, saved, input } = await fixture();
+    const requestId = await a.client.mutation(api.hostedResumes.request, input);
+    await deployment.run(async ctx => {
+      if (boundary === "privacy") await ctx.db.patch(a.userId as any, { privacyPolicyVersion: "old" });
+      if (boundary === "owner") await ctx.db.delete(a.userId as any);
+      if (boundary === "role") await ctx.db.patch(jobId, { title: "New role" });
+      if (boundary === "enrollment") {
+        const invite = await ctx.db.query("alphaInvites").withIndex("by_claimed_by", q => q.eq("claimedBy", a.userId as any)).unique();
+        await ctx.db.patch(invite!._id, { expiredAt: Date.now() });
+      }
+    });
+    expect(await deployment.mutation(internal.hostedResumes.complete, { requestId, draft: "Late output" })).toBe(false);
+    await deployment.run(async ctx => {
+      expect(await ctx.db.get(requestId)).toMatchObject({ status: "failed", failureCode: boundary === "role" ? "staleEvidence" : "accessRevoked" });
+      const bundle = await ctx.db.query("resumeBundles").withIndex("by_owner_job", q => q.eq("ownerId", a.userId as any).eq("jobId", jobId)).unique();
+      expect(bundle).toMatchObject({ resume: saved.resume, revision: 1 });
+    });
+  });
+});

@@ -21,7 +21,7 @@ const bundle = v.object({
   updatedAt: v.number(),
 });
 
-async function ownedJob(ctx: QueryCtx | MutationCtx, jobId: Id<"jobs">) {
+export async function ownedJob(ctx: QueryCtx | MutationCtx, jobId: Id<"jobs">) {
   const ownerId = await requireVerifiedUser(ctx);
   await requireEnrolledUser(ctx, ownerId);
   const job = await ctx.db.get(jobId);

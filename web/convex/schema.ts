@@ -119,6 +119,29 @@ export default defineSchema({
     reviewedAt: v.union(v.number(), v.null()),
     updatedAt: v.number(),
   }).index("by_owner_job", ["ownerId", "jobId"]),
+  // Content stays in the existing bundle. Exact bundle identity + revision bind
+  // consent and completion to the saved evidence, including delete/recreate.
+  hostedResumeRequests: defineTable({
+    ownerId: v.id("users"),
+    jobId: v.id("jobs"),
+    bundleId: v.id("resumeBundles"),
+    bundleRevision: v.number(),
+    company: v.string(),
+    title: v.string(),
+    provider: v.literal("zai"),
+    model: v.literal("glm-4.7"),
+    consentVersion: v.string(),
+    consentedAt: v.number(),
+    privacyPolicyVersion: v.string(),
+    status: v.union(v.literal("pending"), v.literal("succeeded"), v.literal("failed")),
+    createdAt: v.number(),
+    finishedAt: v.optional(v.number()),
+    failureCode: v.optional(v.union(
+      v.literal("staleEvidence"), v.literal("accessRevoked"),
+      v.literal("invalidDraft"), v.literal("providerFailed"),
+      v.literal("unavailable"),
+    )),
+  }).index("by_owner_status", ["ownerId", "status"]),
   // Local discovery records remain canonical. This is a deliberately narrow,
   // owner-scoped projection for the private review UI: no resume content,
   // browser data, local paths, or component-auth records are stored here.
