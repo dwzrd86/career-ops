@@ -82,6 +82,43 @@ async function main() {
       return route.fulfill(generationFailure ? { status: 502, json: { error: "Test GLM failure. Editor retained." } } :
         { json: { draft: "Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS" } });
     });
+    // Exercise hosted AccessScreen recovery using the existing isolated client.
+    // The configured backend lifecycle is covered independently by hostedAuth.test.ts.
+    let localOwnerRequests = 0;
+    await page.route("**/__career_ops/local-owner", route => {
+      localOwnerRequests++;
+      return route.fulfill({ json: { enabled: productionCsp } });
+    });
+    await page.goto(`${baseUrl}?error=INVALID_TOKEN`, { waitUntil: "networkidle" });
+    await expectVisible(page, page.getByText("That verification or reset link is invalid or expired. Request a new link below.", { exact: true }), "invalid callback recovery");
+    await page.getByLabel("Email").fill("unverified@example.test");
+    await page.getByLabel("Password", { exact: true }).fill("FictionalPassword123");
+    await page.evaluate(() => { window.__authFailure = { method: "signIn", code: "EMAIL_NOT_VERIFIED" }; });
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expectVisible(page, page.getByRole("heading", { name: "Verify your email." }), "unverified sign-in recovery");
+    assert.equal(await page.locator("h1").filter({ hasText: "Pipeline" }).count(), 0);
+    await page.evaluate(() => { window.__authFailure = { method: "sendVerificationEmail", code: "AUTH_SERVICE_UNAVAILABLE" }; });
+    await page.getByRole("button", { name: "Resend verification link" }).last().click();
+    await expectVisible(page, page.getByText("Verification email could not be requested. Contact your beta host or try again later.", { exact: true }), "resend failure recovery");
+    await page.getByRole("button", { name: "Back to sign in" }).click();
+    assert.equal(new URL(page.url()).search, "", "starting over clears invalid callback parameters");
+    await page.getByRole("button", { name: "Forgot your password?", exact: true }).click();
+    await page.getByLabel("Email").fill("unknown@example.test");
+    await page.getByRole("button", { name: "Send reset link", exact: true }).click();
+    const resetNotice = await page.getByRole("status").textContent();
+    await page.evaluate(() => { window.__authFailure = { method: "requestPasswordReset", code: "AUTH_SERVICE_UNAVAILABLE" }; });
+    await page.getByRole("button", { name: "Send reset link", exact: true }).click();
+    await page.waitForFunction(text => document.querySelector('[role="status"]')?.textContent === text, resetNotice);
+    assert.equal(await page.getByRole("status").textContent(), resetNotice, "reset service failure does not disclose account existence");
+    await page.goto(`${baseUrl}?token=invalid-fixture-token`, { waitUntil: "networkidle" });
+    await page.getByLabel("New password", { exact: true }).fill("ChangedPassword123");
+    await page.getByLabel("Confirm password").fill("ChangedPassword123");
+    await page.evaluate(() => { window.__authFailure = { method: "resetPassword", code: "INVALID_TOKEN" }; });
+    await page.getByRole("button", { name: "Reset password", exact: true }).click();
+    await expectVisible(page, page.getByText("We could not complete that request. Request a new link and try again.", { exact: true }), "invalid reset token recovery");
+    await page.getByRole("button", { name: "Request another reset link", exact: true }).click();
+    assert.equal(new URL(page.url()).search, "");
+    assert.ok(!(await page.locator("body").textContent()).includes("Private provider diagnostic"));
     const entry = await page.goto(baseUrl, { waitUntil: "networkidle" });
     if (productionCsp) assert.ok(entry.headers()["content-security-policy"], "The browser must receive the enforced CSP");
     await page.getByRole("button", { name: "Create an account" }).click({ force: true });
@@ -99,9 +136,24 @@ async function main() {
     await page.getByRole("button", { name: "Retry bot check", exact: true }).click();
     await page.waitForFunction(button => !button.disabled, await createAccount.elementHandle());
     assert.equal(await page.getByLabel("Email").inputValue(), "security-flow@example.test", "bot retry preserves form input");
+    if (productionCsp) {
+      assert.equal(localOwnerRequests, 0, "hosted builds never probe or post local-owner credentials even if the route advertises availability");
+      assert.equal(await page.getByText(/Create your first local owner account/).count(), 0);
+    }
+    for (const [code, message] of [
+      ["AUTH_CONFIGURATION_UNAVAILABLE", "Authentication is not configured for this workspace. Contact your beta host."],
+      ["BOT_VERIFICATION_FAILED", "The bot check failed. Complete a fresh check and try again."],
+    ]) {
+      await page.evaluate(code => { window.__authFailure = { method: "signUp", code }; }, code);
+      await createAccount.click();
+      await expectVisible(page, page.getByText(message, { exact: true }), `signup ${code} guidance`);
+      assert.equal(await createAccount.isEnabled(), false, "a consumed bot token cannot be reused");
+      await page.evaluate(() => window.__betaTurnstileOptions.callback("fresh-fixture-token"));
+    }
     await createAccount.click();
 
     await expectVisible(page, page.getByRole("heading", { name: "Verify your email." }), "verification screen");
+    if (productionCsp) assert.equal(localOwnerRequests, 0, "hosted signup never submits credentials to the local-owner route");
     await page.getByRole("button", { name: "Resend verification link" }).first().click();
     await expectVisible(page, page.getByRole("heading", { name: "Review the beta privacy notice." }), "privacy acknowledgement");
     await page.getByRole("button", { name: /Privacy notice \(version/ }).click();

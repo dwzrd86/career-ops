@@ -74,6 +74,15 @@ headers/CSP, and renders the actual UI through registration, verification,
 privacy acknowledgement, role creation and update, sign-out, and sign-in. The
 release workflow runs it before Release Please can create a release tag.
 
+For focused auth checks, run `npm run test:auth` (in-memory configured Better
+Auth HTTP routes and Convex functions), then `npm run test:browser-flow` and
+`npm run test:browser-csp` (the real access UI with isolated client/provider
+fixtures). `convex/hostedAuth.test.ts` covers invite expiry/reuse, bot and missing
+configuration failures, verification gates, password reset expiry/reuse and
+session revocation, and hosted rejection of local-owner credentials. Browser
+checks cover safe error/recovery messages and the compiled local-owner gate.
+These fixtures do not certify live email, Turnstile, or deployed accounts.
+
 ## Data and secret handling
 
 Do not commit career records (`cv.md`, `article-digest.md`, `data/`, `reports/`,
