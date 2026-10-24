@@ -13,7 +13,9 @@ export const HOSTED_CONSENT_VERSION = "2026-10-24-zai-selected-evidence-v1";
 const MAX_BRIEF_BYTES = 100_000;
 const failureCode = v.union(
   v.literal("staleEvidence"), v.literal("accessRevoked"),
-  v.literal("invalidDraft"), v.literal("providerFailed"), v.literal("unavailable"),
+  v.literal("invalidDraft"), v.literal("providerFailed"),
+  v.literal("providerBalance"), v.literal("providerRateLimited"),
+  v.literal("providerOverloaded"), v.literal("providerTimeout"), v.literal("unavailable"),
 );
 const requestStatus = v.object({
   requestId: v.id("hostedResumeRequests"), jobId: v.id("jobs"),

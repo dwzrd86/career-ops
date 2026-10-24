@@ -30,23 +30,58 @@ price/bound invalidates unclaimed permits. Unexpected bills above reservation
 are recorded and disable admission. These controls affect future dispatch;
 already sent work remains a possible charge.
 
-The future server provider adapter must reserve a request, then use the single
-successful `claimDispatch` result immediately before its one bounded provider
-call. It must enforce the returned ceilings, verify usage, and settle through
-the ledger. Redelivery after a claim returns no permit; ambiguous calls require
-reconciliation, never automatic inference retries. A retry uses a new request
-and reservation. Only a never-claimed reservation may be released at zero
-without provider billing evidence. All ledger controls are internal functions;
-there is no browser refund, billing exemption or provider fallback API.
-Conditional Claude pricing shares the same pool, but current public requests
-and consent remain pinned to Z.ai. Selecting Claude needs the separate explicit
-provider-choice implementation.
+`convex/hostedResumeWorker.ts` now provides the internal `execute` action. It
+reserves the request and consumes exactly one `claimDispatch` permit. That
+transaction returns the current factual brief and snapshotted prices while
+rechecking access/revision. `convex/hostedProvider.ts` calls only the Standard
+Z.ai endpoint with `glm-4.7`, thinking disabled, no tools, no redirects, no SDK
+and zero automatic retries. The network/body deadline is 45 seconds, responses
+are capped at 256,000 bytes, and completed plain-text drafts reuse the
+40,000-character import validator. Wrong models, unknown usage, unexpected
+reasoning/tools and transport failures retain reservations and locks. Usage
+settles at reserved uncached rates without assuming a cache discount: these
+are conservative charge upper bounds, not independently verified invoices.
+Truncated, refused or malformed output never replaces a bundle. Valid output
+goes through existing revision/access checks and clears factual review.
 
-This source stage has no provider action, scheduler or paid call. The provider
-adapter remains a later task, and hosted generation stays unavailable until
-that adapter and release-time token/billing proofs are complete. The existing
-local generation workflow remains available. Durable billing metadata has no
-career text; its account export/deletion and retention audit is a later task.
+The sole permit holder may settle at zero only when it knows no fetch occurred
+(e.g. missing configuration or rejected input). Failed claims can atomically
+cancel still-unclaimed reservations without affecting a worker which already
+claimed one. Quota is never refunded. Once fetch begins, errors, timeouts and
+browser cancellation cannot justify a zero bill. Redelivery cannot replay
+inference; user retries need a new request/reservation. An action crash after
+claim requires operator reconciliation, with no expiring lease or automatic retry.
+
+Server-only names are `HOSTED_AI_ZAI_API_KEY` (dedicated Standard API key, never
+a Coding Plan/local credential) and `HOSTED_AI_ZAI_BOUND_EVIDENCE` (must match
+the reservation's reviewed evidence reference). Neither is a `VITE_*` variable.
+**Do not set the attestation or enable paid execution until release evidence
+proves this contract:** serialized request UTF-8 bytes plus 4,096 upper-bounds
+all billable input tokens, and `max_tokens` with thinking disabled bounds all
+billable output, with no unreserved fees. The adapter checks that conditional
+input bound against the reserved ceiling (at most 200,000 tokens) and caps total
+output at 8,192 tokens. Arithmetic and a matching reference do not establish the
+provider contract; no live attestation, price or key is seeded. If this bound
+cannot be proven, keep execution disabled and replace it with a verified model
+tokenizer/contract before release. Official references:
+[chat completion](https://docs.z.ai/api-reference/llm/chat-completion) and
+[thinking mode](https://docs.z.ai/guides/capabilities/thinking-mode).
+
+All execution/ledger controls are internal. Conditional Claude pricing shares
+the pool, but requests, consent and transport stay pinned to Z.ai; switching
+requires a separate explicit consented implementation. Resume Studio wiring
+and scheduling remain the next task: the public intent mutation does not yet
+invoke this action. No live call or deployment is certified. The local workflow
+remains usable. Billing tables contain no career text; complete account cleanup
+and retention auditing remain separate tasks.
+
+Run `npm run test:auth` for fake-provider execution and existing backend tests.
+`convex/hostedProvider.test.ts` uses fictional evidence and intercepted fetch;
+it does not certify real pricing/token bounds or hosted accounts. For the
+frontend boundary, build into a disposable directory with
+`HOSTED_AI_ZAI_API_KEY=fictional-hosted-provider-build-key`, then run
+`HOSTED_PROVIDER_BUILD_DIR=/absolute/disposable/build node --test scripts/hosted-provider-build.test.mjs`.
+Preserve release `dist`; use the production build guard for publishable artifacts.
 
 For the current beta test path, saved-progress guide, feature limits and release
 status, see [Beta testing](../docs/BETA_TESTING.md). The Fieldnotes identity is

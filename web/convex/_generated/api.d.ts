@@ -20,6 +20,7 @@ import type * as discovery from "../discovery.js";
 import type * as enrollment from "../enrollment.js";
 import type * as enrollmentCore from "../enrollmentCore.js";
 import type * as errorReporting from "../errorReporting.js";
+import type * as hostedResumeWorker from "../hostedResumeWorker.js";
 import type * as hostedResumes from "../hostedResumes.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   enrollmentCore: typeof enrollmentCore;
   errorReporting: typeof errorReporting;
   hostedResumes: typeof hostedResumes;
+  hostedResumeWorker: typeof hostedResumeWorker;
   http: typeof http;
   jobs: typeof jobs;
   localOwner: typeof localOwner;

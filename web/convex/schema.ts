@@ -140,6 +140,8 @@ export default defineSchema({
     failureCode: v.optional(v.union(
       v.literal("staleEvidence"), v.literal("accessRevoked"),
       v.literal("invalidDraft"), v.literal("providerFailed"),
+      v.literal("providerBalance"), v.literal("providerRateLimited"),
+      v.literal("providerOverloaded"), v.literal("providerTimeout"),
       v.literal("unavailable"),
     )),
   }).index("by_owner_status", ["ownerId", "status"]),

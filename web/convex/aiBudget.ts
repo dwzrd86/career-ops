@@ -4,6 +4,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { ADMISSION_CUTOFF, MONTHLY_ATTEMPTS, PILOT_CAP, priceFields } from "./aiBudgetModel";
 import { requireEnrolledUser } from "./enrollment";
+import { tailoringBrief } from "../src/resumeTailoring";
 import { HOSTED_CONSENT_VERSION } from "./hostedResumes";
 import { PRIVACY_POLICY_VERSION, requireCurrentPrivacyAcknowledgement } from "./privacy";
 
@@ -92,7 +93,7 @@ async function currentEvidence(ctx: MutationCtx, item: Doc<"hostedResumeRequests
 }
 
 // One reservation per request; explicit retries/regenerations require a NEW
-// request and consume quota again. No SDK, scheduler or inference runs here.
+// request and consume quota again. Inference runs only in the internal worker.
 export const reserve = internalMutation({
   args: { requestId: v.id("hostedResumeRequests") }, returns: v.id("aiBudgetAttempts"),
   handler: async (ctx, { requestId }) => {
@@ -134,8 +135,9 @@ export const reserve = internalMutation({
 });
 
 const dispatchPermit = v.object({ requestId: v.id("hostedResumeRequests"), provider: v.string(),
-  model: v.string(), maxInputTokens: v.number(), maxTotalOutputTokens: v.number() });
-// Future server adapter MUST claim immediately before its single bounded call.
+  model: v.string(), maxInputTokens: v.number(), maxTotalOutputTokens: v.number(),
+  brief: v.string(), evidence: v.string(), inputMicroUsdPerMillion: v.number(), outputMicroUsdPerMillion: v.number() });
+// Server adapter MUST claim immediately before its single bounded call.
 // Redelivery/restart returns null forever once claimed: never replay inference
 // on an ambiguous dispatch. No lease expiry or browser refund exists.
 export const claimDispatch = internalMutation({
@@ -160,47 +162,68 @@ export const claimDispatch = internalMutation({
     if (!slot?.active || slot.activeAttemptId !== attemptId) throw new Error("AI pilot admission required");
     const totals = await budgetMonth(ctx, monthNow());
     if ((totals?.settledMicroUsd ?? 0) + state.unresolvedMicroUsd > state.cutoffMicroUsd) throw new Error("Shared AI budget exhausted");
+    const bundle = (await ctx.db.get(request.bundleId))!;
+    const brief = tailoringBrief(request, bundle.sourceResume, bundle.description);
     await ctx.db.patch(attemptId, { state: "dispatched", dispatchedAt: Date.now() });
     await ctx.db.patch(state._id, { activeAttemptId: attemptId });
     return { requestId: attempt.requestId, provider: attempt.provider, model: attempt.model,
-      maxInputTokens: attempt.maxInputTokens, maxTotalOutputTokens: attempt.maxTotalOutputTokens };
+      maxInputTokens: attempt.maxInputTokens, maxTotalOutputTokens: attempt.maxTotalOutputTokens,
+      brief, evidence: attempt.evidence, inputMicroUsdPerMillion: attempt.inputMicroUsdPerMillion,
+      outputMicroUsdPerMillion: attempt.outputMicroUsdPerMillion };
   },
 });
 
 // Trusted billing reconciliation only. null means unknown, even for timeout,
 // failure or disconnect. A reserved-but-never-dispatched call can settle at 0;
-// claimed calls require provider usage evidence, including explicit zero usage.
+// Claimed calls require usage evidence, or the sole permit holder proving no
+// transport was invoked. Provider timeouts/errors never imply zero usage.
+async function settleAttempt(ctx: MutationCtx, attemptId: Id<"aiBudgetAttempts">, billedMicroUsd: number | null) {
+  const attempt = await ctx.db.get(attemptId);
+  if (!attempt) throw new Error("Attempt unavailable");
+  if (attempt.state === "settled") {
+    if (billedMicroUsd !== null && billedMicroUsd !== attempt.billedMicroUsd) throw new Error("Conflicting settlement");
+    return false;
+  }
+  const state = (await control(ctx))!;
+  if (billedMicroUsd === null) {
+    if (attempt.state !== "reserved") {
+      await ctx.db.patch(attemptId, { state: "unknown" });
+      // Keep the global in-flight lock too: a timed-out call may still be running.
+    }
+    return false;
+  }
+  integer(billedMicroUsd, "billed usage", 0, 1_000_000_000);
+  if (attempt.state === "reserved" && billedMicroUsd !== 0) throw new Error("Attempt was not dispatched");
+  const totals = (await budgetMonth(ctx, attempt.month))!;
+  const settled = integer(totals.settledMicroUsd + billedMicroUsd, "settled total");
+  await ctx.db.patch(totals._id, { settledMicroUsd: settled, reservedMicroUsd: totals.reservedMicroUsd - attempt.reservedMicroUsd });
+  await ctx.db.patch(state._id, { unresolvedMicroUsd: state.unresolvedMicroUsd - attempt.reservedMicroUsd,
+    ...(state.activeAttemptId === attemptId ? { activeAttemptId: undefined } : {}),
+    // Record an unexpected bill rather than losing it to transaction rollback.
+    ...(billedMicroUsd > attempt.reservedMicroUsd ? { enabled: false } : {}) });
+  const slot = await ownerSlot(ctx, attempt.ownerId);
+  if (slot?.activeAttemptId === attemptId) await ctx.db.patch(slot._id, { activeAttemptId: undefined });
+  await ctx.db.patch(attemptId, { state: "settled", billedMicroUsd, settledAt: Date.now() });
+  return true;
+}
 export const settle = internalMutation({
   args: { attemptId: v.id("aiBudgetAttempts"), billedMicroUsd: v.union(v.number(), v.null()) },
   returns: v.boolean(),
-  handler: async (ctx, { attemptId, billedMicroUsd }) => {
+  handler: async (ctx, { attemptId, billedMicroUsd }) => settleAttempt(ctx, attemptId, billedMicroUsd),
+});
+
+// A competing worker may have claimed meanwhile: never refund its charge.
+export const cancelUnclaimed = internalMutation({
+  args: { attemptId: v.id("aiBudgetAttempts") }, returns: v.null(),
+  handler: async (ctx, { attemptId }) => {
     const attempt = await ctx.db.get(attemptId);
-    if (!attempt) throw new Error("Attempt unavailable");
-    if (attempt.state === "settled") {
-      if (billedMicroUsd !== null && billedMicroUsd !== attempt.billedMicroUsd) throw new Error("Conflicting settlement");
-      return false;
-    }
-    const state = (await control(ctx))!;
-    if (billedMicroUsd === null) {
-      if (attempt.state !== "reserved") {
-        await ctx.db.patch(attemptId, { state: "unknown" });
-        // Keep the global in-flight lock too: a timed-out call may still be running.
-      }
-      return false;
-    }
-    integer(billedMicroUsd, "billed usage", 0, 1_000_000_000);
-    if (attempt.state === "reserved" && billedMicroUsd !== 0) throw new Error("Attempt was not dispatched");
-    const totals = (await budgetMonth(ctx, attempt.month))!;
-    const settled = integer(totals.settledMicroUsd + billedMicroUsd, "settled total");
-    await ctx.db.patch(totals._id, { settledMicroUsd: settled, reservedMicroUsd: totals.reservedMicroUsd - attempt.reservedMicroUsd });
-    await ctx.db.patch(state._id, { unresolvedMicroUsd: state.unresolvedMicroUsd - attempt.reservedMicroUsd,
-      ...(state.activeAttemptId === attemptId ? { activeAttemptId: undefined } : {}),
-      // Record an unexpected bill rather than losing it to transaction rollback.
-      ...(billedMicroUsd > attempt.reservedMicroUsd ? { enabled: false } : {}) });
-    const slot = await ownerSlot(ctx, attempt.ownerId);
-    if (slot?.activeAttemptId === attemptId) await ctx.db.patch(slot._id, { activeAttemptId: undefined });
-    await ctx.db.patch(attemptId, { state: "settled", billedMicroUsd, settledAt: Date.now() });
-    return true;
+    if (!attempt || attempt.state !== "reserved") return null;
+    await settleAttempt(ctx, attemptId, 0);
+    const request = await ctx.db.get(attempt.requestId);
+    if (request?.status === "pending") await ctx.db.patch(request._id, {
+      status: "failed", failureCode: "unavailable", finishedAt: Date.now(),
+    });
+    return null;
   },
 });
 
