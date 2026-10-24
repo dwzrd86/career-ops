@@ -293,3 +293,10 @@ cannot continue writing results. Per-feed results are deduplicated while
 preserving shortlist and approval decisions. See
 [discovery release verification](../docs/DISCOVERY_RELEASE_VERIFICATION.md) for
 local evidence and the remaining hosted-release checks.
+
+Account export/deletion after hosted generation is documented in
+[`ACCOUNT_DATA_LIFECYCLE.md`](../docs/ACCOUNT_DATA_LIFECYCLE.md), including the
+schema inventory, explicit export limits, bounded cleanup, retained billing
+liabilities and the separate Better Auth/private-data boundary. Export v5
+includes hosted consent/request and owner-usage metadata; overflow fails instead
+of producing a silently truncated download. Cleanup tests run in `npm run test:auth`.

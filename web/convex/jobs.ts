@@ -1,3 +1,4 @@
+import { cleanupRoleRequests } from "./accountLifecycle";
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
@@ -142,6 +143,7 @@ export const remove = mutation({
         .withIndex("by_owner_job", (q) => q.eq("ownerId", userId).eq("jobId", id)).unique();
       if (bundle) await ctx.db.delete(bundle._id);
       await ctx.db.delete(id);
+      await cleanupRoleRequests(ctx, { ownerId: userId, jobId: id });
       return null;
     } catch (error) {
       reportBackendError("jobs.remove");

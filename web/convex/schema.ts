@@ -144,7 +144,9 @@ export default defineSchema({
       v.literal("providerOverloaded"), v.literal("providerTimeout"),
       v.literal("unavailable"),
     )),
-  }).index("by_owner_status", ["ownerId", "status"]),
+  }).index("by_owner_status", ["ownerId", "status"])
+    .index("by_owner_job", ["ownerId", "jobId"])
+    .index("by_owner_bundle", ["ownerId", "bundleId"]),
   // Durable billing metadata only. Never delete unresolved liabilities with
   // career data; they remain chargeable to their original UTC month.
   aiBudgetControl: defineTable({
@@ -163,13 +165,14 @@ export default defineSchema({
   aiOwnerMonths: defineTable({
     ownerId: v.id("users"), month: v.string(), attempts: v.number(),
   }).index("by_owner_month", ["ownerId", "month"]),
+  // Account deletion detaches ownerId but preserves charge/idempotency evidence.
   aiBudgetAttempts: defineTable({
-    ownerId: v.id("users"), requestId: v.id("hostedResumeRequests"), month: v.string(),
+    ownerId: v.optional(v.id("users")), requestId: v.id("hostedResumeRequests"), month: v.string(),
     ...priceFields,
     reservedMicroUsd: v.number(), state: attemptState, createdAt: v.number(),
     dispatchedAt: v.optional(v.number()), settledAt: v.optional(v.number()),
     billedMicroUsd: v.optional(v.number()),
-  }).index("by_request", ["requestId"]),
+  }).index("by_request", ["requestId"]).index("by_owner", ["ownerId"]),
   // Local discovery records remain canonical. This is a deliberately narrow,
   // owner-scoped projection for the private review UI: no resume content,
   // browser data, local paths, or component-auth records are stored here.
@@ -295,9 +298,10 @@ export default defineSchema({
     route: v.string(),
     occurredAt: v.number(),
   }).index("by_occurred_at", ["occurredAt"]),
+  // Deletion events retain action/time only; owner-linked export history is erased.
   accountPrivacyEvents: defineTable({
     action: v.union(v.literal("exportRequested"), v.literal("accountDeleted")),
     occurredAt: v.number(),
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
   }).index("by_user", ["userId"]),
 });

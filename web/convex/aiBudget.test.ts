@@ -301,3 +301,47 @@ describe("durable hosted AI admission (fictional data, no provider/network)", ()
   });
 
 });
+
+
+describe("account cleanup ledger transitions (no auth/provider calls)", () => {
+  test.each([false, true])("deletion detaches billing and only refunds an unclaimed attempt (dispatched=%s)", async dispatched => {
+    const t = fixture(); await setup(t);
+    const ownerId = await owner(t, "cleanup-fictional");
+    const requestId = await request(t, ownerId);
+    const attemptId = await reserve(t, requestId);
+    if (dispatched) await claim(t, attemptId);
+    await expect(t.mutation(internal.account.cleanupDeleted, { ownerId })).rejects.toThrow("Account still exists");
+    await t.run(async ctx => {
+      // Legacy-sized history proves continuation, rather than one truncated batch.
+      for (let i = 0; i < 26; i++) await ctx.db.insert("jobs", {
+        ownerId, company: "Fictional Co", title: "Engineer", location: "Remote",
+        url: `https://jobs.example.test/cleanup-${i}`, source: "manual", status: "discovered",
+        createdAt: Date.now(), updatedAt: Date.now(),
+      });
+      await ctx.db.delete(ownerId);
+    });
+    await t.mutation(internal.account.cleanupDeleted, { ownerId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    await t.mutation(internal.account.cleanupDeleted, { ownerId }); // idempotent redelivery
+    await t.run(async ctx => {
+      expect(await ctx.db.query("jobs").withIndex("by_owner_created_at", q => q.eq("ownerId", ownerId)).take(1)).toEqual([]);
+      expect(await ctx.db.get(requestId)).toBeNull();
+      expect(await ctx.db.query("aiPilotOwners").withIndex("by_owner", q => q.eq("ownerId", ownerId)).take(1)).toEqual([]);
+      expect(await ctx.db.query("aiOwnerMonths").withIndex("by_owner_month", q => q.eq("ownerId", ownerId)).take(1)).toEqual([]);
+      const attempt = (await ctx.db.get(attemptId))!;
+      expect(attempt.ownerId).toBeUndefined();
+      expect(attempt.state).toBe(dispatched ? "dispatched" : "settled");
+      const control = (await ctx.db.query("aiBudgetControl").withIndex("by_key", q => q.eq("key", "shared")).unique())!;
+      expect(control.pilotCount).toBe(0);
+      expect(control.unresolvedMicroUsd).toBe(dispatched ? attempt.reservedMicroUsd : 0);
+      expect(control.activeAttemptId).toBe(dispatched ? attemptId : undefined);
+    });
+    if (dispatched) {
+      // The bill can reconcile after detachment without an owner-slot lookup.
+      await settle(t, attemptId, 1_200);
+      expect(await summary(t)).toMatchObject({ unresolvedMicroUsd: 0, settledMicroUsd: 1_200, pilotCount: 0 });
+      expect(await t.run(ctx => ctx.db.get(requestId))).toBeNull();
+      expect((await t.run(ctx => ctx.db.get(attemptId)))!.ownerId).toBeUndefined();
+    }
+  });
+});

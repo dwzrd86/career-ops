@@ -144,6 +144,7 @@ export const claimDispatch = internalMutation({
   handler: async (ctx, { attemptId }) => {
     const attempt = await ctx.db.get(attemptId);
     if (!attempt || attempt.state !== "reserved") return null;
+    if (!attempt.ownerId) throw new Error("Account unavailable");
     const state = enabled(await control(ctx));
     if (state.activeAttemptId) throw new Error("One global provider call at a time");
     const price = await ctx.db.query("aiBudgetPrices")
@@ -200,7 +201,7 @@ async function settleAttempt(ctx: MutationCtx, attemptId: Id<"aiBudgetAttempts">
     ...(state.activeAttemptId === attemptId ? { activeAttemptId: undefined } : {}),
     // Record an unexpected bill rather than losing it to transaction rollback.
     ...(billedMicroUsd > attempt.reservedMicroUsd ? { enabled: false } : {}) });
-  const slot = await ownerSlot(ctx, attempt.ownerId);
+  const slot = attempt.ownerId ? await ownerSlot(ctx, attempt.ownerId) : null;
   if (slot?.activeAttemptId === attemptId) await ctx.db.patch(slot._id, { activeAttemptId: undefined });
   await ctx.db.patch(attemptId, { state: "settled", billedMicroUsd, settledAt: Date.now() });
   return true;

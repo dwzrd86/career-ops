@@ -1,3 +1,4 @@
+import { cleanupRoleRequests } from "./accountLifecycle";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
@@ -132,6 +133,7 @@ export const remove = mutation({
     if (saved) {
       if (saved.revision !== expectedRevision) throw new Error("This bundle changed in another tab. Reload before deleting.");
       await ctx.db.delete(saved._id);
+      await cleanupRoleRequests(ctx, { ownerId, jobId, bundleId: saved._id });
     }
     return null;
   },

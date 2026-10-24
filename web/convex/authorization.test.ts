@@ -193,7 +193,7 @@ describe("isolated Convex authorization boundary", () => {
     expect(exportA.jobs).toEqual([
       expect.objectContaining({ id: jobA, company: "export-delete-a Company" }),
     ]);
-    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v4", targetProfile: expect.objectContaining({ targetRoles: [expect.objectContaining({ title: "Security Architect" })] }), discoveryScanRuns: [expect.objectContaining({ trigger: "manual" })] }));
+    expect(exportA).toEqual(expect.objectContaining({ format: "jobbie-account-export-v5", targetProfile: expect.objectContaining({ targetRoles: [expect.objectContaining({ title: "Security Architect" })] }), discoveryScanRuns: [expect.objectContaining({ trigger: "manual" })] }));
     expect(exportA.discovery).toEqual([
       expect.objectContaining({
         id: discoveredJobA,
@@ -225,13 +225,35 @@ describe("isolated Convex authorization boundary", () => {
       expect(await ctx.db.query("discoveryStatusHistory").withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
       expect(await ctx.db.query("targetProfiles").withIndex("by_owner", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
       expect(await ctx.db.query("discoveryScanRuns").withIndex("by_owner_queued_at", (query) => query.eq("ownerId", accountA.userId as any)).collect()).toEqual([]);
-      expect(await ctx.db.query("accountPrivacyEvents").withIndex("by_user", (query) => query.eq("userId", accountA.userId as any)).collect())
-        .toEqual(expect.arrayContaining([
-          expect.objectContaining({ action: "exportRequested" }),
-          expect.objectContaining({ action: "accountDeleted" }),
-        ]));
+      expect(await ctx.db.query("accountPrivacyEvents").withIndex("by_user", query => query.eq("userId", accountA.userId as any)).collect()).toEqual([]);
+      expect(await ctx.db.query("accountPrivacyEvents").withIndex("by_user", query => query.eq("userId", undefined)).collect())
+        .toEqual([expect.objectContaining({ action: "accountDeleted" })]);
     });
   });
+  test("export rejects legacy over-cap bundle and scan histories instead of truncating", async () => {
+    const deployment = createIsolatedDeployment();
+    const a = await provisionDisposableAccount(deployment, "export-over-cap");
+    const jobId = await a.client.mutation(api.jobs.create, jobInput("export-over-cap"));
+    const bundles = await deployment.run(async ctx => {
+      const ids = [];
+      for (let i = 0; i < 51; i++) ids.push(await ctx.db.insert("resumeBundles", {
+        ownerId: a.userId as any, jobId, sourceResume: "Fictional source", description: "Fictional role",
+        resume: "Fictional draft", revision: 1, reviewedAt: null, updatedAt: Date.now(),
+      }));
+      return ids;
+    });
+    await expect(a.client.query(api.account.exportData, {})).rejects.toThrow("resumeBundles limit (50)");
+    await deployment.run(ctx => ctx.db.delete(bundles[0]));
+    expect((await a.client.query(api.account.exportData, {})).resumeBundles).toHaveLength(50);
+    await deployment.run(async ctx => {
+      for (let i = 0; i < 31; i++) await ctx.db.insert("discoveryScanRuns", {
+        ownerId: a.userId as any, profileVersion: 1, trigger: "manual", status: "succeeded",
+        queuedAt: Date.now(), feedsSucceeded: 1, feedsFailed: 0, discovered: 0, reviewable: 0, rejected: 0,
+      });
+    });
+    await expect(a.client.query(api.account.exportData, {})).rejects.toThrow("scanRuns limit (30)");
+  });
+
 });
 
 

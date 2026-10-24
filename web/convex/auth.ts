@@ -8,6 +8,7 @@ import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import authConfig from "./auth.config";
+import { cleanupDeletedAccount } from "./accountLifecycle";
 import { inviteTokenHash, reservationEmailHash } from "./enrollmentCore";
 
 type AbuseAction = "signUp" | "passwordReset" | "resendVerification";
@@ -155,48 +156,11 @@ export const authComponent: ReturnType<typeof createClient<DataModel>> = createC
           .withIndex("by_auth_id", (query) => query.eq("authId", authUser._id))
           .unique();
         if (user === null) return;
-        const [jobs, discoveredJobs, matchDecisions, reviewerOverrides, statusHistory, targetProfile, scanRuns, resumeBundles] = await Promise.all([
-          ctx.db
-            .query("jobs")
-            .withIndex("by_owner_created_at", (query) => query.eq("ownerId", user._id))
-            .collect(),
-          ctx.db
-            .query("discoveredJobs")
-            .withIndex("by_owner_discovered_at", (query) => query.eq("ownerId", user._id))
-            .collect(),
-          ctx.db
-            .query("discoveryMatchDecisions")
-            .withIndex("by_owner_job_decided_at", (query) => query.eq("ownerId", user._id))
-            .collect(),
-          ctx.db
-            .query("discoveryReviewerOverrides")
-            .withIndex("by_owner_job_overridden_at", (query) => query.eq("ownerId", user._id))
-            .collect(),
-          ctx.db
-            .query("discoveryStatusHistory")
-            .withIndex("by_owner_job_occurred_at", (query) => query.eq("ownerId", user._id))
-            .collect(),
-          ctx.db.query("targetProfiles").withIndex("by_owner", (query) => query.eq("ownerId", user._id)).unique(),
-          ctx.db.query("discoveryScanRuns").withIndex("by_owner_queued_at", (query) => query.eq("ownerId", user._id)).take(31),
-          ctx.db.query("resumeBundles").withIndex("by_owner_job", (q) => q.eq("ownerId", user._id)).take(50),
-        ]);
-        for (const job of jobs) await ctx.db.delete(job._id);
-        for (const decision of matchDecisions) await ctx.db.delete(decision._id);
-        for (const override of reviewerOverrides) await ctx.db.delete(override._id);
-        for (const status of statusHistory) await ctx.db.delete(status._id);
-        for (const job of discoveredJobs) await ctx.db.delete(job._id);
-        for (const bundle of resumeBundles) await ctx.db.delete(bundle._id);
-        for (const run of scanRuns) await ctx.db.delete(run._id);
-        if (targetProfile) await ctx.db.delete(targetProfile._id);
-        const invite = await ctx.db
-          .query("alphaInvites")
-          .withIndex("by_claimed_by", (query) => query.eq("claimedBy", user._id))
-          .unique();
-        if (invite !== null) {
-          await ctx.db.patch(invite._id, { claimedBy: undefined, expiredAt: Date.now() });
-        }
-        await ctx.db.insert("accountPrivacyEvents", { action: "accountDeleted", occurredAt: Date.now(), userId: user._id });
+        // Removing the mapping immediately denies all public access and queued
+        // callbacks. Larger histories drain through bounded internal batches.
         await ctx.db.delete(user._id);
+        await cleanupDeletedAccount(ctx, user._id);
+        await ctx.db.insert("accountPrivacyEvents", { action: "accountDeleted", occurredAt: Date.now() });
       },
     },
   },
