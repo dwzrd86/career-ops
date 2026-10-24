@@ -15,7 +15,7 @@ related:
 # Meritwake beta terms of use
 
 **Effective date:** 2026-10-24
-**Version:** 2026-10-24-meritwake-beta
+**Version:** 2026-10-24-meritwake-hosted-ai-v1
 **Applies to:** the invited Meritwake/Career-Ops web beta in `web/`.
 
 These terms describe an experimental product and are not a substitute for a
@@ -28,10 +28,16 @@ public-feed discovery, pipeline tracking, saved resume bundles and reviewed
 Word/text/PDF export. It is offered as an early beta and may be changed,
 paused or withdrawn while it is being evaluated.
 
-AI tailoring is available through the separately configured local OpenCode
-connection, with explicit sharing consent. Hosted AI generation is not
-connected in this build; manual editing and draft import remain available.
+When enabled after release verification, hosted AI tailoring sends selected saved
+resume/posting evidence and company/title to Z.ai Standard API (`glm-4.7`)
+with explicit sharing consent. The optional local OpenCode and manual brief/import
+paths remain separate. There is no automatic retry or provider fallback; Claude
+is only a conditional future alternative requiring a reviewed notice and consent.
 Generated claims and literal keyword checks require your factual review.
+Each new draft or content edit clears approval before export. Five active pilot
+testers have at most 20 generation attempts each per UTC calendar month. Explicit
+retries consume attempts; admission also depends on the shared budget and kill
+switch. Availability and complete provider erasure are not guaranteed; see [[PRIVACY]].
 
 The service does not automatically submit job applications, fill employer
 application forms, upload resumes to employers or send employer messages.

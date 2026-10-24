@@ -189,14 +189,19 @@ async function main() {
     await page.getByRole("button", { name: /Privacy notice \(version/ }).click();
     const policy = page.getByRole("dialog", { name: "Privacy notice", exact: true });
     await expectVisible(page, policy, "bundled current privacy policy");
-    assert.ok((await policy.textContent()).includes("2026-10-24-meritwake-beta"));
+    assert.ok((await policy.textContent()).includes("2026-10-24-meritwake-hosted-ai-v1"));
     assert.ok(!(await policy.textContent()).includes("hi@santifer.io"));
+    for (const disclosure of ["Z.ai Standard API", "glm-4.7", "No account", "provider-side", "bounded scheduled batches", "private channel used for your invitation"]) {
+      assert.ok((await policy.textContent()).toLowerCase().includes(disclosure.toLowerCase()), `Privacy dialog discloses ${disclosure}`);
+    }
     await page.keyboard.press("Escape");
     assert.equal(await policy.count(), 0);
     await page.getByRole("button", { name: "Beta terms of use", exact: true }).click();
     const terms = page.getByRole("dialog", { name: "Beta terms of use", exact: true });
     await expectVisible(page, terms, "bundled beta terms");
     assert.ok((await terms.textContent()).includes("saved resume bundles"));
+    assert.ok((await terms.textContent()).includes("2026-10-24-meritwake-hosted-ai-v1"));
+    assert.ok((await terms.textContent()).includes("Z.ai Standard API"));
     await page.keyboard.press("Escape");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Acknowledge and continue" }).click();

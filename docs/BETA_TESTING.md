@@ -34,8 +34,10 @@ The updated privacy notice requires acknowledgement again before saving data.
    about the job market or your suitability.
 5. Select **Prepare resume**. Import your original `.txt`/`.md` resume, reuse a
    saved source, or paste text from PDF/Word. Confirm the job description.
-6. Use local GLM if connected and after acknowledging sharing; otherwise edit
-   manually or import a draft. A missing AI connection is explicitly shown.
+6. For configured hosted generation, save the selected bundle and acknowledge
+   sharing its evidence with Z.ai Standard API before generating. Local GLM,
+   manual editing and draft import remain separate options. Missing configuration
+   is shown explicitly; source implementation does not certify hosted access.
 7. Optionally enter role-specific checklist terms, one per line, for any
    profession. These are temporary checks, reset on role change/refresh and
    excluded from saved bundles/AI briefs. They are not credential verification,
@@ -89,11 +91,13 @@ use the guarded release runbook before any publication.
 
 Follow [[RELEASE_RUNBOOK]] and the existing beta Auto Run plan to verify the
 actual Resend sender, Turnstile hostname, email recovery, exact frontend/backend
-targets, real two-account isolation, and public release smoke. Shared hosted GLM
-or approved Claude generation and atomic budget reservations are not connected
-in this build. The $10/month API ceiling remains a requirement, not a newly
-implemented billing guarantee. Do not enable a paid shared provider until its
-usage ledger, limits, credentials and synthetic live checks are ready.
+targets, real two-account isolation, and public release smoke. Selected-role hosted Z.ai generation and atomic budget reservations are implemented
+and fixture-tested. Live provider credentials, token/pricing bounds, billing
+isolation, retention terms and the $10/month combined API ceiling still require
+release verification. Claude is not an automatic fallback. Confirm monitored
+support/Reply-To, invitation revocation, private auth-data requests and
+deletion-aware backup/restore before admitting testers. Do not enable live work
+until those checks and the release gate pass.
 
 General profession-specific terms are supported, but no broad-profession job
 coverage, license/credential verification, government resume format, academic

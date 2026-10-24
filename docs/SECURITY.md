@@ -13,7 +13,7 @@ related:
 
 # Security and data handling
 
-Career-Ops contains a local job-search workspace alongside a hosted alpha. Keep those data boundaries explicit.
+Career-Ops contains a local job-search workspace alongside a hosted beta. Keep those data boundaries explicit.
 
 ## Data classification
 
@@ -22,7 +22,7 @@ Career-Ops contains a local job-search workspace alongside a hosted alpha. Keep 
 | Public source | Application code, generated Convex bindings, tests, deployment configuration, non-personal documentation | May be reviewed and committed after the secret scan. |
 | Private career records | `cv.md`, `article-digest.md`, `data/`, `reports/`, `config/profile.yml`, `config/target-profile.yml`, `portals.yml`, writing samples | Keep local and ignored. Never paste into an issue, commit, demo, or test fixture. |
 | Private search settings and review metadata | Owner-scoped Target Profile search preferences, scan-run counts and status, and discovered-role metadata: company, title, location, canonical URL, safe record identifier, source/freshness fields, scores, decision codes, review status/history, reviewer reasons, and material review state | Store only in owner-scoped Convex tables. Never add resumes, application answers, browser credentials/state, local paths, or raw local source snapshots. The internal ATS worker may retain up to 30,000 characters of public plain-text posting content; the public projection API cannot accept it. |
-| Saved resume content | Source resume text, pasted job descriptions, edited drafts, review timestamps and revisions | Store only on explicit save in owner-scoped `resumeBundles`. Enforce job ownership, current privacy acknowledgement, 40,000-character field limits, a 50-bundle account cap, revision checks, account export and cascaded deletion. Never emit content to logs. Opt-in local development generation sends selected evidence through OpenCode to Z.AI after explicit sharing acknowledgement; production builds contain no generation endpoint. See [[RESUME_STUDIO]]. |
+| Saved resume content | Source resume text, pasted job descriptions, edited drafts, review timestamps and revisions | Store on explicit save or valid hosted completion into owner-scoped `resumeBundles`. Enforce job ownership, current privacy acknowledgement, 40,000-character field limits, a 50-bundle account cap, revision checks, account export and cascaded deletion. Never emit content to logs. Opt-in local development generation sends selected evidence through OpenCode to Z.AI after explicit sharing acknowledgement; hosted source uses a separate server-side Standard API worker after explicit selected-evidence consent. The loopback OpenCode endpoint is absent from production builds. See [[RESUME_STUDIO]]. |
 | Secrets and access material | `.env*`, Netlify and Convex tokens/deploy keys, generated `.convex-home/` credentials, browser profiles | Keep outside Git and logs. Use provider secret stores and rotate if exposed. |
 | Test identities | Production test accounts, real email inboxes, job-board credentials | Do not create or commit them. Use isolated, disposable test identities only when necessary. |
 
@@ -216,12 +216,55 @@ The Better Auth component has been deployed and browser-validated only on the de
 | `discovery:list`, `discovery:history`, `discovery:project`, `discovery:shortlist`, `discovery:archive`, `discovery:approveForEvaluation`, `discovery:overrideDecision` | Require a verified, enrolled owner; mutations also require current privacy acknowledgement. Every read and mutation is constrained by the matching `ownerId`. Projected data is limited to the documented metadata fields, and returned records omit owner identifiers. |
 | `targetProfile:get`, `targetProfile:save`, `autoDiscovery:requestScan`, `autoDiscovery:listRuns` | Require a verified, enrolled owner; writes require current privacy acknowledgement. Reads are owner-scoped. A manual scan requires a saved, enabled profile. |
 | `autoDiscovery:queueDueRuns`, `autoDiscoveryWorker:runForOwner`, scan ingestion functions | Internal only. The daily cron queues due owners; the action fetches fixed public ATS feeds and stores viable matches and available bounded public posting text. |
-| `account:exportData`, `account:recordExportRequest`; Better Auth account deletion trigger | The export and export-event record require a verified owner. The portable export contains that owner's manual jobs, Target Profile, scan history, privacy acknowledgement, and discovery metadata projection/history. The deletion trigger removes all corresponding owner-scoped records before deleting the application-owned user mapping; it retains only the privacy-safe deletion audit event. |
+| `account:exportData`, `account:recordExportRequest`; Better Auth account deletion trigger | The export and export-event record require a verified owner. The portable export contains that owner's manual jobs, Target Profile, scan history, privacy acknowledgement, and discovery metadata projection/history. Deletion removes the app mapping immediately and drains owned records through bounded scheduled batches. Detached billing liabilities, aggregate totals and anonymous audits remain; see [[ACCOUNT_DATA_LIFECYCLE]]. |
 | `privacy:status`, `privacy:acknowledge`; `enrollment:status` | Require a verified, enrolled user and operate only on that user's app record. |
 | `enrollment:issueInvite` | Operator action protected by `ENROLLMENT_ADMIN_KEY`; returns the raw invite once and stores only an HMAC digest. |
 | `enrollment:reserveInvite`, `enrollment:createInvite`; `abuse:consume`; Better Auth trigger handlers | Internal only. They reserve and claim an invite, maintain opaque abuse counters, and create or delete app-owned user data in response to component user changes. |
-| Better Auth `/api/auth/*` HTTP routes | Registered exclusively by `authComponent.registerRoutes`. They provide sign-up, sign-in, link verification, recovery, password change, session management, and later account deletion when enabled. |
+| Better Auth `/api/auth/*` HTTP routes | Registered exclusively by `authComponent.registerRoutes`. They provide sign-up, sign-in, link verification, recovery, password change, session management, and password-confirmed account deletion. |
 | `errorReporting:reportClient` | May be called pre-auth; accepts only allowlisted metadata and never persists form values, messages, stacks, tokens, or full URLs. |
+
+## Hosted generation and retained accounting
+
+The source adapter uses server-only Z.ai Standard API `glm-4.7` with separately
+versioned selected-evidence consent. It shares the selected source/posting,
+company/title and factual instructions, not email, Target Profile, other roles
+or keys. No automatic retry, tool use, arbitrary endpoint or Claude fallback is
+implemented. Missing runtime enablement, attested bounds, valid prices, pilot
+membership or budget disables admission. Each attempt reserves its maximum cost
+atomically before dispatch; unknown/in-flight charges survive timeout, sign-out,
+deletion and UTC rollover. Limits are five testers, 20 attempts each per UTC
+month, $5/$7 warnings and at most $8 admitted liability within the $10 combined
+API ceiling. Warnings are status signals, not verified alert delivery.
+
+Server-only configuration names are `HOSTED_AI_EXECUTION_ENABLED`,
+`HOSTED_AI_ZAI_API_KEY` and `HOSTED_AI_ZAI_BOUND_EVIDENCE`. The internal
+`aiBudget.configure`, `approvePrice` and `setPilotOwner` controls require
+privileged deployment access; they are not enrollment-key browser APIs. Never
+publish these settings or keys in `VITE_*`. Use [[ALPHA_OPERATIONS]] for safe
+admission shutdown and [[INCIDENT_RESPONSE]] for liability reconciliation.
+
+Requests store role/revision/consent/status metadata; saved bundles retain the
+actual evidence and unreviewed generated draft. Completion rechecks the existing
+owner, enrollment, privacy version and bundle revision and never recreates a
+deleted record. New output/content edits clear factual approval. Word/text/PDF
+exports require review; literal keyword checks establish neither truth nor ATS
+acceptance. No employer application is submitted automatically.
+
+[[ACCOUNT_DATA_LIFECYCLE]] is the canonical table-by-table inventory. Self-service
+v5 app export excludes component auth data, provider logs/backups and reusable
+secrets; overflows require the supported private request in [[ALPHA_OPERATIONS]].
+Account deletion removes credentials/sessions through Better Auth and schedules
+bounded app cleanup. Do not claim immediate erasure of component verification
+rows, provider logs, dispatched prompts, local files or backups. Keep anonymous
+billing liability/idempotency fields, HMAC abuse counters and minimized audits
+until reviewed retention/reconciliation permits cleanup; no automated age-out
+exists. Backup retention, provider evidence handling and a deletion-aware restore
+remain release prerequisites. Preserve optional ownership fields on rollback.
+
+A monitored support/Reply-To destination remains unapproved. Use the private
+invitation channel in [[SECURITY_CONTACT]]; the outbound Meritwake sender and
+local bootstrap do not verify contact ownership. No exact isolated beta target,
+production migration, live inference or backup configuration is certified here.
 
 ## Verification
 

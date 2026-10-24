@@ -16,6 +16,59 @@ related:
 Use this runbook for a production release of `web/`. Do not include personal
 career files or credentials in a release branch or deployment.
 
+## Hosted beta release boundary — 2026-10-24
+
+This is a procedure, not release authorization. Historical Netlify
+`dmd-career-ops` / Convex `beaming-bass-637` identifiers below remain candidates,
+with existing-user impact unknown. No isolated beta pair is approved. Replace
+candidate identifiers with the explicitly approved release-packet targets before
+execution. Never target personal dev `third-wolverine-369` or change
+`career-ops-local.service`. Production configuration/deployment requires fresh
+explicit approval in the executing session; a feature-branch push is not that gate.
+
+Before enabling hosted generation or distributing invites, attach evidence for:
+
+- [[PRIVACY]] and [[TERMS]] version `2026-10-24-meritwake-hosted-ai-v1`, bundled
+  product dialogs and re-acknowledgement for old users before career writes.
+  Admission/completion must reject old policy versions. No local bootstrap is
+  acceptable proof of mailbox ownership.
+- Dedicated Z.ai Standard API `glm-4.7` credentials in server secret stores,
+  verified input/total billable output bounds and current uncached prices,
+  provider retention/region/training/cache/deletion terms, disabled top-ups and
+  isolated billing. Source/fake-client tests do not certify these settings.
+- `HOSTED_AI_EXECUTION_ENABLED` disabled until verified; approved ledger cutoff
+  at most $8, $5/$7 warnings, $10 combined API ceiling, five active testers and
+  20 attempts each per UTC month. Test admission shutdown and outstanding
+  reservation reconciliation without refunding unknown charges. Confirm private
+  warning/error alert delivery, not just status values. See [[ALPHA_OPERATIONS]].
+- Verified Resend sender `Meritwake <meritwake@dmdtechnologies.net>`, SPF/DKIM,
+  Turnstile hostname and exact callbacks. Separately approve a monitored support/
+  Reply-To destination and primary/backup response coverage; no receiving mailbox
+  has been verified. Until then policies use the existing private inviter channel.
+- Single-use invite issuance and an exact-record revocation procedure; there is
+  no dedicated revocation endpoint yet. Exercise expiry/enrollment and auth-session
+  behavior separately before issuing real invites. No public email roster.
+- Proven empty isolated target or rehearsed legacy-owner mapping migration with
+  verified-email recovery; never copy old password hashes. Test self-service v5
+  export, supported private auth/overflow requests, password-confirmed deletion,
+  scheduled cleanup completion and a second account's isolation.
+- Encrypted restricted backups with approved expiry, recovery/data-loss targets,
+  provider capability/cost and a successful restore rehearsal. Quarantine restores,
+  apply intervening deletions and revoke obsolete sessions before reopening.
+  Never replay provider requests or discard unknown billing liabilities. These
+  requirements do not assert backups are active; account deletion cannot purge
+  provider backups by itself.
+
+Rollback must preserve optional `aiBudgetAttempts.ownerId` and
+`accountPrivacyEvents.userId` fields and retained accounting after anonymization.
+Do not roll back to a schema requiring deleted identities or restore deleted
+career data to satisfy it. Frontend publication rollback does not recover backend
+data; select a compatible reviewed backend revision, then recheck ownership,
+policy gates, pending workers, billing totals and CSP/headers before reopening.
+Use [[ACCOUNT_DATA_LIFECYCLE]], [[INCIDENT_RESPONSE]] and [[ALPHA_OPERATIONS]].
+The complete release packet and migration/restore rehearsals remain separate
+playbook tasks; this policy update performs no deployment or real account work.
+
 ## Preconditions
 
 - Inspect the production release inputs without deploying or changing settings:
@@ -61,7 +114,7 @@ career files or credentials in a release branch or deployment.
 - If a future explicit worker bridge is introduced, its credential has an
   identified owner, is stored outside Git and systemd unit files, and has a
   tested revocation/rotation procedure. This release has no worker token.
-- Convex warning and disable limits have been approved for the alpha budget;
+- Convex warning and disable limits have been approved for the beta budget;
   verify them without printing any credentials:
 
   ```bash
@@ -162,8 +215,8 @@ manual metadata-only run; see [[INCIDENT_RESPONSE]].
 1. In Netlify Deploys, select the last known-good published deploy and use
    **Publish deploy** to restore it. This restores the static frontend quickly.
 2. In the Convex dashboard deployment history, identify the last known-good
-   production deployment. Use the provider's rollback/redeploy control for that
-   deployment, or redeploy the corresponding reviewed Git commit with
+   production deployment compatible with the retained-data schema above. Use a
+   provider-supported rollback only after checking compatibility, or redeploy the corresponding reviewed Git commit with
    `npx convex deploy --cmd 'npm run build'`.
 3. Repeat the bundle endpoint check above and record the incident outside the
    repository without including credentials or personal career records.

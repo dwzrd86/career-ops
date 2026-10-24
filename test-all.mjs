@@ -58,11 +58,11 @@ function checkPolicyDocuments() {
   const policyDocuments = [
     {
       path: 'docs/PRIVACY.md',
-      required: ['# Meritwake beta privacy notice', '**Version:** 2026-10-24-meritwake-beta', 'Data collected and why', 'Where data is stored', 'Retention and deletion', 'does not fill application forms or automatically submit applications to employers', 'metadata-only error reporting', 'portable JSON export', 'permanent account deletion', 'private channel used for your invitation', '[[SECURITY_CONTACT]]'],
+      required: ['# Meritwake beta privacy notice', '**Version:** 2026-10-24-meritwake-hosted-ai-v1', 'Z.ai Standard API', 'glm-4.7', 'late responses cannot recreate deleted app records', 'bounded scheduled batches', 'Provider-side retention', 'Data collected and why', 'Where data is stored', 'Retention and deletion', 'does not fill application forms or automatically submit applications to employers', 'metadata-only error reporting', 'portable JSON export', 'permanent account deletion', 'private channel used for your invitation', '[[SECURITY_CONTACT]]'],
     },
     {
       path: 'docs/TERMS.md',
-      required: ['# Meritwake beta terms of use', '**Version:** 2026-10-24-meritwake-beta', 'does not automatically submit job applications', 'with explicit sharing consent', 'require your factual review', 'responsible for the accuracy', 'Material changes', '[[PRIVACY]]', 'private reporting channel in [[SECURITY_CONTACT]]'],
+      required: ['# Meritwake beta terms of use', '**Version:** 2026-10-24-meritwake-hosted-ai-v1', 'does not automatically submit job applications', 'with explicit sharing consent', 'require your factual review', 'responsible for the accuracy', 'Material changes', '[[PRIVACY]]', 'private reporting channel in [[SECURITY_CONTACT]]'],
     },
     {
       path: 'docs/SECURITY_CONTACT.md',
@@ -70,7 +70,7 @@ function checkPolicyDocuments() {
     },
     {
       path: 'docs/INCIDENT_RESPONSE.md',
-      required: ['# Jobbie alpha incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Local discovery data or context loss', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
+      required: ['# Meritwake beta incident response', 'User-reported account compromise', 'Exposed credential rotation', 'Unauthorized-data report', 'Abusive signup spike', 'Service rollback', 'Local discovery data or context loss', 'Post-incident review', '[[RELEASE_RUNBOOK]]'],
     },
     {
       path: 'docs/SECURITY.md',
@@ -82,7 +82,7 @@ function checkPolicyDocuments() {
     },
     {
       path: 'docs/ALPHA_OPERATIONS.md',
-      required: ['# Jobbie closed alpha operations', 'Production data export request', 'Production account-data deletion request', '[[INCIDENT_RESPONSE]]', 'does **not** automatically submit job applications'],
+      required: ['# Meritwake beta operations', 'Production data export request', 'Production account-data deletion request', '[[INCIDENT_RESPONSE]]', 'does **not** automatically submit job applications'],
     },
   ];
 
@@ -92,7 +92,7 @@ function checkPolicyDocuments() {
       continue;
     }
     const policy = readFile(path).replace(/\s+/g, ' ');
-    if (['docs/PRIVACY.md', 'docs/TERMS.md', 'docs/SECURITY_CONTACT.md'].includes(path)) {
+    if (['docs/PRIVACY.md', 'docs/TERMS.md', 'docs/SECURITY_CONTACT.md', 'docs/ALPHA_OPERATIONS.md', 'docs/INCIDENT_RESPONSE.md', 'docs/SECURITY.md', 'docs/RELEASE_RUNBOOK.md'].includes(path)) {
       if (/santifer(?:\.io)?|Santiago Fern[aá]ndez|688[\s-]*921[\s-]*377/i.test(policy)) {
         fail(`Active product policy contains an inherited contact: ${path}`);
       } else {

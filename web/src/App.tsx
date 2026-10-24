@@ -728,7 +728,7 @@ function PrivacyAcknowledgement({
         <div className="access-mark"><ShieldCheck size={22} /></div>
         <p className="eyebrow">Before you add career data</p>
         <h1 id="privacy-notice-title">Review the beta privacy notice.</h1>
-        <p className="access-copy">Meritwake stores your private pipeline, Target Profile, and job-discovery review metadata. When enabled, scheduled scans check approved public job feeds. Please read the current policies before saving that information.</p>
+        <p className="access-copy">Meritwake stores your private pipeline, Target Profile, discovery records and saved resume evidence/drafts. Hosted generation shares selected saved evidence with Z.ai Standard API only with separate consent. Account deletion cannot erase provider copies or downloaded files. Please read the current policies before saving career data.</p>
         <PolicyLinks version={privacyStatus.currentVersion} />
         <label className="acknowledgement-check">
           <input checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} type="checkbox" />

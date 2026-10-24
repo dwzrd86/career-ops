@@ -1,5 +1,6 @@
 import { createIsolatedDeployment, provisionDisposableAccount, jobInput, discoveryProjection } from "./authorizationFixtures";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { PRIVACY_POLICY_VERSION } from "./privacy";
 import { HOSTED_CONSENT_VERSION } from "./hostedResumes";
 import { PROVIDER_TIMEOUT_MS, ZAI_ENDPOINT } from "./hostedProvider";
 import { api, internal } from "./_generated/api";
@@ -28,6 +29,29 @@ describe("isolated Convex authorization boundary", () => {
       expect(await ctx.db.get(jobA)).toEqual(expect.objectContaining({ status: "discovered" }));
       expect(await ctx.db.get(jobB)).toEqual(expect.objectContaining({ ownerId: accountB.userId }));
     });
+  });
+
+  test("the hosted sharing notice invalidates prior acknowledgement before new career writes", async () => {
+    const deployment = createIsolatedDeployment();
+    const account = await provisionDisposableAccount(deployment, "policy-upgrade");
+    const legacyTime = Date.now() - 60_000;
+    await deployment.run(async ctx => {
+      const user = await ctx.db.query("users").withIndex("by_auth_id", q => q.eq("authId", account.authUser._id)).unique();
+      await ctx.db.patch(user!._id, { privacyPolicyVersion: "2026-10-24-meritwake-beta", privacyAcknowledgedAt: legacyTime });
+    });
+    await expect(account.client.query(api.privacy.status, {})).resolves.toEqual({
+      acknowledgedAt: null, currentVersion: PRIVACY_POLICY_VERSION, requiresAcknowledgement: true,
+    });
+    await expect(account.client.mutation(api.jobs.create, jobInput("policy-upgrade")))
+      .rejects.toThrow("Privacy acknowledgement required");
+    await account.client.mutation(api.privacy.acknowledge, {});
+    const status = await account.client.query(api.privacy.status, {});
+    expect(status.requiresAcknowledgement).toBe(false);
+    expect(status.currentVersion).toBe("2026-10-24-meritwake-hosted-ai-v1");
+    expect(status.acknowledgedAt).toBeGreaterThan(legacyTime);
+    await account.client.mutation(api.jobs.create, jobInput("policy-upgrade"));
+    await account.client.mutation(api.privacy.acknowledge, {});
+    expect((await account.client.query(api.privacy.status, {})).acknowledgedAt).toBe(status.acknowledgedAt);
   });
 
   test("anonymous calls to private job, privacy, and export functions fail", async () => {

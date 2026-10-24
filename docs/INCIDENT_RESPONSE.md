@@ -1,6 +1,6 @@
 ---
 type: reference
-title: Jobbie Alpha Incident Response
+title: Meritwake Beta Incident Response
 created: 2026-08-01
 tags:
   - security
@@ -14,7 +14,7 @@ related:
   - '[[PRIVACY]]'
 ---
 
-# Jobbie alpha incident response
+# Meritwake beta incident response
 
 Use this procedure for a suspected account compromise, exposed credential,
 unauthorized-data report, abusive signup spike, or a release that must be
@@ -23,14 +23,14 @@ timelines or a substitute for legal advice.
 
 ## Required owners and safe recordkeeping
 
-Before admitting alpha users, assign these roles and a backup for each in a
+Before admitting beta users, assign these roles and a backup for each in a
 private, access-controlled operations record outside this repository:
 
 | Role | Required action |
 | --- | --- |
 | Incident owner | Opens and coordinates the incident, decides when containment and recovery are complete, and leads the review. |
-| Technical owner | Operates Netlify, Convex, Resend, Turnstile, GitHub, DNS, and the release rollback path. |
-| User-response owner | Receives private reports and data requests at `hi@santifer.io`, sends approved updates, and keeps reporter contact details out of incident notes. |
+| Technical owner | Operates Netlify, Convex, Resend, Turnstile, Z.ai Standard API billing, GitHub, DNS, and the release rollback path. |
+| User-response owner | Receives private reports and data requests through the private invitation channel in [[SECURITY_CONTACT]], sends approved updates, and keeps reporter contact details out of incident notes. |
 | Backup administrator | Can take over if an owner is unavailable and has tested access to every provider above. |
 
 Give each incident an internal ID and record only: detection time, reporter
@@ -80,7 +80,7 @@ account activity, or that their email/password may be compromised.
    application content unless needed to establish scope.
 5. If an unauthorized change is confirmed, contain the cause, guide the user
    through the recovery step above, and use the unauthorized-data procedure if
-   data may have been accessed. Jobbie does not automatically submit job
+   data may have been accessed. Meritwake does not automatically submit job
    applications, so do not imply that an external application was submitted.
 6. Record the outcome as `unconfirmed`, `contained`, or `confirmed` plus the
    minimum evidence category, then proceed to the post-incident review when
@@ -99,7 +99,7 @@ key, generated Convex credential, or browser profile may have been exposed.
    provider and creates a replacement with the least required access. Rotate
    related credentials when the exposure could reach them: GitHub/deploy keys,
    Netlify deploy access, Convex deployment or signing keys, Resend API keys,
-   Turnstile secrets, DNS credentials, and `ENROLLMENT_ADMIN_KEY` as applicable.
+   Turnstile secrets, dedicated Z.ai API keys, DNS credentials, and `ENROLLMENT_ADMIN_KEY` as applicable.
 3. Store the replacement only in the appropriate provider secret store. Never
    place server-only values in `VITE_*`, source control, an email, or a ticket.
    Update the affected provider configuration and remove the revoked value.
@@ -125,7 +125,7 @@ export, delete, or receive another user's data.
    Preserve only route, release label, account-count estimate, and provider
    audit identifiers required to investigate.
 3. Reproduce with an isolated disposable test identity and synthetic data where
-   possible. Do not use a real alpha account or browse unrelated production
+   possible. Do not use a real beta account or browse unrelated production
    records to prove the issue.
 4. Determine the scope from authorization rules, deployment history, and
    necessary provider audit metadata. Separate `confirmed access`, `attempt
@@ -142,7 +142,7 @@ export, delete, or receive another user's data.
 requests, or HMAC-keyed rate-limit rejections rise unexpectedly.
 
 1. Record the UTC window, aggregate counts, release label, and affected
-   providers. Do not create a list of attempted email addresses: the alpha's
+   providers. Do not create a list of attempted email addresses: the beta's
    abuse table deliberately uses HMAC-derived keys instead.
 2. Verify that the released frontend has a configured Turnstile site key and
    the Convex deployment has the matching server secret and hostname policy.
@@ -176,6 +176,45 @@ security regression.
 4. Keep the defective release unavailable until the root cause is fixed,
    authorization tests and build/header checks pass, and a reviewed release is
    ready. Record the rollback deployment IDs and verification result only.
+
+## Hosted inference, billing or evidence incident
+
+1. Stop new admission with `HOSTED_AI_EXECUTION_ENABLED=false` in the explicitly approved
+   beta deployment or internal `aiBudget.configure` with `enabled: false` and the existing approved
+   `cutoffMicroUsd` via authenticated deployment operator access. Never print credentials. Stop new invites if scope is unclear.
+2. Record only request/attempt IDs, provider/model, release, fixed error codes,
+   aggregate settled/reserved spend and UTC times. Do not log evidence, drafts,
+   prompts, provider bodies or credentials. Rotate the dedicated API key at Z.ai
+   if exposed; turn off automatic top-ups and review provider-side charges.
+3. A kill switch or browser disconnect does not cancel an admitted call. Keep
+   unknown/in-flight worst-case reservations and original-month charges. Use
+   reviewed provider billing evidence and the existing idempotent reconciliation
+   path; never edit totals to unblock work or automatically switch to Claude.
+4. For incorrect claims or prompt injection, quarantine the failed flow using
+   fictional evidence. Review every claim; literal keywords are not factual
+   validation. Invalid drafts must remain unreviewed and unavailable for export.
+5. If evidence may have reached an unintended recipient, apply Unauthorized-data
+   report above and request supported provider handling. Do not promise recall
+   of an already processed inference request or deletion from provider logs.
+6. Resume only after token/pricing bounds, available pool, ownership/consent,
+   policy version and provider identity checks pass. Live inference remains
+   separately approved within the shared $10 ceiling.
+
+## Hosted data loss or incomplete account cleanup
+
+Keep the affected service unavailable while identifying whether the fault is a
+frontend release, schema/function regression, or lost backend data. A frontend
+rollback restores static code only. Restore only from an authorized encrypted
+backup into quarantine after the synthetic rehearsal and production capability
+checks in [[RELEASE_RUNBOOK]]. Do not export real data for an unapproved rehearsal.
+Apply intervening deletion records before access is restored; do not resurrect
+deleted accounts, reuse revoked sessions or replay provider requests. Preserve
+anonymous billing liabilities and optional owner fields; an older schema requiring
+those fields is incompatible after deletion. Verify counts, ownership, draft
+revisions and cleanup completion using minimized evidence. Provider backups,
+retention, recovery time and data-loss targets remain release-time checks, not
+claims established by unit tests. For failed cleanup, inspect scheduled continuation
+status and resume the existing bounded cleanup path; never re-create the owner.
 
 ## Local discovery scheduler containment and recovery
 

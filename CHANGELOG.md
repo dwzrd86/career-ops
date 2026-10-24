@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased Meritwake beta — 2026-10-24
+
+Privacy and terms bundle `2026-10-24-meritwake-hosted-ai-v1` describes opt-in
+selected-evidence sharing with Z.ai Standard API, retained request/billing data,
+self-service app export/deletion and separate private auth/provider requests.
+Existing accounts must acknowledge this notice before new career writes; hosted
+requests also recheck its version. Operations and recovery guidance now uses the
+private invitation contact instead of inherited maintainer contacts. Monitored
+support/Reply-To, provider retention verification, backup/restore and live hosted
+certification remain release prerequisites. This source change publishes nothing.
+
 ## [1.6.0](https://github.com/santifer/career-ops/compare/v1.5.0...v1.6.0) (2026-04-26)
 
 
