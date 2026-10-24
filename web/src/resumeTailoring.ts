@@ -1,3 +1,4 @@
+export const HOSTED_CONSENT_VERSION = "2026-10-24-zai-selected-evidence-v1";
 // Literal checks support human review; they cannot prove a claim is true.
 export const resumeTerms = ["Python", "TypeScript", "JavaScript", "React", "Node.js", "SQL", "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Linux", "CI/CD", "Git", "REST", "GraphQL", "security", "leadership", "stakeholder", "automation", "machine learning", "data analysis", "project management", "customer success", "Salesforce", "Excel", "communication"];
 

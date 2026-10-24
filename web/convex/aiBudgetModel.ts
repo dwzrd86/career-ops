@@ -14,3 +14,10 @@ export const priceFields = {
 };
 export const attemptState = v.union(v.literal("reserved"), v.literal("dispatched"),
   v.literal("unknown"), v.literal("settled"));
+
+// Ceiling division in integer micro-USD, shared by admission and UI availability.
+export function maximumAttemptCost(price: { maxInputTokens: number; inputMicroUsdPerMillion: number;
+  maxTotalOutputTokens: number; outputMicroUsdPerMillion: number }) {
+  return Number((BigInt(price.maxInputTokens) * BigInt(price.inputMicroUsdPerMillion)
+    + BigInt(price.maxTotalOutputTokens) * BigInt(price.outputMicroUsdPerMillion) + 999_999n) / 1_000_000n);
+}

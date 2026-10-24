@@ -2,6 +2,8 @@ import type { DiscoveredJob, DiscoveryDecisionOutcome, DiscoveryReviewStatus, Jo
 import type { DiscoveryScanRun, TargetProfile, TargetProfileInput, ResumeBundle } from "../../src/convex";
 
 type BrowserFlowState = {
+  hostedAvailability: { remaining: number; pending: boolean; reason: "ready" | "unavailable" | "quota" | "budget" };
+  hostedRequest: { requestId: string; jobId: string; bundleRevision: number; status: "pending" | "succeeded" | "failed"; failureCode?: string } | null;
   authenticated: boolean;
   discoveredJobs: DiscoveredJob[];
   email: string | null;
@@ -16,6 +18,8 @@ type BrowserFlowState = {
 };
 
 const initialState = (): BrowserFlowState => ({
+  hostedAvailability: { remaining: 20, pending: false, reason: "ready" },
+  hostedRequest: null,
   authenticated: false,
   email: null,
   enrolled: true,
@@ -179,3 +183,26 @@ export function removeBrowserFlowBundle(jobId: string) {
   publish({ resumeBundles: next });
   return null;
 }
+
+export function requestBrowserFlowHostedResume(args: any) {
+  const bundle = state.resumeBundles[args.jobId];
+  if (!args.consent.shareSelectedEvidence || args.expectedRevision !== bundle?.revision) throw new Error("stale or missing consent");
+  const requestId = `request-${Date.now()}`;
+  publish({ hostedRequest: { requestId, jobId: args.jobId, bundleRevision: bundle.revision, status: "pending" },
+    hostedAvailability: { remaining: state.hostedAvailability.remaining - 1, pending: true, reason: "ready" } });
+  return requestId;
+}
+// Test-only controls exercise real Studio rendering; they never invoke a provider.
+Object.assign(window, {
+  __completeHosted(failureCode?: string, conflict = false) {
+    const request = state.hostedRequest!;
+    const bundle = state.resumeBundles[request.jobId];
+    if (!failureCode) saveBrowserFlowBundle({ ...bundle, resume: "Test Candidate\nEXPERIENCE\nBuilt Python automation with SQL on AWS.\nSKILLS\nPython, SQL, AWS", reviewed: false });
+    if (conflict) saveBrowserFlowBundle({ ...state.resumeBundles[request.jobId], resume: "Another tab draft", reviewed: false });
+    publish({ hostedRequest: { ...request, status: failureCode ? "failed" : "succeeded", failureCode },
+      hostedAvailability: { ...state.hostedAvailability, pending: false } });
+  },
+  __hostedAvailability(reason: BrowserFlowState["hostedAvailability"]["reason"]) {
+    publish({ hostedAvailability: { ...state.hostedAvailability, reason, remaining: reason === "quota" ? 0 : 19 } });
+  },
+});

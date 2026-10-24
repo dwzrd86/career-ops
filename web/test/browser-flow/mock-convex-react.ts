@@ -8,6 +8,7 @@ import {
   requestBrowserFlowScan,
   saveBrowserFlowTargetProfile,
   saveBrowserFlowBundle,
+  requestBrowserFlowHostedResume,
   removeBrowserFlowBundle,
   subscribeBrowserFlow,
   updateBrowserFlowDiscoveryStatus,
@@ -32,6 +33,8 @@ export function Unauthenticated({ children }: PropsWithChildren) {
 
 export function useQuery(reference: string, args?: Record<string, any> | "skip") {
   const state = useBrowserFlowState();
+  if (reference === "hostedResumes:availability") return state.hostedAvailability;
+  if (reference === "hostedResumes:status") return args === "skip" ? undefined : state.hostedRequest;
   if (reference === "enrollment:status") return { enrolled: state.enrolled };
   if (reference === "privacy:status") {
     return {
@@ -62,6 +65,7 @@ export function useQuery(reference: string, args?: Record<string, any> | "skip")
 
 export function useMutation(reference: string) {
   return async (args: Record<string, any> = {}) => {
+    if (reference === "hostedResumes:request") return requestBrowserFlowHostedResume(args);
     if (reference === "resumeBundles:save") return saveBrowserFlowBundle(args);
     if (reference === "resumeBundles:remove") return removeBrowserFlowBundle(args.jobId);
     if (reference === "privacy:acknowledge") return acknowledgeBrowserFlowPrivacy();

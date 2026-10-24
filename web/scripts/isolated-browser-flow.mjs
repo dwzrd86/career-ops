@@ -330,6 +330,44 @@ async function main() {
     const sharingConsent = studio.getByRole("checkbox", { name: "Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent." });
     if (productionCsp) {
       assert.equal(await generate.count(), 0, "The hosted bundle must not expose local generation");
+      const hostedGenerate = studio.getByRole("button", { name: "Generate hosted GLM draft", exact: true });
+      const hostedConsent = studio.getByRole("checkbox", { name: "Share this saved source resume and posting with Z.ai Standard API for this hosted draft." });
+      await expectVisible(page, hostedGenerate, "hosted generator without local endpoint");
+      assert.equal(await hostedGenerate.isEnabled(), false, "requires a saved revision and consent");
+      await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
+      await hostedConsent.check();
+      assert.equal(await hostedGenerate.isEnabled(), true);
+      page.once("dialog", dialog => dialog.accept());
+      await hostedGenerate.click();
+      await expectVisible(page, studio.getByRole("button", { name: "Generating hosted draft…", exact: true }), "hosted pending state");
+      assert.equal(await studio.getByLabel("Source resume", { exact: true }).isEnabled(), false);
+      assert.equal(await targetRole.isEnabled(), false);
+      await page.evaluate(() => window.__completeHosted());
+      await expectVisible(page, studio.getByText("Hosted GLM draft saved. Review changed lines and facts before approving and exporting.", { exact: true }), "hosted saved draft arrival");
+      assert.equal(await studio.getByRole("button", { name: "Download Word" }).isEnabled(), false);
+      assert.equal(await hostedConsent.isChecked(), false, "fresh consent required for regeneration");
+      for (const [reason, text] of [["quota", "Monthly quota exhausted"], ["budget", "shared AI budget is exhausted"], ["unavailable", "Hosted generation is unavailable"]]) {
+        await page.evaluate(reason => window.__hostedAvailability(reason), reason);
+        await expectVisible(page, studio.getByText(text, { exact: false }), `${reason} availability`);
+        assert.equal(await hostedGenerate.isEnabled(), false);
+      }
+      await page.evaluate(() => window.__hostedAvailability("ready"));
+      await hostedConsent.check();
+      page.once("dialog", dialog => dialog.accept());
+      await hostedGenerate.click();
+      await page.evaluate(() => window.__completeHosted("providerTimeout"));
+      await expectVisible(page, studio.getByText(/Provider timed out/), "safe timeout recovery");
+      await hostedConsent.check();
+      page.once("dialog", dialog => dialog.accept());
+      await hostedGenerate.click();
+      const beforeConflict = await studio.getByLabel("Resume text", { exact: true }).inputValue();
+      await page.evaluate(() => window.__completeHosted(undefined, true));
+      await expectVisible(page, studio.getByText(/The saved bundle changed. Your editor was retained/), "conflicting save protection");
+      assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), beforeConflict);
+      await studio.getByRole("button", { name: "Reload saved bundle", exact: true }).click();
+      // Restore the original fictional draft for the shared export assertions.
+      await studio.getByLabel("Resume text", { exact: true }).fill(beforeConflict);
+
     } else {
       await expectVisible(page, generate, "connected local GLM generator");
       assert.equal(await generate.isEnabled(), false, "provider consent required");
@@ -395,7 +433,7 @@ async function main() {
     await preparation.getByRole("button", { name: "Save reviewed bundle", exact: true }).click();
     assert.equal(await studio.getByRole("button", { name: "Save bundle", exact: true }).evaluate(element => document.activeElement === element), true, "save navigation focuses the existing save control");
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
-    await expectVisible(page, studio.getByText("Saved revision 1.", { exact: true }), "saved bundle revision");
+    await expectVisible(page, studio.getByText(`Saved revision ${productionCsp ? 5 : 1}.`, { exact: true }), "saved bundle revision");
     await expectVisible(page, guide.getByText("4 of 4 steps complete", { exact: true }), "saved first application progress");
     if (process.env.CAREER_OPS_BETA_SCREENSHOT && !productionCsp) {
       await page.setViewportSize({ width: 1440, height: 1050 });
@@ -476,7 +514,7 @@ async function main() {
     await studio.getByLabel("Resume target role", { exact: true }).selectOption("");
     assert.equal(await studio.getByLabel("Resume text", { exact: true }).inputValue(), "Updated draft");
     await studio.getByRole("button", { name: "Save bundle", exact: true }).click();
-    await expectVisible(page, studio.getByText("Saved revision 2.", { exact: true }), "updated unreviewed bundle");
+    await expectVisible(page, studio.getByText(`Saved revision ${productionCsp ? 6 : 2}.`, { exact: true }), "updated unreviewed bundle");
 
     await expectVisible(page, studio.getByRole("button", { name: "Ready to export (0)", exact: true }), "editing clears queue readiness after saving");
     await studio.getByRole("button", { name: "Needs review (1)", exact: true }).click();
@@ -487,7 +525,13 @@ async function main() {
     await page.waitForFunction((select) => select instanceof HTMLSelectElement && select.value === "applied", await status.elementHandle());
 
     await expectVisible(page, studio.getByRole("button", { name: "Needs review (0)", exact: true }), "applied role leaves preparation queue");
+    if (productionCsp) {
+      await studio.getByRole("checkbox", { name: "Share this saved source resume and posting with Z.ai Standard API for this hosted draft." }).check();
+      page.once("dialog", dialog => dialog.accept());
+      await studio.getByRole("button", { name: "Generate hosted GLM draft", exact: true }).click();
+    }
     await page.getByRole("button", { name: "Sign out" }).click();
+    if (productionCsp) await page.evaluate(() => window.__completeHosted("providerTimeout"));
     await expectVisible(page, page.getByRole("heading", { name: "Welcome back." }), "signed-out screen");
     await page.getByLabel("Email").fill("security-flow@example.test");
     await page.getByLabel("Password", { exact: true }).fill("SecurityFlow123");

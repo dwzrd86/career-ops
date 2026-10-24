@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { ADMISSION_CUTOFF, MONTHLY_ATTEMPTS, PILOT_CAP, priceFields } from "./aiBudgetModel";
+import { ADMISSION_CUTOFF, MONTHLY_ATTEMPTS, maximumAttemptCost, PILOT_CAP, priceFields } from "./aiBudgetModel";
 import { requireEnrolledUser } from "./enrollment";
 import { tailoringBrief } from "../src/resumeTailoring";
 import { HOSTED_CONSENT_VERSION } from "./hostedResumes";
@@ -110,8 +110,7 @@ export const reserve = internalMutation({
       .withIndex("by_provider_model", q => q.eq("provider", request.provider).eq("model", request.model)).unique();
     if (!price || price.validUntil <= Date.now()) throw new Error("Verified price/token ceiling unavailable");
     // BigInt arithmetic + ceiling division avoids a fractional-unit under-reserve.
-    const cost = Number((BigInt(price.maxInputTokens) * BigInt(price.inputMicroUsdPerMillion)
-      + BigInt(price.maxTotalOutputTokens) * BigInt(price.outputMicroUsdPerMillion) + 999_999n) / 1_000_000n);
+    const cost = maximumAttemptCost(price);
     integer(cost, "reservation", 1);
     const month = monthNow();
     const totals = await budgetMonth(ctx, month);

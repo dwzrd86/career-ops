@@ -353,7 +353,7 @@ test("discovery approval creates a private resume target once and preserves trac
 });
 
 
-describe("hosted resume request boundaries (no provider dispatch)", () => {
+describe("hosted resume request boundaries (fake deployment)", () => {
   const consent = { provider: "zai", model: "glm-4.7", version: "2026-10-24-zai-selected-evidence-v1", shareSelectedEvidence: true } as const;
   async function fixture() {
     const deployment = createIsolatedDeployment();
@@ -388,7 +388,7 @@ describe("hosted resume request boundaries (no provider dispatch)", () => {
     await expect(a.client.mutation(api.hostedResumes.request, { ...input, jobId })).rejects.toThrow("Alpha enrollment");
   });
 
-  test("pending intent is private, one per owner, and has no scheduled or paid side effect", async () => {
+  test("pending intent is private, clears review and schedules exactly one guarded worker", async () => {
     const { deployment, a, b, saved, input } = await fixture();
     const requestId = await a.client.mutation(api.hostedResumes.request, input);
     expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ requestId, status: "pending", provider: "zai", model: "glm-4.7", bundleRevision: 1 });
@@ -401,12 +401,28 @@ describe("hosted resume request boundaries (no provider dispatch)", () => {
       const item = await ctx.db.get(requestId);
       expect(item).not.toHaveProperty("sourceResume");
       expect(item).not.toHaveProperty("description");
-      expect(await ctx.db.system.query("_scheduled_functions").collect()).toEqual([]);
+      const scheduled = await ctx.db.system.query("_scheduled_functions").collect();
+      expect(scheduled).toHaveLength(1);
+      expect(scheduled[0].name).toContain("hostedResumeWorker");
+      expect(scheduled[0].args).toEqual([{ requestId }]);
+      expect(await ctx.db.query("aiBudgetAttempts").collect()).toEqual([]);
     });
     expect(await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "unavailable" })).toBe(true);
     expect(await a.client.query(api.hostedResumes.status, { requestId })).toMatchObject({ status: "failed", failureCode: "unavailable", finishedAt: expect.any(Number) });
     expect(await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "providerFailed" })).toBe(false);
     expect(await a.client.mutation(api.hostedResumes.request, input)).not.toBe(requestId);
+  });
+
+  test("availability reports only this owner's quota and pending work, and fails closed", async () => {
+    const { deployment, a, b, input } = await fixture();
+    expect(await a.client.query(api.hostedResumes.availability, {})).toEqual({ remaining: 20, pending: false, reason: "unavailable" });
+    await a.client.mutation(api.hostedResumes.request, input);
+    expect((await a.client.query(api.hostedResumes.availability, {})).pending).toBe(true);
+    expect((await b.client.query(api.hostedResumes.availability, {})).pending).toBe(false);
+    await deployment.run(ctx => ctx.db.insert("aiOwnerMonths", { ownerId: a.userId as any, month: new Date().toISOString().slice(0, 7), attempts: 20 }));
+    expect(await a.client.query(api.hostedResumes.availability, {})).toMatchObject({ remaining: 0, reason: "quota" });
+    expect((await b.client.query(api.hostedResumes.availability, {})).remaining).toBe(20);
+    await expect(deployment.query(api.hostedResumes.availability, {})).rejects.toThrow("Authentication required");
   });
 
   test.each(["\u0000binary", "bad\uFFFDencoding", "x".repeat(40001), "界".repeat(33000)])("rejects invalid or oversized saved evidence (%#)", async sourceResume => {
@@ -458,7 +474,7 @@ describe("hosted resume request boundaries (no provider dispatch)", () => {
     }
     const requestId = await a.client.mutation(api.hostedResumes.request, input);
     await deployment.mutation(internal.hostedResumes.fail, { requestId, code: "providerFailed" });
-    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: saved.resume, reviewedAt: expect.any(Number), revision: 1 });
+    expect(await a.client.query(api.resumeBundles.get, { jobId })).toMatchObject({ resume: saved.resume, reviewedAt: null, revision: 1 });
   });
 
   test.each(["privacy", "enrollment", "owner", "role"])("completion rechecks %s before accepting output", async boundary => {

@@ -53,6 +53,9 @@ export type DiscoveredJob = {
 };
 
 export const functions = {
+  requestHostedResume: "hostedResumes:request",
+  hostedResumeStatus: "hostedResumes:status",
+  hostedResumeAvailability: "hostedResumes:availability",
   listResumeSummaries: "resumeBundles:summaries",
   listResumeSources: "resumeBundles:sources",
   getResumeBundle: "resumeBundles:get",

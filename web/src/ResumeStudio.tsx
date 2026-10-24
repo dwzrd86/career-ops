@@ -3,7 +3,7 @@ import { Download, FileText, Printer } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { functions, type Job } from "./convex";
 
-import { containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges, unsupportedDetails, parseChecklistTerms } from "./resumeTailoring";
+import { HOSTED_CONSENT_VERSION, containsTerm, resumeTerms, tailoringBrief, parseResumeDraft, draftChanges, unsupportedDetails, parseChecklistTerms } from "./resumeTailoring";
 
 export type ResumeStudioHandle = { openJob: (jobId: string) => void };
 
@@ -34,6 +34,11 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   const [checklistText, setChecklistText] = useState("");
   const [localModel, setLocalModel] = useState<string | null>(null);
   const [providerConsent, setProviderConsent] = useState(false);
+  const hostedAvailability = useQuery(functions.hostedResumeAvailability, {});
+  const requestHosted = useMutation(functions.requestHostedResume);
+  const [hostedRequestId, setHostedRequestId] = useState<string | null>(null);
+  const hostedStatus = useQuery(functions.hostedResumeStatus, hostedRequestId ? { requestId: hostedRequestId } : "skip");
+  const hostedContext = useRef<{ jobId: string; company: string; title: string; revision: number; sourceResume: string; description: string; resume: string } | null>(null);
   const [generating, setGenerating] = useState(false);
   const generationRequest = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -47,7 +52,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   }, []);
   const job = jobs.find((item) => item._id === jobId);
   // Consent applies to the selected evidence, not every future role or resume.
-  useEffect(() => { setProviderConsent(false); }, [jobId, job?.company, job?.title, sourceResume, description]);
+  useEffect(() => { setProviderConsent(false); }, [jobId, job?.company, job?.title, sourceResume, description, localModel]);
   const shelf = (summaries ?? []).flatMap(summary => {
     const role = jobs.find(item => item._id === summary.jobId);
     return role && !["applied", "interview", "offer", "rejected", "discarded"].includes(role.status)
@@ -182,9 +187,69 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
   const details = useMemo(() => unsupportedDetails(sourceResume, resume), [sourceResume, resume]);
   const newSkills = [...new Set([...resumeTerms, ...requested])].filter(term => containsTerm(resume, term) && !containsTerm(sourceResume, term));
 
+  // The fieldset locks edits/navigation while waiting. Recheck identity and the
+  // exact saved revision too: other tabs and pipeline changes remain possible.
+  useEffect(() => {
+    if (!hostedRequestId || hostedStatus === undefined || hostedStatus?.status === "pending") return;
+    const context = hostedContext.current;
+    if (hostedStatus?.status === "succeeded" && saved?.revision === (context?.revision ?? 0) + 1
+      && context && jobId === context.jobId && job?.company === context.company && job?.title === context.title
+      && revision === context.revision && sourceResume === context.sourceResume
+      && description === context.description && resume === context.resume
+      && saved.sourceResume === sourceResume && saved.description === description && saved.reviewedAt === null) {
+      setResume(saved.resume); setRevision(saved.revision); setReviewed(false); setDirty(false);
+      setMessage("Hosted GLM draft saved. Review changed lines and facts before approving and exporting.");
+    } else if (hostedStatus?.status === "succeeded" && saved?.revision === context?.revision) {
+      return; // Wait for the reactive bundle query to catch up with completion.
+    } else {
+      const failures: Record<string, string> = {
+        providerTimeout: "Provider timed out. Its charge may remain reserved; retry can be unavailable until reconciliation.",
+        providerBalance: "Provider balance is unavailable. Contact the pilot operator.",
+        providerRateLimited: "Provider rate limit reached. Wait before explicitly trying again.",
+        providerOverloaded: "Provider is busy. Wait before explicitly trying again.",
+        invalidDraft: "Provider output failed validation. No draft was applied.",
+        staleEvidence: "The saved role or evidence changed. Reload the saved bundle before trying again.",
+        accessRevoked: "Generation access changed. Check enrollment and privacy acknowledgement.",
+      };
+      setMessage(hostedStatus?.status === "failed"
+        ? (failures[hostedStatus.failureCode ?? ""] ?? "Hosted generation could not finish. Check availability below before explicitly retrying.")
+        : "The saved bundle changed. Your editor was retained; download unsaved work before reloading the saved bundle.");
+      setReviewed(false);
+    }
+    setProviderConsent(false); setBusy(false); setGenerating(false);
+    setHostedRequestId(null); hostedContext.current = null;
+  }, [hostedRequestId, hostedStatus, saved, jobId, job?.company, job?.title, revision, sourceResume, description, resume]);
+
+  async function generateHostedDraft() {
+    if (!job || busy || loading || dirty || revision === null || !providerConsent || hostedAvailability?.reason !== "ready" || hostedAvailability.pending) return;
+    if (resume.trim() && !window.confirm("Replace the saved draft with a hosted GLM draft? Factual review will be cleared.")) return;
+    const context = { jobId, company: job.company, title: job.title, revision, sourceResume, description, resume };
+    hostedContext.current = context;
+    setBusy(true); setGenerating(true); setMessage("Requesting a hosted GLM draft…");
+    try {
+      const requestId = await requestHosted({ jobId, expectedRevision: revision, consent: {
+        provider: "zai", model: "glm-4.7", version: HOSTED_CONSENT_VERSION, shareSelectedEvidence: true,
+      } });
+      if (!importContext.current) return; // Signed out or unmounted.
+      setReviewed(false); setHostedRequestId(requestId);
+      setMessage("Hosted generation pending. You can sign out and return to the saved bundle; an admitted request may still be charged.");
+    } catch {
+      if (!importContext.current) return;
+      hostedContext.current = null; setBusy(false); setGenerating(false); setProviderConsent(false);
+      setMessage("Could not queue this draft. Check the saved revision, enrollment, privacy acknowledgement and availability before retrying. Your editor is unchanged.");
+    }
+  }
+
+  const localGenerationContext = useMemo(() => ({ jobId, company: job?.company, title: job?.title, sourceResume, description, resume, revision, savedRevision: saved?.revision }),
+    [jobId, job?.company, job?.title, sourceResume, description, resume, revision, saved?.revision]);
+  const localContext = useRef<typeof localGenerationContext | null>(null);
+  localContext.current = localGenerationContext;
+  useEffect(() => () => { localContext.current = null; }, []);
+
   async function generateDraft() {
     if (!job || !localModel || !providerConsent || busy || loading) return;
     if (resume.trim() && !window.confirm("Replace the current draft with a new GLM draft?")) return;
+    const context = localContext.current;
     const controller = new AbortController();
     generationRequest.current = controller;
     setBusy(true); setGenerating(true); setMessage("GLM is tailoring your evidence for this role. This can take up to three minutes…");
@@ -197,6 +262,7 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
       if (!response.ok) throw new Error(result.error || "Could not generate a GLM draft.");
       const draft = parseResumeDraft(result.draft);
       if (controller.signal.aborted) return;
+      if (context !== localContext.current) { setMessage("The role or saved evidence changed. Your editor was retained; generate again from the current evidence."); return; }
       setResume(draft); setReviewed(false); setDirty(true);
       setMessage("GLM draft ready. Review changed lines and facts, then save and export your resume.");
     } catch (error) {
@@ -299,7 +365,15 @@ export function ResumeStudio({ jobs, ref }: { jobs: Job[]; ref?: Ref<ResumeStudi
         <label>Job description<textarea ref={postingEditor} aria-label="Job description" disabled={!job || loading} rows={7} maxLength={40000} placeholder="Paste the requirements from the original posting." value={description} onChange={(event) => { setDescription(event.target.value); setReviewed(false); setDirty(true); }} /></label>
         <div ref={tailoringPanel} tabIndex={-1} className="resume-evidence">
           <h3>Tailor with GLM</h3>
-          {!localModel && <p className="resume-connection-note">AI generation is not connected in this workspace. You can start from your source, edit a draft, or import one below. Export works after your factual review. Hosted AI and its usage budget still need setup.</p>}
+          <h4>Hosted generation · Z.ai glm-4.7</h4>
+          <p role="status">{!hostedAvailability ? "Checking hosted generation availability…" : hostedAvailability.pending ? "A hosted request is pending for your account. Return to its saved role after it finishes." : hostedAvailability.reason === "quota" ? "Monthly quota exhausted. Attempts reset at the start of the next UTC calendar month." : hostedAvailability.reason === "budget" ? "The shared AI budget is exhausted. Generation is paused until budget is available." : hostedAvailability.reason === "unavailable" ? "Hosted generation is unavailable. Pilot enrollment, provider configuration, pricing or unresolved usage may need operator attention." : "Hosted generation is available."} {hostedAvailability && `${hostedAvailability.remaining} of 20 attempts remaining this UTC month.`}</p>
+          <p>Start a draft from your source and save the bundle first. Save any edits before generating. Selected evidence goes to Z.ai Standard API; no local agent or downloaded brief is needed. Explicit retries consume another attempt and may incur another charge.</p>
+          {!localModel && <label><input type="checkbox" checked={providerConsent} onChange={event => setProviderConsent(event.target.checked)} />Share this saved source resume and posting with Z.ai Standard API for this hosted draft.</label>}
+          {!localModel && <button type="button" className="button primary" disabled={!job || loading || dirty || revision === null || !providerConsent || hostedAvailability?.reason !== "ready" || hostedAvailability.pending} onClick={generateHostedDraft}>{generating ? "Generating hosted draft…" : "Generate hosted GLM draft"}</button>}
+          {revision !== null && saved && saved.revision !== revision && !busy && <button type="button" className="button secondary" onClick={() => {
+            if (dirty && !window.confirm("Discard editor edits and reload the saved bundle? Download your draft first if needed.")) return;
+            setLoadedJob(""); setMessage("Saved bundle reloaded. Review its facts before export.");
+          }}>Reload saved bundle</button>}
           {localModel ? <>
             <p>Your local OpenCode agent is connected. Generate a tailored draft directly into this editor, then review the facts before exporting.</p>
             <label><input type="checkbox" checked={providerConsent} onChange={event => setProviderConsent(event.target.checked)} />Send this source resume and posting to Z.AI through my local OpenCode Coding Plan agent.</label>

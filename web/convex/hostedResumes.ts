@@ -1,3 +1,5 @@
+import { internal } from "./_generated/api";
+import { MONTHLY_ATTEMPTS, maximumAttemptCost } from "./aiBudgetModel";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
@@ -6,10 +8,10 @@ import { requireVerifiedUser } from "./auth";
 import { requireEnrolledUser } from "./enrollment";
 import { PRIVACY_POLICY_VERSION, requireCurrentPrivacyAcknowledgement } from "./privacy";
 import { ownedJob } from "./resumeBundles";
-import { parseResumeDraft, tailoringBrief } from "../src/resumeTailoring";
+import { HOSTED_CONSENT_VERSION, parseResumeDraft, tailoringBrief } from "../src/resumeTailoring";
 
-export const HOSTED_CONSENT_VERSION = "2026-10-24-zai-selected-evidence-v1";
-// Transport bounds only; the future ledger must prove a billable token ceiling.
+export { HOSTED_CONSENT_VERSION };
+// Transport bound only; admission separately requires attested billable ceilings.
 const MAX_BRIEF_BYTES = 100_000;
 const failureCode = v.union(
   v.literal("staleEvidence"), v.literal("accessRevoked"),
@@ -34,8 +36,7 @@ function validateEvidence(role: { company: string; title: string }, source: stri
   if (new TextEncoder().encode(brief).byteLength > MAX_BRIEF_BYTES) throw new Error("Selected evidence is too large for hosted generation");
 }
 
-// Records intent only. No scheduling, provider call, retry, or budget exemption.
-// Dispatch must be added only through the separately implemented admission ledger.
+// Intent and worker scheduling commit atomically; only the worker may admit paid work.
 export const request = mutation({
   args: {
     jobId: v.id("jobs"), expectedRevision: v.number(),
@@ -60,12 +61,15 @@ export const request = mutation({
       .withIndex("by_owner_status", q => q.eq("ownerId", ownerId).eq("status", "pending")).first();
     if (pending) throw new Error("A hosted request is already pending for this account");
     const now = Date.now();
-    return await ctx.db.insert("hostedResumeRequests", {
+    const requestId = await ctx.db.insert("hostedResumeRequests", {
       ownerId, jobId, bundleId: saved._id, bundleRevision: saved.revision,
       company: job.company, title: job.title, provider: consent.provider, model: consent.model,
       consentVersion: consent.version, consentedAt: now, privacyPolicyVersion: PRIVACY_POLICY_VERSION,
       status: "pending", createdAt: now,
     });
+    await ctx.db.patch(saved._id, { reviewedAt: null });
+    await ctx.scheduler.runAfter(0, internal.hostedResumeWorker.execute, { requestId });
+    return requestId;
   },
 });
 
@@ -130,5 +134,32 @@ export const fail = internalMutation({
     if (!item || item.status !== "pending") return false;
     await failRequest(ctx, item, code);
     return true;
+  },
+});
+
+// Account-scoped presentation only. The worker rechecks every admission bound.
+export const availability = query({
+  args: {}, returns: v.object({ remaining: v.number(), pending: v.boolean(),
+    reason: v.union(v.literal("ready"), v.literal("quota"), v.literal("budget"), v.literal("unavailable")) }),
+  handler: async ctx => {
+    const ownerId = await requireVerifiedUser(ctx);
+    await requireEnrolledUser(ctx, ownerId);
+    const month = new Date(Date.now()).toISOString().slice(0, 7);
+    const usage = await ctx.db.query("aiOwnerMonths").withIndex("by_owner_month", q => q.eq("ownerId", ownerId).eq("month", month)).unique();
+    const pending = !!await ctx.db.query("hostedResumeRequests").withIndex("by_owner_status", q => q.eq("ownerId", ownerId).eq("status", "pending")).first();
+    const remaining = Math.max(0, MONTHLY_ATTEMPTS - (usage?.attempts ?? 0));
+    const state = await ctx.db.query("aiBudgetControl").withIndex("by_key", q => q.eq("key", "shared")).unique();
+    const slot = await ctx.db.query("aiPilotOwners").withIndex("by_owner", q => q.eq("ownerId", ownerId)).unique();
+    const price = await ctx.db.query("aiBudgetPrices").withIndex("by_provider_model", q => q.eq("provider", "zai").eq("model", "glm-4.7")).unique();
+    if (!remaining) return { remaining, pending, reason: "quota" as const };
+    if (!state?.enabled || !slot?.active || slot.activeAttemptId || state.activeAttemptId
+      || process.env.HOSTED_AI_EXECUTION_ENABLED !== "true" || !process.env.HOSTED_AI_ZAI_API_KEY
+      || !price || price.validUntil <= Date.now()
+      || process.env.HOSTED_AI_ZAI_BOUND_EVIDENCE !== price.evidence) {
+      return { remaining, pending, reason: "unavailable" as const };
+    }
+    const totals = await ctx.db.query("aiBudgetMonths").withIndex("by_month", q => q.eq("month", month)).unique();
+    const cost = maximumAttemptCost(price);
+    return { remaining, pending, reason: (totals?.settledMicroUsd ?? 0) + state.unresolvedMicroUsd + cost > state.cutoffMicroUsd ? "budget" as const : "ready" as const };
   },
 });

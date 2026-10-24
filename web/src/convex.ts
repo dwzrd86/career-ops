@@ -161,7 +161,17 @@ export type AccountExport = {
   privacy: { acknowledgedAt: string; policyVersion: string | null } | null;
 };
 
+export type HostedResumeStatus = {
+  requestId: string; jobId: string; bundleRevision: number;
+  status: "pending" | "succeeded" | "failed"; failureCode?: string;
+};
 export const functions = {
+  requestHostedResume: makeFunctionReference<"mutation", { jobId: string; expectedRevision: number;
+    consent: { provider: "zai"; model: "glm-4.7"; version: string; shareSelectedEvidence: boolean } }, string>("hostedResumes:request"),
+  hostedResumeStatus: makeFunctionReference<"query", { requestId: string }, HostedResumeStatus | null>("hostedResumes:status"),
+  hostedResumeAvailability: makeFunctionReference<"query", Record<string, never>, {
+    remaining: number; pending: boolean; reason: "ready" | "quota" | "budget" | "unavailable";
+  }>("hostedResumes:availability"),
   listResumeSummaries: makeFunctionReference<"query", Record<string, never>, Array<{ jobId: string; revision: number; reviewedAt: number | null; updatedAt: number }>>("resumeBundles:summaries"),
   listResumeSources: makeFunctionReference<"query", Record<string, never>, Array<{ jobId: string; company: string; title: string; sourceResume: string; updatedAt: number }>>("resumeBundles:sources"),
   getResumeBundle: makeFunctionReference<"query", { jobId: string }, ResumeBundle | null>("resumeBundles:get"),

@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { callProvider, providerBody } from "./hostedProvider";
 
-// Internal execution entry point. UI/scheduling wiring is a separate task.
+// Internal execution entry point, scheduled atomically by hostedResumes.request.
 // Duplicate deliveries consume the same reservation and can never replay a call.
 export const execute = internalAction({
   args: { requestId: v.id("hostedResumeRequests") }, returns: v.null(),

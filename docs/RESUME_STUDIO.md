@@ -10,6 +10,35 @@ related:
   - '[[PRIVACY]]'
 ---
 
+## Hosted beta generation — source implementation, 2026-10-24
+
+Studio connects the selected saved bundle to the Z.ai Standard API worker. Start
+from source (or prepare a draft), save the bundle, then acknowledge sharing its
+source resume and posting and choose **Generate hosted GLM draft**. Changed
+source/posting/role requires fresh consent. The hosted page needs neither
+OpenCode nor a downloaded brief. The local development connection and manual
+brief/import workflow remain available.
+
+The server atomically records intent, clears saved factual approval and schedules
+the existing worker. Only the admission ledger permits a provider call. Studio
+shows availability, remaining attempts out of 20 per UTC month, pending work,
+quota/shared-budget exhaustion, safe failures and explicit retries. Retries are
+new attempts; timeout liabilities remain reserved until reconciled. Missing
+configuration, pricing, pilot admission or unresolved usage disables generation
+with an explanation. No automatic retry or provider fallback is added.
+
+The editor locks during a pending request; completion applies only to the same
+role, evidence and exact saved revision. A conflicting save retains editor text
+and offers **Reload saved bundle**. New drafts are saved unreviewed: compare the
+changed lines, verify every claim, check factual review, then save/export Word,
+text or PDF. Signing out discards editor state; an admitted provider request may
+still finish into the owned saved bundle, subject to server lifecycle checks.
+
+This is local fixture verification, not a hosted release certification. Provider
+credentials, verified bounds/pricing, pilot admission and release approval are
+still required. No live inference or deployment was performed. Historical
+iteration notes below describe earlier implementation states.
+
 Resume Studio is available in the authenticated web dashboard. Click **Prepare resume** on a pipeline row to select that role and move keyboard focus into Resume Studio, or choose a role inside the studio. Paste the original posting, import or paste your source resume, edit the draft, acknowledge factual review, and download Word (.docx), plain text, or use the browser print dialog to save PDF. Disable browser headers and footers in the print dialog.
 
 **Prepare this application** shows a per-role checklist for source evidence,
